@@ -1,0 +1,13 @@
+cd C:\Users\cgonz\Desktop\CRM\turbotubo
+python -m venv django_env 
+pip instal django
+python manage.py runserver
+
+python manage.py makemigrations
+
+(deactivate)
+deactivate
+
+tailwind update:
+
+ npx tailwindcss -i ./static/main.css -o ./static/main.css --watch   

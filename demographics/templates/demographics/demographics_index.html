@@ -1,0 +1,54 @@
+<!-- demographics/templates/demographics/demographics_index.html -->
+{% extends 'core/base.html' %}
+
+{% block title %}Demografía{% endblock %}
+
+{% block content %}
+  <h2>Demographics</h2>
+  <div class="space-x-4 my-4">
+      <a href="?form_type=iditem"><button class="py-4 px-6 bg-blue-300 rounded-xl text-white">Upload ID Item</button></a>
+      <a href="?form_type=phone"><button class="py-4 px-6 bg-blue-300 rounded-xl text-white">Upload Phone</button></a>
+      <a href="?form_type=iddemographics"><button class="py-4 px-6 bg-blue-300 rounded-xl text-white">Upload ID Demographics</button></a>
+      <a href="?form_type=aval_demographics"><button class="py-4 px-6 bg-blue-300 rounded-xl text-white">Upload Aval Demographics</button></a>
+  </div>
+
+  <div id="upload-forms" class="mt-6">
+      {% if form_type == 'iditem' %}
+      <div id="upload-iditem-form">
+          <h3>Upload ID Item</h3>
+          <form method="post" enctype="multipart/form-data" action="{% url 'demographics:upload_iditem' %}">
+              {% csrf_token %}
+              <input type="file" name="excel_file" required>
+              <button type="submit" class="py-2 px-4 bg-blue-300 rounded-xl text-white mt-2">Upload</button>
+          </form>
+      </div>
+      {% elif form_type == 'phone' %}
+      <div id="upload-phone-form">
+          <h3>Upload Phone</h3>
+          <form method="post" enctype="multipart/form-data" action="{% url 'demographics:upload_phone' %}">
+              {% csrf_token %}
+              <input type="file" name="excel_file" required>
+              <button type="submit" class="py-2 px-4 bg-blue-300 rounded-xl text-white mt-2">Upload</button>
+          </form>
+      </div>
+      {% elif form_type == 'iddemographics' %}
+      <div id="upload-iddemographics-form">
+          <h3>Upload ID Demographics</h3>
+          <form method="post" enctype="multipart/form-data" action="{% url 'demographics:upload_iddemographics' %}">
+              {% csrf_token %}
+              <input type="file" name="excel_file" required>
+              <button type="submit" class="py-2 px-4 bg-blue-300 rounded-xl text-white mt-2">Upload</button>
+          </form>
+      </div>
+      {% elif form_type == 'aval_demographics' %}
+      <div id="upload-aval_demographics-form">
+          <h3>Upload Aval Demographics</h3>
+          <form method="post" enctype="multipart/form-data" action="{% url 'demographics:upload_aval_demographics' %}">
+              {% csrf_token %}
+              <input type="file" name="excel_file" required>
+              <button type="submit" class="py-2 px-4 bg-blue-300 rounded-xl text-white mt-2">Upload</button>
+          </form>
+      </div>
+      {% endif %}
+  </div>
+{% endblock %}

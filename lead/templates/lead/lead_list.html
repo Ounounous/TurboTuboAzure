@@ -1,0 +1,68 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Leads{% endblock %}
+
+{% block content %}
+  <div class="py-6 px-6">
+    <h1 class="mb-4 text-xl">Clientes</h1>
+
+    <div class="flex justify-between mb-4">
+      <div>
+        <a href="{% url 'leads:add_lead' %}" class="inline-block py-4 px-6 bg-teal-400 rounded-xl text-white">Agregar Cliente</a>
+        <a href="{% url 'leads:upload-excel' %}" class="inline-block py-4 px-6 bg-teal-400 rounded-xl text-white">Agregar Clientes desde Excel</a>
+        <a href="{% url 'leads:leads_assign' %}" class="inline-block py-4 px-6 bg-teal-400 rounded-xl text-white">Ir a asignaciones</a>
+      </div>
+      <div>
+        <a href="{% url 'leads:download-excel' %}" class="inline-block py-4 px-6 bg-teal-400 rounded-xl text-white">Descargar Cartera</a>
+      </div>
+    </div>
+
+    {% if leads %}
+      <div class="mt-6 flex justify-between">
+        <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Op</p>
+        <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Name</p>
+        <p class="py-4 px-2 bg-gray-200 font-semibold w-full">RUT</p>
+        <p class="py-4 px-2 bg-gray-200 font-semibold w-full">DV</p>
+        <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Saldo Insoluto</p>
+        <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Saldo Deuda</p>
+        <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Valor Cuota</p>
+        <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Cuotas Atrasadas</p>
+        <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Cartera</p>
+        <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Tipo Cobranza</p>
+        <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Status</p>
+        <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Ciclo Cartera</p>
+        <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Ciclo</p>
+        <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Activo</p>
+        <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Tiene Aval</p>
+        <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Acciones</p>
+      </div>
+
+      {% for lead in leads %}
+        <div class="flex justify-between">
+          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.op }}</p>
+          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.name }}</p>
+          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.rut }}</p>
+          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.dv }}</p>
+          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.saldo_insoluto }}</p>
+          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.saldo_deuda }}</p>
+          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.valor_cuota }}</p>
+          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.cuotas_atrasadas }}</p>
+          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.cartera }}</p>
+          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.tipo_cobranza }}</p>
+          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.get_status_display }}</p>
+          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.ciclo_cartera }}</p>
+          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.ciclo }}</p>
+          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.activo }}</p>
+          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.tiene_aval }}</p>
+          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">
+            <a href="{% url 'leads:detail' lead.pk %}" class="btn btn-primary">Ver Detalles</a>
+          </p>
+        </div>
+      {% empty %}
+        <p>No existen clientes asignados</p>
+      {% endfor %}
+    {% else %}
+      <p>No existen clientes asignados</p>
+    {% endif %}
+  </div>
+{% endblock %}

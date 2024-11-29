@@ -1,0 +1,223 @@
+{% extends 'core/base.html' %}
+
+{% block title %}{{ lead.name }}{% endblock %}
+
+{% block content %}
+  <div class="py-6 px-6">
+    <h1 class="mb-4 text-xl">Operación N° {{ lead.op }} - {{ lead.name }}</h1>
+
+    <details>
+      <summary>Información Cliente</summary>
+      <div class="grid grid-cols-2 gap-4">
+        <div class="flex flex-col">
+          <p class="font-semibold">OP:</p>
+          <p class="mb-2 ml-2">{{ lead.op }}</p>
+        </div>
+        <div class="flex flex-col">
+          <p class="font-semibold">Name:</p>
+          <p class="mb-2 ml-2">{{ lead.name }}</p>
+        </div>
+        <div class="flex flex-col">
+          <p class="font-semibold">RUT:</p>
+          <p class="mb-2 ml-2">{{ lead.rut }}-{{ lead.dv }}</p>
+        </div>
+        <div class="flex flex-col">
+          <p class="font-semibold">Cartera:</p>
+          <p class="mb-2 ml-2">{{ lead.cartera }}</p>
+        </div>
+        <div class="flex flex-col">
+          <p class="font-semibold">Saldo Insoluto:</p>
+          <p class="mb-2 ml-2">{{ lead.saldo_insoluto }}</p>
+        </div>
+        <div class="flex flex-col">
+          <p class="font-semibold">Saldo Deuda:</p>
+          <p class="mb-2 ml-2">{{ lead.saldo_deuda }}</p>
+        </div>
+        <div class="flex flex-col">
+          <p class="font-semibold">Valor Cuota:</p>
+          <p class="mb-2 ml-2">{{ lead.valor_cuota }}</p>
+        </div>
+        <div class="flex flex-col">
+          <p class="font-semibold">Cuotas Atrasadas:</p>
+          <p class="mb-2 ml-2">{{ lead.cuotas_atrasadas }}</p>
+        </div>
+        <div class="flex flex-col">
+          <p class="font-semibold">Status:</p>
+          <p class="mb-2 ml-2">{{ lead.status }}</p>
+        </div>
+        <div class="flex flex-col">
+          <p class="font-semibold">Tiene Aval:</p>
+          <p class="mb-2 ml-2">{{ lead.tiene_aval }}</p>
+        </div>
+        <div class="flex flex-col">
+          <p class="font-semibold">Tipo Cobranza:</p>
+          <p class="mb-2 ml-2">{{ lead.tipo_cobranza }}</p>
+        </div>
+        <div class="flex flex-col">
+          <p class="font-semibold">Ciclo Cartera:</p>
+          <p class="mb-2 ml-2">{{ lead.ciclo_cartera }}</p>
+        </div>
+        <div class="flex flex-col">
+          <p class="font-semibold">Ciclo:</p>
+          <p class="mb-2 ml-2">{{ lead.ciclo }}</p>
+        </div>
+        <div class="flex flex-col">
+          <p class="font-semibold">Activo:</p>
+          <p class="mb-2 ml-2">{{ lead.activo }}</p>
+        </div>
+      </div>
+      <hr class="my-4">
+      <a href="{% url 'leads:edit' lead.id %}" class="py-2 px-4 rounded-xl bg-teal-500 text-white">Editar Estado</a>
+    </details>
+
+
+  </details>
+
+  <hr class="my-4">
+
+    <details style="display:none;">
+      <summary>Editar</summary>
+      <form id="lead_delete_form" method="post" action="{% url 'leads:delete' lead.id %}">
+        {% csrf_token %}
+      </form>
+      <a href="{% url 'leads:convert' lead.id %}" class="py-2 px-4 rounded-xl bg-blue-500 text-white">Convert to client</a>
+      <a href="{% url 'leads:edit' lead.id %}" class="py-2 px-4 rounded-xl bg-teal-500 text-white">Edit</a>
+      <a href="#" onclick="document.getElementById('lead_delete_form').submit();" class="py-2 px-4 rounded-xl bg-red-500 text-white">Delete</a>
+    </details>
+
+    <hr class="my-4">
+
+    <details class="bg-white shadow rounded-lg p-4">
+      <summary class="font-bold cursor-pointer">Gestiones</summary>
+      <div class="mt-4">
+        <div class="mb-4">
+          <a href="{% url 'actions:multistep_step_with_lead' step=2 lead_id=lead.pk %}" class="py-2 px-4 rounded-xl bg-blue-500 text-white">Add New Action</a>
+        </div>
+        
+        {% if lead.actions.all %}
+          <div class="overflow-x-auto">
+            <table class="min-w-full">
+              <thead>
+                <tr class="bg-gray-200">
+                  <th class="py-2 px-2 text-left">Action Type</th>
+                  <th class="py-2 px-2 text-left">Result</th>
+                  <th class="py-2 px-2 text-left">User</th>
+                  <th class="py-2 px-2 text-left">Date</th>
+                  <th class="py-2 px-2 text-left">Phone</th>
+                  <th class="py-2 px-2 text-left">Email</th>
+                  <th class="py-2 px-2 text-left">Comentario</th>
+                  <th class="py-2 px-2 text-left">Target</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for action in lead.actions.all %}
+                  <tr class="{% cycle '' 'bg-gray-100' %}">
+                    <td class="py-2 px-2">{{ action.get_action_type_display }}</td>
+                    <td class="py-2 px-2">{{ action.get_result_display }}</td>
+                    <td class="py-2 px-2">{{ action.user }}</td>
+                    <td class="py-2 px-2">{{ action.created_at|date:"d-M-Y H:i" }}</td>
+                    <td class="py-2 px-2">{{ action.phone|default_if_none:"-" }}</td>
+                    <td class="py-2 px-2">{{ action.email|default_if_none:"-" }}</td>
+                    <td class="py-2 px-2">{{ action.comment|default_if_none:"-" }}</td>
+                    <td class="py-2 px-2">{{ action.target|capfirst|default_if_none:"-" }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <p>No actions recorded for this lead yet.</p>
+        {% endif %}
+
+      </div>
+    </details>
+    <details>
+      <summary>Demographics</summary>
+<div>
+  {% for demographic in demographics %}
+    <p class="font-semibold">OP:</p>
+    <p class="mb-2">{{ demographic.op }}</p>
+    <p class="font-semibold">Cartera:</p>
+    <p class="mb-2">{{ demographic.cartera }}</p>
+    <p class="font-semibold">Email:</p>
+    <p class="mb-2">{{ demographic.principal_email }}</p>
+    <p class="font-semibold">Address:</p>
+    <p class="mb-2">{{ demographic.principal_address }}</p>
+    <p class="font-semibold">Phones:</p>
+    <ul>
+      {% for phone in lead.phone_set.all %}
+        {% if phone.phone_type == 'Principal' %}
+          <li>{{ phone.phone_number }}</li>
+        {% endif %}
+      {% endfor %}
+    </ul>
+    <p class="font-semibold">Bienes:</p>
+    <ul>
+      {% for item in lead.iditem_set.all %}
+        <li>{{ item.item_type }} - {{ item.patente }} - {{ item.marca }} - {{ item.modelo }}</li>
+      {% endfor %}
+    </ul>
+  {% endfor %}
+  {% if aval_demographics %}
+    <hr class="my-4">
+    <p class="font-semibold">AVAL Demographics:</p>
+    <p class="font-semibold">Name:</p>
+    <p class="mb-2">{{ aval_demographics.aval_name }}</p>
+    <p class="font-semibold">RUT:</p>
+    <p class="mb-2">{{ aval_demographics.aval_rut }}-{{ aval_demographics.aval_dv }}</p>
+    <p class="font-semibold">Phone Numbers:</p>
+    <ul>
+      {% for phone in lead.phone_set.all %}
+        {% if phone.phone_type == 'Aval' %}
+          <li>{{ phone.phone_number }}</li>
+        {% endif %}
+      {% endfor %}
+    </ul>
+    <p class="font-semibold">Email:</p>
+    <p class="mb-2">{{ aval_demographics.aval_email }}</p>
+  {% endif %}
+</div>
+</details>
+
+    <hr class="my-4">
+
+    <details style="display:none;">
+      <summary>Comments</summary>
+      <div class="space-y-4">
+        {% for comment in lead.comments.all %}
+          <div class="bg-gray-100 py-6 px-6 rounded-xl">
+            <p class="mb-2"><strong>{{ comment.created_by }}</strong> @ {{ comment.created_at}}</p>
+            {{ comment.content}}
+          </div>
+        {% endfor %}
+      </div>
+      <form method="post" action="{% url 'leads:add_comment' lead.id %}">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button class="py-2 px-4 rounded-xl bg-blue-500 text-white">Submit</button>
+      </form>
+    </details>
+
+    <hr class="my-4">
+
+    <details style="display:none;">
+      <summary>Files</summary>
+      <div>
+        {% for file in lead.files.all %}
+          <div class="bg-gray-100 py-6 px-6 rounded-xl my-4">
+            <p class="mb-2"><strong>{{ file.created_by }}</strong> @ {{ file.created_at}}</p>
+            <a href="{{ file.file.url }}">Download</a>
+          </div>
+        {% endfor %}
+      </div>
+      <form method="post" action="{% url 'leads:add_file' lead.id %}" enctype="multipart/form-data">
+        {% csrf_token %}
+        {{ fileform.as_p }}
+        <button class="py-2 px-4 rounded-xl bg-blue-500 text-white">Submit</button>
+      </form>
+    </details>
+
+    <hr class="my-4">
+    <a href="{% url 'leads:list' %}" class="py-2 px-4 rounded-xl bg-pink-700 text-white">Back to leads</a>
+  </div>
+{% endblock %}

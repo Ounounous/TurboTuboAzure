@@ -1,0 +1,62 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+<div class="container mx-auto mt-8">
+  <h1 class="text-2xl font-bold mb-4">Multi-step Action Form</h1>
+
+  {% if step == 1 %}
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit" class="btn btn-primary">Next</button>
+  </form>
+  {% elif step == 2 %}
+  <form method="post">
+    {% csrf_token %}
+    {{ demographic_form.as_p }}
+    <button type="submit" class="btn btn-primary">Next</button>
+  </form>
+  {% elif step == 3 %}
+  <form method="post">
+    {% csrf_token %}
+
+    <div>
+      {{ action_form.non_field_errors }}
+    </div>
+
+    <div class="form-group">
+      <label for="{{ action_form.action_type.id_for_label }}">Action Type:</label>
+      {{ action_form.action_type.errors }}
+      {{ action_form.action_type }}
+    </div>
+
+    <div class="form-group">
+      <label for="{{ action_form.result.id_for_label }}">Result:</label>
+      {{ action_form.result.errors }}
+      {{ action_form.result }}
+    </div>
+
+    <div class="form-group">
+      <label for="{{ action_form.comment.id_for_label }}">Comment:</label>
+      {{ action_form.comment.errors }}
+      {{ action_form.comment }}
+    </div>
+
+    <div class="form-group">
+      <label for="{{ action_form.target.id_for_label }}">Target:</label>
+      {{ action_form.target.errors }}
+      {{ action_form.target }}
+    </div>
+
+    {% if not phone_disabled %}
+    <p>Phone: {{ action_form.phone }}</p>
+    {% endif %}
+    {% if not email_disabled %}
+    <p>Email: {{ action_form.email }}</p>
+    {% endif %}
+
+    <button type="submit" class="btn btn-primary">Submit</button>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

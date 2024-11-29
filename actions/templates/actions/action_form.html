@@ -1,0 +1,106 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Add Action for {{ lead.name }}{% endblock %}
+
+{% block content %}
+<div class="py-6 px-6">
+    <h1 class="text-xl mb-4">Add Action for {{ lead.name }}</h1>
+
+    <!-- Search Bar -->
+    <form method="GET" action="{% url 'actions:multistep' %}">
+        <input type="text" name="query" placeholder="Enter lead query" required>
+        <button type="submit" class="py-2 px-4 bg-teal-500 text-white rounded-xl hover:bg-teal-600">Search Lead</button>
+    </form>
+
+    <!-- Multi-Step Form -->
+    {% if step == 2 %}
+    <form method="post" class="space-y-4">
+        {% csrf_token %}
+        {% for field in demographic_form %}
+        <div class="flex flex-col mb-4" id="div_id_{{ field.name }}">
+            <label for="{{ field.id_for_label }}" class="mb-2 font-bold">{{ field.label }}</label>
+            {{ field }}
+            {% for error in field.errors %}
+            <p class="text-red-500 text-sm">{{ error }}</p>
+            {% endfor %}
+        </div>
+        {% endfor %}
+
+        <button type="submit" class="py-2 px-4 bg-teal-500 text-white rounded-xl hover:bg-teal-600">Continue</button>
+    </form>
+    {% elif step == 3 %}
+    <form method="post" class="space-y-4">
+        {% csrf_token %}
+        {% for field in action_form %}
+        <div class="flex flex-col mb-4" id="div_id_{{ field.name }}">
+            <label for="{{ field.id_for_label }}" class="mb-2 font-bold">{{ field.label }}</label>
+            {{ field }}
+            {% for error in field.errors %}
+            <p class="text-red-500 text-sm">{{ error }}</p>
+            {% endfor %}
+        </div>
+        {% endfor %}
+
+        <button type="submit" class="py-2 px-4 bg-teal-500 text-white rounded-xl hover:bg-teal-600">Add Action</button>
+        <a href="{% url 'leads:detail' lead.id %}" class="py-2 px-4 bg-gray-500 text-white rounded-xl hover:bg-gray-600 ml-2">Cancel</a>
+    </form>
+    {% endif %}
+</div>
+
+<script type="text/javascript">
+    document.addEventListener('DOMContentLoaded', function() {
+        const actionTypeField = document.getElementById('id_action_type');
+        const phoneField = document.getElementById('id_phone');
+        const emailField = document.getElementById('id_email');
+        const targetField = document.getElementById('id_target');
+
+        function updateFormVisibility() {
+            const actionType = actionTypeField ? actionTypeField.value : '';
+            if (actionType === 'email') {
+                phoneField.closest('.flex-col').style.display = 'none';
+                emailField.closest('.flex-col').style.display = '';
+            } else {
+                phoneField.closest('.flex-col').style.display = '';
+                emailField.closest('.flex-col').style.display = 'none';
+            }
+        }
+
+        function updateTarget() {
+            const selectedPhone = phoneField ? phoneField.options[phoneField.selectedIndex].text : '';
+            const selectedEmail = emailField ? emailField.value : '';
+
+            let target = '';
+            if (selectedPhone) {
+                if (selectedPhone.includes('Principal')) {
+                    target = 'principal';
+                } else if (selectedPhone.includes('Aval')) {
+                    target = 'aval';
+                } else {
+                    target = 'other';
+                }
+            } else if (selectedEmail) {
+                const principalEmail = '{{ lead.principal_email }}';
+                if (selectedEmail === principalEmail) {
+                    target = 'principal';
+                } else {
+                    target = 'aval';
+                }
+            }
+            targetField.value = target;
+        }
+
+        if (actionTypeField) {
+            actionTypeField.addEventListener('change', updateFormVisibility);
+        }
+        if (phoneField) {
+            phoneField.addEventListener('change', updateTarget);
+        }
+        if (emailField) {
+            emailField.addEventListener('change', updateTarget);
+        }
+
+        updateFormVisibility();
+    });
+</script>
+
+{% endblock %}

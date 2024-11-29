@@ -1,0 +1,12 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Status Changes{% endblock %}
+
+{% block content %}
+<h2>Status Changes</h2>
+<ul>
+    {% for log in logs %}
+    <li>{{ log.timestamp }}: {{ log.lead }} status changed to {{ log.new_status }} by {{ log.changed_by }}</li>
+    {% endfor %}
+</ul>
+{% endblock %}

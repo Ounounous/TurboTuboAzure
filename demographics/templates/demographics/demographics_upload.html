@@ -1,0 +1,46 @@
+<!-- demographics/templates/demographics/demographics_upload.html -->
+{% extends 'core/base.html' %}
+
+{% block title %}Upload Demographics{% endblock %}
+
+{% block content %}
+  <h2>Upload Demographics Data</h2>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="p-4 border rounded-md">
+          <h3 class="text-lg font-bold mb-2">Upload ID Item</h3>
+          <form method="post" enctype="multipart/form-data">
+              {% csrf_token %}
+              <input type="hidden" name="upload_type" value="id_item">
+              <input type="file" name="excel_file" required>
+              <button type="submit" class="py-4 px-6 bg-blue-300 rounded-xl text-white">Upload</button>
+          </form>
+      </div>
+      <div class="p-4 border rounded-md">
+          <h3 class="text-lg font-bold mb-2">Upload Phone</h3>
+          <form method="post" enctype="multipart/form-data">
+              {% csrf_token %}
+              <input type="hidden" name="upload_type" value="phone">
+              <input type="file" name="excel_file" required>
+              <button type="submit" class="py-2 px-4 bg-green-400 rounded-xl text-white mt-2">Upload</button>
+          </form>
+      </div>
+      <div class="p-4 border rounded-md">
+          <h3 class="text-lg font-bold mb-2">Upload ID Demographics</h3>
+          <form method="post" enctype="multipart/form-data">
+              {% csrf_token %}
+              <input type="hidden" name="upload_type" value="id_demographics">
+              <input type="file" name="excel_file" required>
+              <button type="submit" class="py-2 px-4 bg-green-400 rounded-xl text-white mt-2">Upload</button>
+          </form>
+      </div>
+      <div class="p-4 border rounded-md">
+          <h3 class="text-lg font-bold mb-2">Upload Aval Demographics</h3>
+          <form method="post" enctype="multipart/form-data">
+              {% csrf_token %}
+              <input type="hidden" name="upload_type" value="aval_demographics">
+              <input type="file" name="excel_file" required>
+              <button type="submit" class="py-2 px-4 bg-green-400 rounded-xl text-white mt-2">Upload</button>
+          </form>
+      </div>
+  </div>
+{% endblock %}

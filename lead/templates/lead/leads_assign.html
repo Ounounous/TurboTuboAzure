@@ -1,0 +1,24 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Assign Leads{% endblock %}
+
+{% block content %}
+<div class="py-6 px-6">
+    <h2 class="mt-6 mb-4 text-xl">upload a file:</h2>
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        {{ upload_form.as_p }}
+        <button type="submit" class="bg-teal-400 rounded-xl text-white py-2 px-4">Upload File</button>
+    </form>
+
+    <h1 class="mb-4 text-xl">Assign Leads</h1>
+
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit" class="bg-teal-400 rounded-xl text-white py-2 px-4">Assign Leads</button>
+    </form>
+
+
+</div>
+{% endblock %}

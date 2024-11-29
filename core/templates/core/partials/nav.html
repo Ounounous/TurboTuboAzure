@@ -1,0 +1,22 @@
+<nav class="py-6 px-6 flex justify-between bg-teal-500">
+    <a href="/" class="text-white">Tubo</a>
+
+    <div class="space-x-4">
+        <a href="{% url 'about' %}" class="text-white">About</a>
+        {% if request.user.is_authenticated %}
+        
+            <!-- <a href="{% url 'team:detail' active_team.id %}" class="text-white">{{ active_team.name }}</a> -->
+            <!-- <a href="{% url 'dashboard:index' %}" class="py-4 px-6 bg-pink-400 rounded-xl text-white">Dashboard</a> -->
+            <a href="{% url 'leads:list' %}" class="py-4 px-6 bg-pink-700 rounded-xl text-white">Cartera</a>
+            <a href="{% url 'actions:index' %}" class="py-4 px-6 bg-pink-700 rounded-xl text-white">Gestiones</a>
+            <!-- <a href="{% url 'clients:list' %}" class="py-4 px-6 bg-blue-300 rounded-xl text-white">Clients</a>   -->
+            <a href="{% url 'demographics:index' %}" class="py-4 px-6 bg-blue-400 rounded-xl text-white">Subir Demografía</a>
+            <a href="{% url 'leads:status-changes' 'day' %}" class="py-4 px-6 bg-pink-700 rounded-xl text-white">Cambios de estado</a>
+            <a href="{% url 'userprofile:myaccount' %}" class="py-4 px-6 bg-teal-800 rounded-xl text-white">Mi cuenta</a>
+           
+        {% else %}
+            <a href="{% url 'login' %}" class="py-4 px-6 bg-pink-600 rounded-xl text-white">Log in</a>
+            <!-- <a href="{% url 'userprofile:signup' %}" class="py-4 px-6 bg-pink-400 rounded-xl text-white">Sign up</a> -->
+        {% endif %}
+    </div>
+</nav>

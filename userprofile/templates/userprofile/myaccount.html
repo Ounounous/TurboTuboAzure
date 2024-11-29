@@ -1,0 +1,32 @@
+{% extends 'core/base.html' %}
+
+{% block title %}My account{% endblock %}
+
+{% block content %}
+<div class="py-6 px-6"></div>
+    <h1 class="mb-6 text-xl">My account</h1>
+    
+    <p class="mb-2">
+        <strong>Username: </strong>{{ request.user.username}}
+    </p>
+
+    <p class="mb-2">
+        {% if active_team %}
+            <strong>Team: </strong><a href="{% url 'team:detail' active_team.id %}"></a>{{ activeteam.name }}</a>
+
+            {% if active_team.created_by == request.user %}
+                <a href="{% url 'team:edit' active_team.id %}">(Edit)</a>
+            {% endif %}
+        {% else %}
+            <a href="{% url 'team:list' %}">Select Team</a>
+        {% endif %}
+    </p>
+
+    <hr class="mb-4">
+
+    <form method="post" action="{% url 'logout' %}" style="display: inline;">
+        {% csrf_token %}
+        <button type="submit" class="py-4 px-6 bg-red-600 rounded-xl text-white">Log out</button>
+    </form>
+</div>
+{% endblock %}

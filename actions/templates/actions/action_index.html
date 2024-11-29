@@ -1,0 +1,59 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+<div class="container mx-auto mt-8">
+    <h1 class="text-2xl font-bold mb-4">Actions Index</h1>
+    <!-- Search Form -->
+    <form method="GET" action="{% url 'actions:index' %}" class="mb-6">
+        <input type="text" name="query" value="{{ query }}" placeholder="Search by OP, RUT, or Aval RUT..." class="border p-2 rounded w-full">
+        <button type="submit" class="mt-2 py-2 px-4 bg-teal-400 rounded text-white">Search</button>
+    </form>
+
+    <!-- Display Lead Results -->
+    <h2 class="text-xl font-bold mb-2">Lead Results</h2>
+    {% if lead_results %}
+    <ul class="list-disc list-inside">
+        {% for lead in lead_results %}
+        <li>
+            OP: {{ lead.op }} - RUT: {{ lead.rut }} - Nombre: {{ lead.name }}
+            <a href="{% url 'leads:detail' lead.id %}" class="text-blue-500">Lead Details</a> |
+            <a href="{% url 'actions:multistep_step_with_lead' step=2 lead_id=lead.pk %}" class="text-blue-500">Create Action</a>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p>No leads found.</p>
+    {% endif %}
+
+    <!-- Display Aval Results -->
+    <h2 class="text-xl font-bold mb-2 mt-6">Aval Results</h2>
+    {% if aval_results %}
+    <ul class="list-disc list-inside">
+        {% for aval in aval_results %}
+        <li>
+            Aval RUT: {{ aval.aval_rut }} - Name: {{ aval.aval_name }} - OP: {{ aval.op }}
+            {% if aval.id_demographics.lead_set.exists %}
+            {% for lead in aval.id_demographics.lead_set.all %}
+            <a href="{% url 'leads:detail' lead.id %}" class="text-blue-500">Lead Details</a> |
+            <a href="{% url 'actions:multistep_step_with_lead' step=2 lead_id=lead.pk %}" class="text-blue-500">Create Action</a>
+            {% endfor %}
+            {% else %}
+            <span class="text-gray-500">No corresponding lead found</span>
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p>No avals found.</p>
+    {% endif %}
+            <div class="mt-6">
+          <h2 class="text-lg mb-2">Download Actions</h2>
+          <a href="{% url 'actions:download_actions' scope='team' %}" class="py-2 px-4 bg-blue-500 text-white rounded-xl hover:bg-blue-600">
+              Download Team Actions (Excel)
+          </a>
+          <a href="{% url 'actions:download_actions' scope='user' %}" class="py-2 px-4 bg-blue-500 text-white rounded-xl hover:bg-blue-600 ml-2">
+              Download My Actions (Excel)
+          </a>
+        </div>
+</div>
+{% endblock %}
