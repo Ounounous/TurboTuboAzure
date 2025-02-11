@@ -3,8 +3,10 @@ from django.shortcuts import get_object_or_404, redirect,render
 from django.urls import reverse
 from django.views.generic import CreateView, DetailView
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.http import JsonResponse
 from django.http import HttpResponse
 from django.views import View
+from django.utils.dateparse import parse_date
 from .models import Action
 from lead.models import Lead
 from team.models import Team
@@ -37,16 +39,19 @@ class ActionIndexView(LoginRequiredMixin, View):
                 Q(aval_rut__icontains=query)
             )
 
+        # Get all teams
+        all_teams = Team.objects.all()
+
         return render(
             request,
             'actions/action_index.html',
             {
                 'lead_results': lead_results,
                 'aval_results': aval_results,
-                'query': query
+                'query': query,
+                'all_teams': all_teams,  # Pass all teams to the template
             }
         )
-
 
 class ActionCreateView(LoginRequiredMixin, CreateView):
     model = Action
@@ -170,47 +175,105 @@ class ActionDownloadExcelView(LoginRequiredMixin, View):
     def get(self, request, *args, **kwargs):
         scope = kwargs.get('scope', 'team')
 
-        logger.debug(f"User: {request.user}")
-        logger.debug(f"UserProfile: {request.user.userprofile}")
-        logger.debug(f"Active Team: {request.user.userprofile.active_team}")
+        logger.debug(f"Scope: {scope}, User: {request.user}")
 
-        # Create your Excel file
-        workbook = openpyxl.Workbook()
-        sheet = workbook.active
-        sheet.title = f'{scope.capitalize()} Actions'
+        # Team ID from GET request
+        team_id = request.GET.get('team_id')  # Query parameter to select the team
 
-        # Add headers
-        headers = ['Date', 'Lead', 'Action Type', 'Result', 'Comment', 'User']
-        sheet.append(headers)
-
-        # Get the appropriate queryset
+        # Fetch the team if 'scope' is 'team'
         if scope == 'team':
-            team = request.user.userprofile.active_team
+            if not team_id:  # Handle missing team_id
+                return JsonResponse(
+                    {"error": "No team selected. Please provide a valid team ID to download actions."},
+                    status=400
+                )
+
+            try:
+                # Locate the team by ID
+                team = Team.objects.get(id=team_id)
+                logger.debug(f"Selected team: {team} (ID: {team_id})")
+            except Team.DoesNotExist:
+                logger.error(f"Team with ID {team_id} does not exist.")
+                return JsonResponse(
+                    {"error": f"Team with ID {team_id} does not exist."},
+                    status=404
+                )
+
+        # Handle user-specific download request (if scope == 'user')
+        if scope == 'user':
+            logger.debug("Downloading actions for user scope.")
+
+        # Parse optional date range from GET request
+        start_date = request.GET.get('start_date')
+        end_date = request.GET.get('end_date')
+
+        try:
+            if start_date:
+                start_date = parse_date(start_date)
+            if end_date:
+                end_date = parse_date(end_date)
+        except ValueError:
+            return JsonResponse({"error": "Invalid date format. Use YYYY-MM-DD."}, status=400)
+
+        # Validate the start-end date range
+        if start_date and end_date and start_date > end_date:
+            return JsonResponse({"error": "Start date cannot be later than end date."}, status=400)
+
+        # Fetch actions based on the scope
+        if scope == 'team':
             actions = Action.objects.filter(team=team)
         elif scope == 'user':
             actions = Action.objects.filter(user=request.user)
         else:
-            return HttpResponse("Invalid scope")
+            return JsonResponse({"error": "Invalid scope provided. Allowed scopes: 'team', 'user'."}, status=400)
 
-        logger.debug(f"Number of actions: {actions.count()}")
+        # Apply additional filters (by created_at date)
+        if start_date:
+            actions = actions.filter(created_at__gte=start_date)
+        if end_date:
+            actions = actions.filter(created_at__lte=end_date)
 
-        # Add data
+        logger.debug(f"{actions.count()} actions found for {scope}")
+
+        # Handle case when no actions are found
+        if not actions.exists():
+            return JsonResponse({"error": "No actions found for the given criteria."}, status=404)
+
+        # Generate Excel file for download
+        workbook = openpyxl.Workbook()
+        sheet = workbook.active
+        sheet.title = f'{scope.capitalize()} Actions'
+
+        # Add headers to the spreadsheet
+        headers = ['OP', 'RUT', 'DV', 'ACCION', 'SUBESTADO', 'ESTADO', 'FECHA', 'COMENTARIO', 'TELEFONO', 'EMAIL',
+                   'USER']
+        sheet.append(headers)
+
+        # Insert action data into the Excel sheet
         for action in actions:
+            phone = str(action.phone) if action.phone else 'N/A'
+            email = str(action.email) if action.email else 'N/A'
+
             sheet.append([
-                action.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-                action.lead.op if action.lead else 'N/A',
-                action.get_action_type_display(),
-                action.get_result_display(),
-                action.comment,
-                action.user.username if action.user else 'N/A'
+                action.lead.op if action.lead else 'N/A',  # OP
+                action.lead.rut if action.lead else 'N/A',  # RUT
+                action.lead.dv if action.lead else 'N/A',  # DV
+                action.get_action_type_display(),  # ACCION
+                action.get_target_display(),  # SUBESTADO
+                action.get_result_display(),  # ESTADO
+                action.created_at.strftime("%Y-%m-%d %H:%M:%S"),  # FECHA
+                action.comment if action.comment else 'N/A',  # COMENTARIO
+                phone,  # TELEFONO
+                email,  # EMAIL
+                action.user.username if action.user else 'N/A'  # USER
             ])
 
-        # Save the workbook to a BytesIO stream
+        # Save the workbook to a BytesIO object
         output = BytesIO()
         workbook.save(output)
         output.seek(0)
 
-        # Create the HTTP response
+        # Create HTTP response for downloading the Excel file
         response = HttpResponse(
             content=output.read(),
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'

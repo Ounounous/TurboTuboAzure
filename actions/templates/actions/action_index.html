@@ -16,8 +16,8 @@
         {% for lead in lead_results %}
         <li>
             OP: {{ lead.op }} - RUT: {{ lead.rut }} - Nombre: {{ lead.name }}
-            <a href="{% url 'leads:detail' lead.id %}" class="text-blue-500">Lead Details</a> |
-            <a href="{% url 'actions:multistep_step_with_lead' step=2 lead_id=lead.pk %}" class="text-blue-500">Create Action</a>
+            <a href="{% url 'leads:detail' lead.id %}" class="text-white bg-blue-500 px-4 py-2 rounded">Lead Details</a> |
+            <a href="{% url 'actions:multistep_step_with_lead' step=2 lead_id=lead.pk %}" class="text-white bg-teal-500 px-4 py-2 rounded">Create Action</a>
         </li>
         {% endfor %}
     </ul>
@@ -34,8 +34,8 @@
             Aval RUT: {{ aval.aval_rut }} - Name: {{ aval.aval_name }} - OP: {{ aval.op }}
             {% if aval.id_demographics.lead_set.exists %}
             {% for lead in aval.id_demographics.lead_set.all %}
-            <a href="{% url 'leads:detail' lead.id %}" class="text-blue-500">Lead Details</a> |
-            <a href="{% url 'actions:multistep_step_with_lead' step=2 lead_id=lead.pk %}" class="text-blue-500">Create Action</a>
+            <a href="{% url 'leads:detail' lead.id %}" class="text-white bg-blue-500 px-4 py-2 rounded">Lead Details</a> |
+            <a href="{% url 'actions:multistep_step_with_lead' step=2 lead_id=lead.pk %}" class="text-white bg-green-500 px-4 py-2 rounded">Create Action</a>
             {% endfor %}
             {% else %}
             <span class="text-gray-500">No corresponding lead found</span>
@@ -46,14 +46,62 @@
     {% else %}
     <p>No avals found.</p>
     {% endif %}
-            <div class="mt-6">
-          <h2 class="text-lg mb-2">Download Actions</h2>
-          <a href="{% url 'actions:download_actions' scope='team' %}" class="py-2 px-4 bg-blue-500 text-white rounded-xl hover:bg-blue-600">
-              Download Team Actions (Excel)
-          </a>
-          <a href="{% url 'actions:download_actions' scope='user' %}" class="py-2 px-4 bg-blue-500 text-white rounded-xl hover:bg-blue-600 ml-2">
-              Download My Actions (Excel)
-          </a>
-        </div>
+
+    <!-- Download Actions Section -->
+    <div class="mt-6">
+        <h2 class="text-lg mb-2 font-bold">Download Actions</h2>
+
+        <!-- Date Filter with Team Actions -->
+        <form method="GET" action="{% url 'actions:download_actions' scope='team' %}" class="mb-4 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <!-- Date Range Filters -->
+            <div>
+                <label for="start_date" class="font-semibold">Start Date:</label>
+                <input
+                        type="date"
+                        id="start_date"
+                        name="start_date"
+                        class="border border-gray-300 rounded p-2"
+                        value="{{ request.GET.start_date }}">
+            </div>
+
+            <div>
+                <label for="end_date" class="font-semibold">End Date:</label>
+                <input
+                        type="date"
+                        id="end_date"
+                        name="end_date"
+                        class="border border-gray-300 rounded p-2"
+                        value="{{ request.GET.end_date }}">
+            </div>
+
+            <!-- Team Selection Dropdown -->
+            <div>
+                <label for="team_id" class="font-semibold">Choose Team:</label>
+                <select
+                    id="team_id"
+                    name="team_id"
+                    required
+                    class="border border-gray-300 rounded p-2">
+                    <option value="" disabled selected>--- Select Team ---</option>
+                    {% for team in all_teams %}
+                        <option value="{{ team.id }}">{{ team.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Submit Button -->
+            <button
+                    type="submit"
+                    class="py-2 px-4 bg-blue-500 text-white rounded hover:bg-blue-600 mt-2 sm:mt-0">
+                Download Team Actions (Filtered)
+            </button>
+        </form>
+
+        <!-- Link for User Actions -->
+        <a href="{% url 'actions:download_actions' scope='user' %}"
+           class="py-2 px-4 bg-blue-500 text-white rounded-xl hover:bg-blue-600 mt-2 block sm:inline-block">
+            Download My Actions (Excel)
+        </a>
+    </div>
 </div>
 {% endblock %}
