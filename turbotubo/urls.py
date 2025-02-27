@@ -6,7 +6,7 @@ from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import path, include
 
-from core.views import index, about
+from core.views import index, about, health_check
 from userprofile.forms import LoginForm
 
 urlpatterns = [
@@ -22,5 +22,6 @@ urlpatterns = [
     path('log-in/', auth_views.LoginView.as_view(template_name='userprofile/login.html', authentication_form=LoginForm), name='login'),
     path('log-out/', auth_views.LogoutView.as_view(), name='logout'),
     path('admin/', admin.site.urls),
+    path('health/', health_check, name='health_check'),
     path('schema/', Schema.as_view()),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
