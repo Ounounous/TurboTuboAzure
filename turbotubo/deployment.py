@@ -2,30 +2,42 @@ import os
 from .settings import *
 from .settings import BASE_DIR
 
-# Access the SECRET_KEY securely from environment variables
+# ACCESS SECRET_KEY SECURELY
 try:
     SECRET_KEY = os.environ['SECRET']
 except KeyError:
     raise Exception(
-        "The 'SECRET' environment variable is missing. Please set it in your Azure App Service or deployment pipeline.")
+        "The 'SECRET' environment variable is missing. Please set it in your Azure App Service or deployment pipeline."
+    )
 
-# Ensure WEBSITE_HOSTNAME is set for ALLOWED_HOSTS and CSRF_TRUSTED_ORIGINS
+# ACCESS WEBSITE_HOSTNAME FOR ALLOWED_HOSTS AND CSRF_TRUSTED_ORIGINS
 try:
-    WEBSITE_HOSTNAME = os.environ['WEBSITE_HOSTNAME']
+    WEBSITE_HOSTNAME = os.environ['WEBSITE_HOSTNAME']  # Azure provides this automatically
 except KeyError:
-    # Provide a fallback hostname for local development
-    WEBSITE_HOSTNAME = 'localhost'
+    WEBSITE_HOSTNAME = 'localhost'  # Fallback for local testing
 
 ALLOWED_HOSTS = [WEBSITE_HOSTNAME]
 CSRF_TRUSTED_ORIGINS = ['https://' + WEBSITE_HOSTNAME]
 
-# Disable DEBUG for production
+# DISABLE DEBUG FOR PRODUCTION
 DEBUG = False
 
-# Middleware configuration with Whitenoise for static file serving
+# HTTPS SECURITY SETTINGS
+SECURE_SSL_REDIRECT = True  # Redirect all HTTP traffic to HTTPS
+SESSION_COOKIE_SECURE = True  # Ensure cookies are sent over HTTPS only
+CSRF_COOKIE_SECURE = True  # Protect CSRF cookies via HTTPS
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # Identify HTTPS requests via proxy
+
+# ENABLE HTTP STRICT TRANSPORT SECURITY (HSTS)
+SECURE_HSTS_SECONDS = 31536000  # Enforce HTTPS for 1 year
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True  # Apply to subdomains
+SECURE_HSTS_PRELOAD = True  # Preload HSTS in browsers
+# Note: SECURE_HSTS_PRELOAD is safe to enable, as your app is already using HTTPS.
+
+# MIDDLEWARE FOR STATIC FILE SERVING WITH WHITENOISE
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # Enables serving static files efficiently via Whitenoise
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -34,11 +46,11 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-# Static files setup for production
+# STATIC FILES CONFIGURATION FOR PRODUCTION
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
-# Parse AZURE_POSTGRESQL_CONNECTIONSTRING securely with error handling
+# DATABASE CONFIGURATION FROM AZURE CONNECTION STRING
 try:
     # Try to load the connection string from the environment variables
     connection_string = os.environ['AZURE_POSTGRESQL_CONNECTIONSTRING']
@@ -53,7 +65,7 @@ except KeyError:
         "password=Dt0ylE4wKt$bIMo3"
     )
 
-# Parse the connection string into parameters
+# PARSE THE CONNECTION STRING INTO PARAMETERS
 try:
     parameters = {
         pair.split('=')[0]: pair.split('=')[1]
