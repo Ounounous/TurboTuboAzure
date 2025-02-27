@@ -9,3 +9,5 @@ def about(request):
 
 def health_check(request):
     return JsonResponse({"status": "healthy"})
+
+#intento 2
