@@ -16,7 +16,9 @@ try:
 except KeyError:
     WEBSITE_HOSTNAME = 'localhost'  # Fallback for local testing
 
-ALLOWED_HOSTS = [WEBSITE_HOSTNAME]
+ALLOWED_HOSTS = [WEBSITE_HOSTNAME,
+                 '169.254.130.4'  # Azure health probe
+                 ]
 CSRF_TRUSTED_ORIGINS = ['https://' + WEBSITE_HOSTNAME]
 
 # DISABLE DEBUG FOR PRODUCTION
