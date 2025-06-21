@@ -146,16 +146,20 @@ LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'handlers': {
+        'console': {
+            'level': 'DEBUG',
+            'class': 'logging.StreamHandler',
+        },
         'file': {
             'level': 'DEBUG',
             'class': 'logging.FileHandler',
-            'filename': '/tmp/django_debug.log',  # Path for log file
+            'filename': '/home/LogFiles/django_debug.log',  # Alternate location
         },
     },
     'loggers': {
         'django': {
-            'handlers': ['file'],
-            'level': 'DEBUG',  # Log all messages at DEBUG level and higher
+            'handlers': ['console', 'file'],  # Add console and file
+            'level': 'DEBUG',
             'propagate': True,
         },
     },
