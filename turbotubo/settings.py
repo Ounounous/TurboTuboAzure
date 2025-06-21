@@ -48,7 +48,7 @@ INSTALLED_APPS = [
     'lead',
     'team',
     'userprofile',
-    'schema_graph',
+  #  'schema_graph',
     
 ]
 

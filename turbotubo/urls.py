@@ -1,4 +1,4 @@
-from schema_graph.views import Schema
+# from schema_graph.views import Schema
 
 from django.conf import settings
 from django.conf.urls.static import static
@@ -23,5 +23,5 @@ urlpatterns = [
     path('log-out/', auth_views.LogoutView.as_view(), name='logout'),
     path('admin/', admin.site.urls),
     path('health/', health_check, name='health_check'),
-    path('schema/', Schema.as_view()),
+    #path('schema/', Schema.as_view()),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
