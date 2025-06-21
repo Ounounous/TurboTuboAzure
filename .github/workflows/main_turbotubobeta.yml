@@ -1,40 +1,49 @@
-name: Build and deploy Python app to Azure Web App - turbotubobeta
+name: Build and deploy Python app to Azure Web App
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
+
+env:
+  PYTHON_VERSION: '3.9'  # Match Azure's Python version
+  DJANGO_SETTINGS_MODULE: turbotubo.deployment
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read # This is required for actions/checkout
+    environment: Production
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python version
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Upgrade pip and install dependencies
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements.txt --no-warn-script-location
+          pip freeze > deployed_requirements.txt  # Create deployment manifest
+
+      - name: Upload requirements snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-dependencies
+          path: deployed_requirements.txt
 
       - name: Collect static files
         run: python manage.py collectstatic --noinput
         env:
-          DJANGO_SETTINGS_MODULE: turbotubo.deployment
           SECRET: ${{ secrets.SECRET }}
 
-      - name: Deploy to Azure Web App
+      - name: Deploy to Azure
         uses: azure/webapps-deploy@v3
         with:
           app-name: 'turbotubobeta'
           slot-name: 'Production'
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: .
