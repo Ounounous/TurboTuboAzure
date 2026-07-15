@@ -1,0 +1,35 @@
+{% extends 'core/base.html' %}
+
+{% block title %}{{ cartera.nombre }}{% endblock %}
+
+{% block content %}
+<div class="py-6 px-6">
+  <h1 class="mb-4 text-xl">{{ cartera.nombre }}</h1>
+
+  <h2 class="mb-2 text-lg">Subcarteras</h2>
+
+  {% if subcarteras %}
+    <div class="mt-2 flex justify-between">
+      <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Nombre</p>
+      <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Por defecto</p>
+    </div>
+    {% for subcartera in subcarteras %}
+      <div class="flex justify-between">
+        <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ subcartera.nombre }}</p>
+        <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ subcartera.es_default|yesno:"Sí,No" }}</p>
+      </div>
+    {% endfor %}
+  {% else %}
+    <p>No existen subcarteras todavía</p>
+  {% endif %}
+
+  <h2 class="mt-6 mb-2 text-lg">Agregar Subcartera</h2>
+  <form method="post" action="{% url 'cartera:add_subcartera' cartera.pk %}">
+    {% csrf_token %}
+
+    {{ subcartera_form.as_p }}
+
+    <button class="py-4 px-8 bg-pink-600 text-white rounded-xl">Guardar</button>
+  </form>
+</div>
+{% endblock %}

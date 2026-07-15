@@ -23,7 +23,11 @@
         </div>
         <div class="flex flex-col">
           <p class="font-semibold">Cartera:</p>
-          <p class="mb-2 ml-2">{{ lead.cartera }}</p>
+          <p class="mb-2 ml-2">{{ lead.subcartera.cartera.nombre }}</p>
+        </div>
+        <div class="flex flex-col">
+          <p class="font-semibold">Subcartera:</p>
+          <p class="mb-2 ml-2">{{ lead.subcartera.nombre }}</p>
         </div>
         <div class="flex flex-col">
           <p class="font-semibold">Saldo Insoluto:</p>
@@ -91,7 +95,7 @@
       <summary class="font-bold cursor-pointer">Gestiones</summary>
       <div class="mt-4">
         <div class="mb-4">
-          <a href="{% url 'actions:multistep_step_with_lead' step=2 lead_id=lead.pk %}" class="py-2 px-4 rounded-xl bg-blue-500 text-white">Add New Action</a>
+          <a href="{% url 'actions:multistep_step_with_lead' step=2 lead_id=lead.pk %}" class="py-2 px-4 rounded-xl bg-blue-500 text-white" onclick="openGestionModal(this.href); return false;">Add New Action</a>
         </div>
         
         {% if lead.actions.all %}
@@ -112,8 +116,8 @@
               <tbody>
                 {% for action in lead.actions.all %}
                   <tr class="{% cycle '' 'bg-gray-100' %}">
-                    <td class="py-2 px-2">{{ action.get_action_type_display }}</td>
-                    <td class="py-2 px-2">{{ action.get_result_display }}</td>
+                    <td class="py-2 px-2">{{ action.medio.nombre }}</td>
+                    <td class="py-2 px-2">{{ action.resultado.nombre }}</td>
                     <td class="py-2 px-2">{{ action.user }}</td>
                     <td class="py-2 px-2">{{ action.created_at|date:"d-M-Y H:i" }}</td>
                     <td class="py-2 px-2">{{ action.phone|default_if_none:"-" }}</td>
@@ -131,6 +135,42 @@
 
       </div>
     </details>
+
+    <hr class="my-4">
+
+    <details class="bg-white shadow rounded-lg p-4">
+      <summary class="font-bold cursor-pointer">Grabaciones de llamadas</summary>
+      <div class="mt-4">
+        {% if lead.pending_pbx_calls.all|length %}
+          {% with pending_count=lead.pending_pbx_calls.all|length %}
+            {% for pc in lead.pending_pbx_calls.all %}
+              {% if not pc.resolved %}
+                <p class="text-sm text-gray-500 mb-2">⏳ Llamada iniciada {{ pc.requested_at|date:"d-M-Y H:i" }}, buscando su grabación...</p>
+              {% endif %}
+            {% endfor %}
+          {% endwith %}
+        {% endif %}
+
+        {% if lead.call_recordings.all %}
+          <div class="space-y-4">
+            {% for rec in lead.call_recordings.all %}
+              <div class="bg-gray-100 py-4 px-4 rounded-xl">
+                <p class="mb-2 text-sm">
+                  <strong>{{ rec.user.username|default:"-" }}</strong> · {{ rec.call_date|date:"d-M-Y H:i"|default:rec.created_at|date:"d-M-Y H:i" }}
+                  {% if rec.duration_seconds %} · {{ rec.duration_seconds }}s{% endif %}
+                </p>
+                <audio controls class="w-full">
+                  <source src="{{ rec.audio_file.url }}" type="audio/mpeg">
+                </audio>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p>No hay grabaciones todavía.</p>
+        {% endif %}
+      </div>
+    </details>
+
     <details>
       <summary>Demographics</summary>
 <div>
@@ -143,21 +183,21 @@
     <p class="mb-2">{{ demographic.principal_email }}</p>
     <p class="font-semibold">Address:</p>
     <p class="mb-2">{{ demographic.principal_address }}</p>
-    <p class="font-semibold">Phones:</p>
-    <ul>
-      {% for phone in lead.phone_set.all %}
-        {% if phone.phone_type == 'Principal' %}
-          <li>{{ phone.phone_number }}</li>
-        {% endif %}
-      {% endfor %}
-    </ul>
-    <p class="font-semibold">Bienes:</p>
-    <ul>
-      {% for item in lead.iditem_set.all %}
-        <li>{{ item.item_type }} - {{ item.patente }} - {{ item.marca }} - {{ item.modelo }}</li>
-      {% endfor %}
-    </ul>
   {% endfor %}
+  <p class="font-semibold">Phones:</p>
+  <ul>
+    {% for phone in lead.phone_set.all %}
+      {% if phone.phone_type == 'principal' %}
+        <li>{{ phone.phone_number }} ({{ phone.get_phone_number_status_display }})</li>
+      {% endif %}
+    {% endfor %}
+  </ul>
+  <p class="font-semibold">Bienes:</p>
+  <ul>
+    {% for item in lead.iditem_set.all %}
+      <li>{{ item.item_type }} - {{ item.patente }} - {{ item.marca }} - {{ item.modelo }}</li>
+    {% endfor %}
+  </ul>
   {% if aval_demographics %}
     <hr class="my-4">
     <p class="font-semibold">AVAL Demographics:</p>
@@ -168,7 +208,7 @@
     <p class="font-semibold">Phone Numbers:</p>
     <ul>
       {% for phone in lead.phone_set.all %}
-        {% if phone.phone_type == 'Aval' %}
+        {% if phone.phone_type == 'aval' %}
           <li>{{ phone.phone_number }}</li>
         {% endif %}
       {% endfor %}

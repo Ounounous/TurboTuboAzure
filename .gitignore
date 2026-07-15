@@ -54,6 +54,9 @@ coverage.xml
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
+backups/
+sample_uploads/
+media/call_recordings/
 
 # PEP 582; used by e.g. github.com/David-OConnor/pyflow
 __pypackages__/
@@ -66,4 +69,5 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+django_env/
 

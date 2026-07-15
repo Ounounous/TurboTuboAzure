@@ -1,62 +1,200 @@
-{% extends 'core/base.html' %}
+{% extends 'actions/popup_base.html' %}
 
 {% block content %}
-<div class="container mx-auto mt-8">
-  <h1 class="text-2xl font-bold mb-4">Multi-step Action Form</h1>
+<div class="mx-auto mt-4 px-6 pb-6">
+  <h1 class="text-2xl font-bold mb-4">Nueva gestión{% if lead %} - {{ lead.op }} {{ lead.name }}{% endif %}</h1>
 
   {% if step == 1 %}
   <form method="post">
     {% csrf_token %}
     {{ form.as_p }}
-    <button type="submit" class="btn btn-primary">Next</button>
+    <button type="submit" class="py-2 px-4 bg-teal-500 text-white rounded-xl">Siguiente</button>
   </form>
+
   {% elif step == 2 %}
   <form method="post">
     {% csrf_token %}
+    <p class="font-semibold mb-2">¿A qué teléfono o email vas a gestionar?</p>
     {{ demographic_form.as_p }}
-    <button type="submit" class="btn btn-primary">Next</button>
+    <button type="submit" class="py-2 px-4 bg-teal-500 text-white rounded-xl">Siguiente</button>
+    <a href="{% url 'actions:cancel' lead.id %}" class="py-2 px-4 bg-gray-300 rounded-xl inline-block">Cancelar</a>
   </form>
+
   {% elif step == 3 %}
-  <form method="post">
+  <p class="mb-4">
+    Gestionando:
+    {% if selected_phone %}
+      <strong>{{ selected_phone.phone_number }}</strong> ({{ selected_phone.get_phone_type_display }})
+    {% elif selected_email %}
+      <strong>{{ selected_email }}</strong>
+    {% endif %}
+  </p>
+
+  <form method="post" id="action-form" data-lead-id="{{ lead.id }}" data-phone-id="{% if selected_phone %}{{ selected_phone.id }}{% endif %}">
     {% csrf_token %}
 
-    <div>
-      {{ action_form.non_field_errors }}
+    {{ action_form.non_field_errors }}
+
+    <div class="form-group mb-4">
+      <label class="font-semibold block mb-1">Medio:</label>
+      {{ action_form.medio.errors }}
+
+      {% if not action_form.fields.medio.queryset %}
+        <p class="text-red-600 bg-red-50 border border-red-200 rounded-xl py-2 px-4">
+          La cartera <strong>{{ lead.subcartera.cartera.nombre }}</strong> todavía no tiene un árbol de gestiones cargado.
+          Pídele a un administrador que lo importe antes de poder registrar esta gestión.
+        </p>
+      {% elif canal == 'telefono' %}
+        <div class="flex gap-2" id="medio-buttons">
+          {% for medio in action_form.fields.medio.queryset %}
+            <button type="button"
+                    class="medio-btn py-2 px-4 rounded-xl border"
+                    data-medio-id="{{ medio.id }}"
+                    data-nombre="{{ medio.nombre }}"
+                    {% if 'whatsapp' in medio.nombre|lower %}
+                      data-native-url="https://wa.me/{{ phone_digits }}"
+                    {% else %}
+                      data-native-url="tel:{{ phone_digits }}"
+                      {% if has_pbx %}data-pbx-call="1"{% endif %}
+                    {% endif %}>
+              {% if 'whatsapp' in medio.nombre|lower %}💬{% else %}☎️{% endif %} {{ medio.nombre }}
+            </button>
+          {% endfor %}
+        </div>
+        {% if has_pbx %}<p class="text-sm text-gray-500 mt-1">☎️ marcará por la central telefónica (pbxip.cl) a tu anexo, luego te conecta con el cliente.</p>{% endif %}
+      {% else %}
+        <div class="flex gap-2 items-center" id="medio-buttons">
+          {% for medio in action_form.fields.medio.queryset %}
+            <button type="button"
+                    class="medio-btn py-2 px-4 rounded-xl border"
+                    data-medio-id="{{ medio.id }}"
+                    data-nombre="{{ medio.nombre }}"
+                    data-native-url="mailto:{{ selected_email }}">
+              ✉️ {{ medio.nombre }}
+            </button>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      <select name="medio" id="id_medio" class="hidden">
+        <option value="">--- Elige un medio ---</option>
+        {% for medio in action_form.fields.medio.queryset %}
+          <option value="{{ medio.id }}" {% if action_form.medio.value|stringformat:"s" == medio.id|stringformat:"s" %}selected{% endif %}>{{ medio.nombre }}</option>
+        {% endfor %}
+      </select>
     </div>
 
-    <div class="form-group">
-      <label for="{{ action_form.action_type.id_for_label }}">Action Type:</label>
-      {{ action_form.action_type.errors }}
-      {{ action_form.action_type }}
+    <div class="form-group mb-4">
+      <label class="font-semibold block mb-1" for="id_resultado">Resultado:</label>
+      {{ action_form.resultado.errors }}
+      <!-- Medio y Resultado son independientes: la lista de resultados no depende del medio elegido. -->
+      <select name="resultado" id="id_resultado" class="border p-2 rounded w-full" required>
+        <option value="">--- Elige un resultado ---</option>
+        {% for resultado in action_form.fields.resultado.queryset %}
+          <option value="{{ resultado.id }}" data-fecha="{% if resultado.requiere_fecha_pago %}1{% else %}0{% endif %}" {% if action_form.resultado.value|stringformat:"s" == resultado.id|stringformat:"s" %}selected{% endif %}>{{ resultado.nombre }}{% if resultado.tipo_contacto %} ({{ resultado.tipo_contacto|title }}){% endif %}</option>
+        {% endfor %}
+      </select>
     </div>
 
-    <div class="form-group">
-      <label for="{{ action_form.result.id_for_label }}">Result:</label>
-      {{ action_form.result.errors }}
-      {{ action_form.result }}
+    <div class="form-group mb-4" id="fecha-compromiso-group" style="display:none;">
+      <label class="font-semibold block mb-1" for="{{ action_form.fecha_compromiso.id_for_label }}">Fecha de compromiso de pago:</label>
+      {{ action_form.fecha_compromiso.errors }}
+      {{ action_form.fecha_compromiso }}
+      <label class="font-semibold block mb-1 mt-2" for="{{ action_form.monto_compromiso.id_for_label }}">Monto del compromiso ($):</label>
+      {{ action_form.monto_compromiso.errors }}
+      {{ action_form.monto_compromiso }}
     </div>
 
-    <div class="form-group">
-      <label for="{{ action_form.comment.id_for_label }}">Comment:</label>
+    <div class="form-group mb-4">
+      <label class="font-semibold block mb-1" for="{{ action_form.comment.id_for_label }}">Comentario:</label>
       {{ action_form.comment.errors }}
       {{ action_form.comment }}
     </div>
 
-    <div class="form-group">
-      <label for="{{ action_form.target.id_for_label }}">Target:</label>
-      {{ action_form.target.errors }}
-      {{ action_form.target }}
+    <div class="flex gap-2">
+      <button type="submit" name="submit_action" value="save" class="py-2 px-4 bg-teal-500 text-white rounded-xl">Grabar Acción</button>
+      <button type="submit" name="submit_action" value="add_another" class="py-2 px-4 bg-blue-500 text-white rounded-xl">Grabar y agregar otra</button>
+      <a href="{% url 'actions:cancel' lead.id %}" class="py-2 px-4 bg-gray-300 rounded-xl inline-block">Cancelar</a>
     </div>
-
-    {% if not phone_disabled %}
-    <p>Phone: {{ action_form.phone }}</p>
-    {% endif %}
-    {% if not email_disabled %}
-    <p>Email: {{ action_form.email }}</p>
-    {% endif %}
-
-    <button type="submit" class="btn btn-primary">Submit</button>
   </form>
+
+  <script>
+    (function () {
+      var medioSelect = document.getElementById('id_medio');
+      var resultadoSelect = document.getElementById('id_resultado');
+      var fechaGroup = document.getElementById('fecha-compromiso-group');
+      var fechaInputs = Array.from(fechaGroup.querySelectorAll('input'));
+      var fechaInput = fechaInputs[0];
+      var medioButtons = Array.from(document.querySelectorAll('.medio-btn'));
+
+      function updateFechaVisibility() {
+        var selected = resultadoSelect.options[resultadoSelect.selectedIndex];
+        var requiereFecha = selected && selected.dataset.fecha === '1';
+        fechaGroup.style.display = requiereFecha ? '' : 'none';
+        fechaInput.required = !!requiereFecha;
+        if (!requiereFecha) { fechaInputs.forEach(function (i) { i.value = ''; }); }
+      }
+
+      function selectMedio(btn) {
+        medioButtons.forEach(function (b) {
+          b.classList.remove('bg-teal-500', 'text-white');
+          b.classList.add('bg-white');
+        });
+        btn.classList.add('bg-teal-500', 'text-white');
+        btn.classList.remove('bg-white');
+        medioSelect.value = btn.dataset.medioId;
+      }
+
+      function originatePbxCall(btn) {
+        var actionForm = document.getElementById('action-form');
+        var body = new URLSearchParams({
+          lead_id: actionForm.dataset.leadId,
+          phone_id: actionForm.dataset.phoneId,
+        });
+        var originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'Llamando...';
+        fetch('{% url "actions:pbx_call" %}', {
+          method: 'POST',
+          headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: body,
+        }).then(function (resp) { return resp.json(); }).then(function (data) {
+          btn.disabled = false;
+          btn.textContent = originalText;
+          if (!data.ok) {
+            // Sin credenciales o error de la central: cae de vuelta al tel: nativo.
+            window.open(btn.dataset.nativeUrl, '_blank');
+          }
+        }).catch(function () {
+          btn.disabled = false;
+          btn.textContent = originalText;
+          window.open(btn.dataset.nativeUrl, '_blank');
+        });
+      }
+
+      medioButtons.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          selectMedio(btn);
+          if (btn.dataset.pbxCall) {
+            originatePbxCall(btn);
+          } else if (btn.dataset.nativeUrl) {
+            window.open(btn.dataset.nativeUrl, '_blank');
+          }
+        });
+      });
+
+      resultadoSelect.addEventListener('change', updateFechaVisibility);
+
+      // Si solo hay un medio disponible (típico para email), se preselecciona solo.
+      if (medioButtons.length === 1) {
+        selectMedio(medioButtons[0]);
+      }
+      updateFechaVisibility();
+    })();
+  </script>
   {% endif %}
 </div>
 {% endblock %}

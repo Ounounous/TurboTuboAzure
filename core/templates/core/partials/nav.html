@@ -7,8 +7,15 @@
         
             <!-- <a href="{% url 'team:detail' active_team.id %}" class="text-white">{{ active_team.name }}</a> -->
             <!-- <a href="{% url 'dashboard:index' %}" class="py-4 px-6 bg-pink-400 rounded-xl text-white">Dashboard</a> -->
-            <a href="{% url 'leads:list' %}" class="py-4 px-6 bg-pink-700 rounded-xl text-white">Cartera</a>
+            <a href="{% url 'leads:list' %}" class="py-4 px-6 bg-pink-700 rounded-xl text-white">Leads</a>
+            {% if request.user.userprofile.user_type in 'admin,owner,supervisor' %}
+            <a href="{% url 'cartera:list' %}" class="py-4 px-6 bg-pink-700 rounded-xl text-white">Carteras</a>
+            {% endif %}
             <a href="{% url 'actions:index' %}" class="py-4 px-6 bg-pink-700 rounded-xl text-white">Gestiones</a>
+            {% if request.user.userprofile.user_type in 'admin,owner,supervisor' %}
+            <a href="{% url 'actions:recordings_list' %}" class="py-4 px-6 bg-pink-700 rounded-xl text-white">Grabaciones</a>
+            <a href="{% url 'actions:commitments_list' %}" class="py-4 px-6 bg-pink-700 rounded-xl text-white">Compromisos de pago</a>
+            {% endif %}
             <!-- <a href="{% url 'clients:list' %}" class="py-4 px-6 bg-blue-300 rounded-xl text-white">Clients</a>   -->
             <a href="{% url 'demographics:index' %}" class="py-4 px-6 bg-blue-400 rounded-xl text-white">Subir Demografía</a>
             <a href="{% url 'leads:status-changes' 'day' %}" class="py-4 px-6 bg-pink-700 rounded-xl text-white">Cambios de estado</a>

@@ -17,6 +17,13 @@
       </div>
     </div>
 
+    <div class="mb-4 space-x-2">
+      <span class="font-semibold">Mostrar:</span>
+      <a href="?limit=10" class="{% if limit == 10 %}font-bold underline{% endif %}">10</a>
+      <a href="?limit=50" class="{% if limit == 50 %}font-bold underline{% endif %}">50</a>
+      <a href="?limit=100" class="{% if limit == 100 %}font-bold underline{% endif %}">100</a>
+    </div>
+
     {% if leads %}
       <div class="mt-6 flex justify-between">
         <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Op</p>
@@ -28,6 +35,7 @@
         <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Valor Cuota</p>
         <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Cuotas Atrasadas</p>
         <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Cartera</p>
+        <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Subcartera</p>
         <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Tipo Cobranza</p>
         <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Status</p>
         <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Ciclo Cartera</p>
@@ -47,15 +55,17 @@
           <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.saldo_deuda }}</p>
           <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.valor_cuota }}</p>
           <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.cuotas_atrasadas }}</p>
-          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.cartera }}</p>
+          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.subcartera.cartera.nombre }}</p>
+          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.subcartera.nombre }}</p>
           <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.tipo_cobranza }}</p>
           <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.get_status_display }}</p>
           <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.ciclo_cartera }}</p>
           <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.ciclo }}</p>
           <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.activo }}</p>
           <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.tiene_aval }}</p>
-          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">
-            <a href="{% url 'leads:detail' lead.pk %}" class="btn btn-primary">Ver Detalles</a>
+          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %} space-x-2">
+            <a href="{% url 'leads:detail' lead.pk %}" title="Ver Detalles" class="inline-block text-xl">👁️</a>
+            <a href="{% url 'actions:multistep_step_with_lead' step=2 lead_id=lead.pk %}" title="Crear Acción" class="inline-block text-xl" onclick="openGestionModal(this.href); return false;">⚡</a>
           </p>
         </div>
       {% empty %}

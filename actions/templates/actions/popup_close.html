@@ -1,0 +1,12 @@
+<!doctype html>
+<html>
+<body>
+<script>
+    if (window.parent && window.parent.closeGestionModalAndRefresh) {
+        window.parent.closeGestionModalAndRefresh();
+    } else {
+        window.location.href = '/dashboard/leads/';
+    }
+</script>
+</body>
+</html>

@@ -10,10 +10,15 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
+import os
 from pathlib import Path
+from dotenv import load_dotenv
+
 # Trigger GitHub Actions
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+load_dotenv(BASE_DIR / '.env')
 
 
 # Quick-start development settings - unsuitable for production
@@ -41,15 +46,17 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'actions',
+    'cartera',
     'client',
     'core',
     'dashboard',
-    'demographics',  
+    'demographics',
+    'django_celery_beat',
     'lead',
     'team',
     'userprofile',
   #  'schema_graph',
-    
+
 ]
 
 MIDDLEWARE = [
@@ -61,6 +68,18 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+# Allow same-origin framing so the "crear accion" popup (iframe inside a <dialog>) can load.
+# Django's default is DENY, which blocks framing even from pages on this same site.
+X_FRAME_OPTIONS = 'SAMEORIGIN'
+
+# Fernet key used to encrypt/decrypt per-user PBX (pbxip.cl) passwords at rest.
+PBX_ENCRYPTION_KEY = os.environ.get('PBX_ENCRYPTION_KEY', '')
+
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = CELERY_BROKER_URL
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+CELERY_TIMEZONE = 'America/Santiago'
 
 ROOT_URLCONF = 'turbotubo.urls'
 
@@ -89,8 +108,12 @@ WSGI_APPLICATION = 'turbotubo.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.environ.get('DB_NAME', 'turbotubo'),
+        'USER': os.environ.get('DB_USER', 'turbotubo'),
+        'PASSWORD': os.environ.get('DB_PASSWORD', 'turbotubo'),
+        'HOST': os.environ.get('DB_HOST', 'localhost'),
+        'PORT': os.environ.get('DB_PORT', '5432'),
     }
 }
 
@@ -149,7 +172,7 @@ LOGGING = {
         'file': {
             'level': 'DEBUG',
             'class': 'logging.FileHandler',
-            'filename': '/tmp/django_debug.log',  # Path for log file
+            'filename': BASE_DIR / 'django_debug.log',  # Path for log file
         },
     },
     'loggers': {

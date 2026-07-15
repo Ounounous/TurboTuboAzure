@@ -1,6 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
+    'cartera/templates/cartera/*.html',
     'client/templates/client/*.html',
     'core/templates/core/*.html',
     'core/templates/core/partials/*.html',

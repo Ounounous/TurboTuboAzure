@@ -1,11 +1,12 @@
 from django import forms
 from django.contrib.auth.models import User
+from cartera.models import Cartera
 from .models import Lead, Comment, LeadFile
 
 class AddLeadForm(forms.ModelForm):
     class Meta:
         model = Lead
-        fields = ('op', 'name', 'rut', 'dv', 'saldo_insoluto', 'saldo_deuda', 'valor_cuota', 'cuotas_atrasadas', 'cartera', 'tipo_cobranza', 'status', 'ciclo_cartera', 'ciclo', 'activo', 'tiene_aval',)
+        fields = ('op', 'name', 'rut', 'dv', 'saldo_insoluto', 'saldo_deuda', 'valor_cuota', 'cuotas_atrasadas', 'subcartera', 'tipo_cobranza', 'status', 'ciclo_cartera', 'ciclo', 'activo', 'tiene_aval',)
 
 
 class AddCommentForm(forms.ModelForm):
@@ -20,6 +21,7 @@ class AddFileForm(forms.ModelForm):
         fields = ('file',)
 
 class UploadExcelFileForm(forms.Form):
+    cartera = forms.ModelChoiceField(queryset=Cartera.objects.filter(activo=True), label='Cartera')
     excel_file = forms.FileField(label='Upload Excel file')
 
 class AssignLeadsForm(forms.Form):

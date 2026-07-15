@@ -19,6 +19,7 @@ from openpyxl import load_workbook
 
 from .forms import AddCommentForm, AddFileForm, AddLeadForm, UploadExcelFileForm, AssignLeadsForm, UploadAssignmentFileForm
 from .models import Lead, LeadAssignment, User
+from cartera.models import Cartera, Subcartera
 from demographics.models import IDDemographics, AvalDemographics, IDItem, Phone
 
 from client.models import Client, Comment as ClientComment
@@ -27,13 +28,22 @@ from client.models import Client, Comment as ClientComment
 class LeadListView(LoginRequiredMixin, ListView):
     model = Lead
 
+    def get_limit(self):
+        try:
+            limit = int(self.request.GET.get('limit', 10))
+        except ValueError:
+            limit = 10
+        return limit if limit in (10, 50, 100) else 10
+
     def get_queryset(self):
         queryset = super(LeadListView, self).get_queryset()
         return queryset.filter(Q(assigned_to__pk=self.request.user.pk) | Q(created_by=self.request.user))
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['leads'] = self.get_queryset()
+        limit = self.get_limit()
+        context['leads'] = self.get_queryset()[:limit]
+        context['limit'] = limit
         return context
 
 class LeadDetailView(LoginRequiredMixin, DetailView):
@@ -168,6 +178,8 @@ class UploadExcelFileView(LoginRequiredMixin, View):
         form = UploadExcelFileForm(request.POST, request.FILES)
 
         if form.is_valid():
+            cartera = form.cleaned_data['cartera']
+            subcartera = cartera.subcartera_default
             excel_file = form.cleaned_data['excel_file']
             wb = load_workbook(excel_file)
             sheet = wb.active
@@ -184,13 +196,13 @@ class UploadExcelFileView(LoginRequiredMixin, View):
                     saldo_deuda=row[5],
                     valor_cuota=row[6],
                     cuotas_atrasadas=row[7],
-                    cartera=row[8],
-                    tipo_cobranza=row[9],
-                    status=row[10],
-                    ciclo_cartera=row[11],
-                    ciclo=row[12],
-                    activo=row[13],
-                    tiene_aval=row[14],
+                    subcartera=subcartera,
+                    tipo_cobranza=row[8],
+                    status=row[9],
+                    ciclo_cartera=row[10],
+                    ciclo=row[11],
+                    activo=row[12],
+                    tiene_aval=row[13],
                     created_by=self.request.user,
                     assigned_to=self.request.user,
                     team=self.request.user.userprofile.active_team,
@@ -209,13 +221,13 @@ class DownloadExcelView(View):
         sheet.title = 'Clients'
 
         # Add headers
-        headers = ['Op','Name', 'RUT', 'DV', 'Saldo Insoluto', 'Saldo Deuda', 'Valor Cuota', 'Cuotas Atrasadas', 'Cartera', 'Tipo Cobranza', 'Status', 'Ciclo Cartera', 'Ciclo', 'Activo', 'Tiene Aval']
+        headers = ['Op','Name', 'RUT', 'DV', 'Saldo Insoluto', 'Saldo Deuda', 'Valor Cuota', 'Cuotas Atrasadas', 'Cartera', 'Subcartera', 'Tipo Cobranza', 'Status', 'Ciclo Cartera', 'Ciclo', 'Activo', 'Tiene Aval']
         sheet.append(headers)
 
         # Add data
-        for lead in Lead.objects.all():
+        for lead in Lead.objects.select_related('subcartera__cartera').all():
             sheet.append([
-                lead.op, lead.name, lead.rut, lead.dv, lead.saldo_insoluto, lead.saldo_deuda, lead.valor_cuota, lead.cuotas_atrasadas, lead.cartera, lead.tipo_cobranza, lead.get_status_display(), lead.ciclo_cartera, lead.ciclo, lead.activo, lead.tiene_aval
+                lead.op, lead.name, lead.rut, lead.dv, lead.saldo_insoluto, lead.saldo_deuda, lead.valor_cuota, lead.cuotas_atrasadas, lead.subcartera.cartera.nombre, lead.subcartera.nombre, lead.tipo_cobranza, lead.get_status_display(), lead.ciclo_cartera, lead.ciclo, lead.activo, lead.tiene_aval
             ])
 
         # Save the workbook to a BytesIO stream
@@ -341,12 +353,24 @@ class AssignLeadsView(LoginRequiredMixin, View):
             data = []
 
             for row in sheet.iter_rows(min_row=2, values_only=True):
-                op = row[0]
-                cartera = row[1]
-                collector_username = row[2]  # Assuming the username is in the third column
+                cartera_nombre = str(row[0]).strip() if row[0] is not None else ''
+                subcartera_nombre = str(row[1]).strip() if row[1] is not None else ''
+                op = str(row[2]).strip() if row[2] is not None else ''
+                collector_username = str(row[3]).strip() if row[3] is not None else ''
                 try:
-                    lead = Lead.objects.get(op=op, cartera=cartera, team=team)
-                    collector = User.objects.get(username=collector_username, userprofile__active_team=team)
+                    cartera = Cartera.objects.get(nombre__iexact=cartera_nombre)
+                except Cartera.DoesNotExist:
+                    messages.error(request, f'Cartera no encontrada: {cartera_nombre}.')
+                    continue
+
+                subcartera = Subcartera.objects.filter(cartera=cartera, nombre__iexact=subcartera_nombre).first()
+                if subcartera is None:
+                    subcartera = Subcartera.objects.create(cartera=cartera, nombre=subcartera_nombre)
+
+                try:
+                    lead = Lead.objects.get(op__iexact=op, subcartera__cartera=cartera, team=team)
+                    collector = User.objects.get(username__iexact=collector_username, userprofile__active_team=team)
+                    lead.subcartera = subcartera
                     lead.assigned_to = collector
                     lead.save()
                     LeadAssignment.objects.create(
@@ -355,7 +379,7 @@ class AssignLeadsView(LoginRequiredMixin, View):
                         assigned_by=request.user
                     )
                 except Lead.DoesNotExist:
-                    messages.error(request, f'Lead not found for OP: {op}, Cartera: {cartera}.')
+                    messages.error(request, f'Lead not found for OP: {op}, Cartera: {cartera_nombre}.')
                 except User.DoesNotExist:
                     messages.error(request, f'Collector with username {collector_username} does not exist.')
 

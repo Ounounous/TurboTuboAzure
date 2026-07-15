@@ -5,15 +5,6 @@ from django.apps import apps
 from team.models import Team
 
 class Lead(models.Model):
-    GALGO = 'galgo'
-    TANNER = 'tanner'
-
-    CHOICES_CARTERA = (
-        (TANNER, 'Tanner'),
-        (GALGO, 'Galgo'),
-    )
-
-
     JUDICIAL = 'judicial'
     EXTRAJUDICIAL = 'extra judicial'
 
@@ -111,13 +102,14 @@ class Lead(models.Model):
     saldo_deuda = models.IntegerField()
     valor_cuota = models.IntegerField()
     cuotas_atrasadas = models.IntegerField()
-    cartera = models.CharField(max_length=255, choices=CHOICES_CARTERA, default=GALGO)
+    subcartera = models.ForeignKey('cartera.Subcartera', related_name='leads', on_delete=models.PROTECT)
     tipo_cobranza = models.CharField(max_length=15, choices=CHOICES_TIPO_COBRANZA, default=EXTRAJUDICIAL)
     status = models.CharField(max_length=15, choices=CHOICES_STATUS, default=NO_CONTACTADO)
     ciclo_cartera = models.CharField(max_length=255, choices=CHOICES_CICLO_CARTERA, default=VIGENTE)
     ciclo = models.CharField(max_length=255, choices=CHOICES_CICLO, default=NO_DEFINIDO)
     activo = models.CharField(max_length=255, choices=CHOICES_ACTIVO, default=ACTIVO)
     tiene_aval = models.CharField(max_length=2, choices=CHOICES_AVAL, default=NO)
+    fecha_compromiso_pago = models.DateField(null=True, blank=True)
     converted_to_client = models.BooleanField(default=False)
     created_by = models.ForeignKey(User, related_name='leads', on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)

@@ -33,7 +33,7 @@ class IDItem(models.Model):
 
     @property
     def cartera(self):
-        return self.lead.cartera
+        return self.lead.subcartera.cartera.nombre
 
 
     def __str__(self):
@@ -72,7 +72,7 @@ class Phone(models.Model):
 
     @property
     def cartera(self):
-        return self.lead.cartera
+        return self.lead.subcartera.cartera.nombre
 
     def __str__(self):
         return f"{self.phone_number}"
@@ -89,7 +89,7 @@ class IDDemographics(models.Model):
 
     @property
     def cartera(self):
-        return self.lead.cartera
+        return self.lead.subcartera.cartera.nombre
 
     def __str__(self):
         return f"{self.op} - {self.cartera}"

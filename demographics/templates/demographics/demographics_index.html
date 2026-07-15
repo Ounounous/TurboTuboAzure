@@ -4,51 +4,57 @@
 {% block title %}Demografía{% endblock %}
 
 {% block content %}
-  <h2>Demographics</h2>
+<div class="py-6 px-6">
+  <h2 class="mb-4 text-xl">Demografía</h2>
   <div class="space-x-4 my-4">
-      <a href="?form_type=iditem"><button class="py-4 px-6 bg-blue-300 rounded-xl text-white">Upload ID Item</button></a>
-      <a href="?form_type=phone"><button class="py-4 px-6 bg-blue-300 rounded-xl text-white">Upload Phone</button></a>
-      <a href="?form_type=iddemographics"><button class="py-4 px-6 bg-blue-300 rounded-xl text-white">Upload ID Demographics</button></a>
-      <a href="?form_type=aval_demographics"><button class="py-4 px-6 bg-blue-300 rounded-xl text-white">Upload Aval Demographics</button></a>
+      <a href="?form_type=phone"><button class="py-4 px-6 bg-blue-300 rounded-xl text-white">Teléfonos</button></a>
+      <a href="?form_type=iddemographics"><button class="py-4 px-6 bg-blue-300 rounded-xl text-white">Email</button></a>
+      <a href="?form_type=address"><button class="py-4 px-6 bg-blue-300 rounded-xl text-white">Dirección</button></a>
+      <a href="?form_type=iditem"><button class="py-4 px-6 bg-blue-300 rounded-xl text-white">Bienes</button></a>
   </div>
 
   <div id="upload-forms" class="mt-6">
-      {% if form_type == 'iditem' %}
-      <div id="upload-iditem-form">
-          <h3>Upload ID Item</h3>
-          <form method="post" enctype="multipart/form-data" action="{% url 'demographics:upload_iditem' %}">
-              {% csrf_token %}
-              <input type="file" name="excel_file" required>
-              <button type="submit" class="py-2 px-4 bg-blue-300 rounded-xl text-white mt-2">Upload</button>
-          </form>
-      </div>
-      {% elif form_type == 'phone' %}
+      {% if form_type == 'phone' %}
       <div id="upload-phone-form">
-          <h3>Upload Phone</h3>
+          <h3 class="text-lg mb-2">Teléfonos</h3>
+          <a href="{% url 'demographics:download_template' 'phone' %}" class="inline-block mb-4 py-2 px-4 bg-teal-400 rounded-xl text-white">Descargar planilla de ejemplo</a>
           <form method="post" enctype="multipart/form-data" action="{% url 'demographics:upload_phone' %}">
               {% csrf_token %}
               <input type="file" name="excel_file" required>
-              <button type="submit" class="py-2 px-4 bg-blue-300 rounded-xl text-white mt-2">Upload</button>
+              <button type="submit" class="py-2 px-4 bg-blue-300 rounded-xl text-white mt-2">Subir</button>
           </form>
       </div>
       {% elif form_type == 'iddemographics' %}
       <div id="upload-iddemographics-form">
-          <h3>Upload ID Demographics</h3>
+          <h3 class="text-lg mb-2">Email</h3>
+          <a href="{% url 'demographics:download_template' 'iddemographics' %}" class="inline-block mb-4 py-2 px-4 bg-teal-400 rounded-xl text-white">Descargar planilla de ejemplo</a>
           <form method="post" enctype="multipart/form-data" action="{% url 'demographics:upload_iddemographics' %}">
               {% csrf_token %}
               <input type="file" name="excel_file" required>
-              <button type="submit" class="py-2 px-4 bg-blue-300 rounded-xl text-white mt-2">Upload</button>
+              <button type="submit" class="py-2 px-4 bg-blue-300 rounded-xl text-white mt-2">Subir</button>
           </form>
       </div>
-      {% elif form_type == 'aval_demographics' %}
-      <div id="upload-aval_demographics-form">
-          <h3>Upload Aval Demographics</h3>
-          <form method="post" enctype="multipart/form-data" action="{% url 'demographics:upload_aval_demographics' %}">
+      {% elif form_type == 'address' %}
+      <div id="upload-address-form">
+          <h3 class="text-lg mb-2">Dirección</h3>
+          <a href="{% url 'demographics:download_template' 'address' %}" class="inline-block mb-4 py-2 px-4 bg-teal-400 rounded-xl text-white">Descargar planilla de ejemplo</a>
+          <form method="post" enctype="multipart/form-data" action="{% url 'demographics:upload_address' %}">
               {% csrf_token %}
               <input type="file" name="excel_file" required>
-              <button type="submit" class="py-2 px-4 bg-blue-300 rounded-xl text-white mt-2">Upload</button>
+              <button type="submit" class="py-2 px-4 bg-blue-300 rounded-xl text-white mt-2">Subir</button>
+          </form>
+      </div>
+      {% elif form_type == 'iditem' %}
+      <div id="upload-iditem-form">
+          <h3 class="text-lg mb-2">Bienes</h3>
+          <a href="{% url 'demographics:download_template' 'iditem' %}" class="inline-block mb-4 py-2 px-4 bg-teal-400 rounded-xl text-white">Descargar planilla de ejemplo</a>
+          <form method="post" enctype="multipart/form-data" action="{% url 'demographics:upload_iditem' %}">
+              {% csrf_token %}
+              <input type="file" name="excel_file" required>
+              <button type="submit" class="py-2 px-4 bg-blue-300 rounded-xl text-white mt-2">Subir</button>
           </form>
       </div>
       {% endif %}
   </div>
+</div>
 {% endblock %}

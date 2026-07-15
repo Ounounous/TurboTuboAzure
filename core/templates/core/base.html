@@ -27,6 +27,27 @@
         {% endblock %}
 
         {% include 'core/partials/footer.html' %}
+
+        <dialog id="gestion-dialog" class="rounded-xl p-0 w-11/12 max-w-2xl">
+            <div class="flex justify-end p-2 bg-gray-100 rounded-t-xl">
+                <button type="button" onclick="closeGestionModal()" class="text-xl px-2" aria-label="Cerrar">✕</button>
+            </div>
+            <iframe id="gestion-iframe" src="about:blank" class="w-full border-0" style="height:75vh;"></iframe>
+        </dialog>
+        <script>
+            function openGestionModal(url) {
+                document.getElementById('gestion-iframe').src = url;
+                document.getElementById('gestion-dialog').showModal();
+            }
+            function closeGestionModal() {
+                document.getElementById('gestion-dialog').close();
+                document.getElementById('gestion-iframe').src = 'about:blank';
+            }
+            function closeGestionModalAndRefresh() {
+                closeGestionModal();
+                window.location.reload();
+            }
+        </script>
     </body>
 </html>
 

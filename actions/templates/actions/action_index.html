@@ -2,7 +2,8 @@
 
 {% block content %}
 <div class="container mx-auto mt-8">
-    <h1 class="text-2xl font-bold mb-4">Actions Index</h1>
+    <h1 class="text-2xl font-bold mb-4">Gestiones</h1>
+
     <!-- Search Form -->
     <form method="GET" action="{% url 'actions:index' %}" class="mb-6">
         <input type="text" name="query" value="{{ query }}" placeholder="Search by OP, RUT, or Aval RUT..." class="border p-2 rounded w-full">
@@ -17,7 +18,7 @@
         <li>
             OP: {{ lead.op }} - RUT: {{ lead.rut }} - Nombre: {{ lead.name }}
             <a href="{% url 'leads:detail' lead.id %}" class="text-white bg-blue-500 px-4 py-2 rounded">Lead Details</a> |
-            <a href="{% url 'actions:multistep_step_with_lead' step=2 lead_id=lead.pk %}" class="text-white bg-teal-500 px-4 py-2 rounded">Create Action</a>
+            <a href="{% url 'actions:multistep_step_with_lead' step=2 lead_id=lead.pk %}" class="text-white bg-teal-500 px-4 py-2 rounded" onclick="openGestionModal(this.href); return false;">Create Action</a>
         </li>
         {% endfor %}
     </ul>
@@ -35,7 +36,7 @@
             {% if aval.id_demographics.lead_set.exists %}
             {% for lead in aval.id_demographics.lead_set.all %}
             <a href="{% url 'leads:detail' lead.id %}" class="text-white bg-blue-500 px-4 py-2 rounded">Lead Details</a> |
-            <a href="{% url 'actions:multistep_step_with_lead' step=2 lead_id=lead.pk %}" class="text-white bg-green-500 px-4 py-2 rounded">Create Action</a>
+            <a href="{% url 'actions:multistep_step_with_lead' step=2 lead_id=lead.pk %}" class="text-white bg-green-500 px-4 py-2 rounded" onclick="openGestionModal(this.href); return false;">Create Action</a>
             {% endfor %}
             {% else %}
             <span class="text-gray-500">No corresponding lead found</span>
@@ -89,6 +90,20 @@
                 </select>
             </div>
 
+            <!-- Cartera Filter: cada cartera puede sacar su propio reporte -->
+            <div>
+                <label for="cartera" class="font-semibold">Cartera:</label>
+                <select
+                    id="cartera"
+                    name="cartera"
+                    class="border border-gray-300 rounded p-2">
+                    <option value="">--- Todas ---</option>
+                    {% for cartera in all_carteras %}
+                        <option value="{{ cartera.id }}">{{ cartera.nombre }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
             <!-- Submit Button -->
             <button
                     type="submit"
@@ -102,6 +117,73 @@
            class="py-2 px-4 bg-blue-500 text-white rounded-xl hover:bg-blue-600 mt-2 block sm:inline-block">
             Download My Actions (Excel)
         </a>
+
+        <!-- Reporte Tanner: formato oficial (.txt, pipe-delimited, un dia) -->
+        <h3 class="text-md mt-4 mb-2 font-bold">Reporte Tanner (formato oficial)</h3>
+        <form method="GET" action="{% url 'actions:tanner_report' %}" class="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <div>
+                <label for="fecha_tanner" class="font-semibold">Fecha:</label>
+                <input type="date" id="fecha_tanner" name="fecha" required class="border border-gray-300 rounded p-2">
+            </div>
+            <button type="submit" class="py-2 px-4 bg-blue-500 text-white rounded hover:bg-blue-600 mt-2 sm:mt-0">
+                Descargar reporte Tanner (.txt)
+            </button>
+        </form>
+
+        <!-- Reporte Nuevo Capital: formato oficial (.xlsx, un dia) -->
+        <h3 class="text-md mt-4 mb-2 font-bold">Reporte Nuevo Capital (formato oficial)</h3>
+        <form method="GET" action="{% url 'actions:nuevocapital_report' %}" class="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <div>
+                <label for="fecha_nc" class="font-semibold">Fecha:</label>
+                <input type="date" id="fecha_nc" name="fecha" required class="border border-gray-300 rounded p-2">
+            </div>
+            <button type="submit" class="py-2 px-4 bg-blue-500 text-white rounded hover:bg-blue-600 mt-2 sm:mt-0">
+                Descargar reporte Nuevo Capital (.xlsx)
+            </button>
+        </form>
+    </div>
+
+    <!-- Latest gestiones (bottom) -->
+    <div class="mt-10">
+        <div class="flex justify-between items-center mb-2">
+            <h2 class="text-xl font-bold">Últimas gestiones{% if request.user.userprofile.user_type in 'admin,owner,supervisor' %} del equipo{% else %} mías{% endif %}</h2>
+            <div class="space-x-2">
+                <span class="font-semibold">Mostrar:</span>
+                <a href="?limit=10{% if query %}&query={{ query }}{% endif %}" class="{% if limit == 10 %}font-bold underline{% endif %}">10</a>
+                <a href="?limit=50{% if query %}&query={{ query }}{% endif %}" class="{% if limit == 50 %}font-bold underline{% endif %}">50</a>
+                <a href="?limit=100{% if query %}&query={{ query }}{% endif %}" class="{% if limit == 100 %}font-bold underline{% endif %}">100</a>
+            </div>
+        </div>
+        {% if recent_actions %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full">
+                <thead>
+                    <tr class="bg-gray-200">
+                        <th class="py-2 px-2 text-left">Lead</th>
+                        <th class="py-2 px-2 text-left">Medio</th>
+                        <th class="py-2 px-2 text-left">Resultado</th>
+                        <th class="py-2 px-2 text-left">Target</th>
+                        <th class="py-2 px-2 text-left">Usuario</th>
+                        <th class="py-2 px-2 text-left">Fecha</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for action in recent_actions %}
+                    <tr class="{% cycle '' 'bg-gray-100' %}">
+                        <td class="py-2 px-2"><a href="{% url 'leads:detail' action.lead.pk %}" class="text-blue-600">{{ action.lead.op }} - {{ action.lead.name }}</a></td>
+                        <td class="py-2 px-2">{{ action.medio.nombre }}</td>
+                        <td class="py-2 px-2">{{ action.resultado.nombre }}</td>
+                        <td class="py-2 px-2">{{ action.get_target_display|default:"-" }}</td>
+                        <td class="py-2 px-2">{{ action.user.username|default:"-" }}</td>
+                        <td class="py-2 px-2">{{ action.created_at|date:"d-M-Y H:i" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p>No hay gestiones registradas todavía.</p>
+        {% endif %}
     </div>
 </div>
 {% endblock %}

@@ -24,6 +24,34 @@
 
     <hr class="mb-4">
 
+    <h2 class="mb-2 text-lg font-bold">Datos personales</h2>
+    <form method="post" class="mb-6">
+        {% csrf_token %}
+        <input type="hidden" name="form" value="profile_data">
+        {{ profile_form.as_p }}
+        <button type="submit" class="py-2 px-4 bg-teal-500 text-white rounded-xl">Guardar datos</button>
+    </form>
+
+    <hr class="mb-4">
+
+    <h2 class="mb-2 text-lg font-bold">Central telefónica (pbxip.cl)</h2>
+    <p class="mb-4 text-sm">
+        Estado:
+        {% if userprofile.has_pbx_credentials %}
+            <span class="text-green-700 font-semibold">Conectado</span>
+        {% else %}
+            <span class="text-gray-500">No configurado</span>
+        {% endif %}
+    </p>
+    <form method="post" class="mb-6">
+        {% csrf_token %}
+        <input type="hidden" name="form" value="pbx_credentials">
+        {{ pbx_form.as_p }}
+        <button type="submit" class="py-2 px-4 bg-teal-500 text-white rounded-xl">Guardar credenciales PBX</button>
+    </form>
+
+    <hr class="mb-4">
+
     <form method="post" action="{% url 'logout' %}" style="display: inline;">
         {% csrf_token %}
         <button type="submit" class="py-4 px-6 bg-red-600 rounded-xl text-white">Log out</button>

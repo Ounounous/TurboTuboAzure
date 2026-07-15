@@ -1,5 +1,5 @@
 from django import forms
-from .models import Action, Lead
+from .models import Action, Lead, Medio, Resultado
 from demographics.models import Phone, IDDemographics, AvalDemographics
 import logging
 
@@ -45,32 +45,54 @@ class ActionForm(forms.ModelForm):
     class Meta:
         model = Action
         fields = [
-            'action_type',
-            'result',
+            'medio',
+            'resultado',
             'comment',
-            'target',
+            'fecha_compromiso',
+            'monto_compromiso',
         ]
+        widgets = {
+            'fecha_compromiso': forms.DateInput(attrs={'type': 'date'}),
+            'monto_compromiso': forms.NumberInput(attrs={'min': 0, 'placeholder': 'Monto en pesos'}),
+        }
+        labels = {
+            'fecha_compromiso': 'Fecha de compromiso de pago',
+            'monto_compromiso': 'Monto del compromiso ($)',
+        }
 
     def __init__(self, *args, **kwargs):
+        cartera = kwargs.pop('cartera', None)
+        canal = kwargs.pop('canal', None)
         super().__init__(*args, **kwargs)
 
-        self.fields['target'].required = True
-        self.fields['result'].required = True
+        medios_qs = Medio.objects.none()
+        resultados_qs = Resultado.objects.none()
+        if cartera and canal:
+            medios_qs = Medio.objects.filter(cartera=cartera, canal=canal)
+        if cartera:
+            # Medio y Resultado son independientes: el resultado se elige de la lista
+            # completa de la cartera, sin filtrar por el medio elegido.
+            resultados_qs = Resultado.objects.filter(cartera=cartera)
 
-        # Debug logging
+        self.fields['medio'].queryset = medios_qs
+        self.fields['resultado'].queryset = resultados_qs
+        self.fields['medio'].required = True
+        self.fields['resultado'].required = True
+        self.fields['fecha_compromiso'].required = False
+        self.fields['monto_compromiso'].required = False
+
         logger.debug(f"Form initialized with fields: {self.fields}")
 
     def clean(self):
         cleaned_data = super().clean()
 
-        action_type = cleaned_data.get('action_type')
-        result = cleaned_data.get('result')
-        target = cleaned_data.get('target')
+        medio = cleaned_data.get('medio')
+        resultado = cleaned_data.get('resultado')
+        fecha_compromiso = cleaned_data.get('fecha_compromiso')
 
-        logger.debug(f"Cleaned data - Action Type: {action_type}, Result: {result}, Target: {target}")
+        if resultado and resultado.requiere_fecha_pago and not fecha_compromiso:
+            self.add_error('fecha_compromiso', 'Este resultado requiere una fecha de compromiso/pago.')
 
-        # Perform any additional validation as needed
-        if not action_type or not result or not target:
-            raise forms.ValidationError("All fields are required.")
+        logger.debug(f"Cleaned data - Medio: {medio}, Resultado: {resultado}, Fecha: {fecha_compromiso}")
 
         return cleaned_data
