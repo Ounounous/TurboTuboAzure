@@ -8,19 +8,11 @@
 
   <!-- Filtros -->
   <form method="get" class="mb-6">
+    {% if selected_cartera %}<input type="hidden" name="cartera" value="{{ selected_cartera }}">{% endif %}
     <div class="flex flex-wrap gap-4 items-end">
       <div>
         <label class="font-semibold block mb-1" for="op">ID (OP)</label>
         <input type="text" name="op" id="op" value="{{ selected_op }}">
-      </div>
-      <div>
-        <label class="font-semibold block mb-1" for="cartera">Cartera</label>
-        <select name="cartera" id="cartera">
-          <option value="">--- Todas ---</option>
-          {% for cartera in carteras %}
-            <option value="{{ cartera.id }}" {% if selected_cartera == cartera.id|stringformat:"s" %}selected{% endif %}>{{ cartera.nombre }}</option>
-          {% endfor %}
-        </select>
       </div>
       <div>
         <label class="font-semibold block mb-1" for="fecha">Fecha compromiso</label>
@@ -50,54 +42,50 @@
     </div>
   </div>
 
-  <!-- Total general (todas las carteras del filtro actual) -->
-  {% if grupos %}
-    <div class="card p-4 mb-6 flex flex-wrap items-center justify-between gap-3">
-      <span class="font-bold text-lg">Total (todas las carteras)</span>
-      <span class="text-lg">{{ gran_count }} compromiso(s) · <strong>${{ gran_total|floatformat:0 }}</strong></span>
-    </div>
-
-    <!-- Una tabla por cartera, con su propia suma -->
-    {% for g in grupos %}
-      <div class="mb-8">
-        <div class="flex flex-wrap items-center justify-between gap-3 mb-2">
-          <h2 class="text-lg font-bold">{{ g.cartera }}</h2>
-          <span class="muted">{{ g.count }} compromiso(s) · <strong>${{ g.total|floatformat:0 }}</strong></span>
-        </div>
-        <div class="card" style="border:1px solid var(--border); border-radius:10px;">
-          <div class="overflow-x-auto">
-            <table class="table-dense">
-              <thead>
-                <tr>
-                  <th>Subcartera</th><th>ID</th><th>Cliente</th><th>Fecha compromiso</th>
-                  <th class="num">Monto</th><th>Comentario</th><th>Ejecutivo</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for c in g.items %}
-                  <tr>
-                    <td>{{ c.subcartera.nombre }}</td>
-                    <td class="op"><a href="{% url 'leads:detail' c.lead.pk %}" class="link">{{ c.lead.op }}</a></td>
-                    <td style="font-weight:600">{{ c.lead.name }}</td>
-                    <td style="font-variant-numeric:tabular-nums">{{ c.fecha_compromiso|date:"d-m-Y" }}</td>
-                    <td class="num">{% if c.monto %}${{ c.monto|floatformat:0 }}{% else %}-{% endif %}</td>
-                    <td>{{ c.comentario|default:"-"|truncatechars:60 }}</td>
-                    <td>{{ c.created_by.username|default:"-" }}</td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-              <tfoot>
-                <tr class="list-head">
-                  <td class="py-2 px-3 font-bold" colspan="4">Subtotal {{ g.cartera }}</td>
-                  <td class="py-2 px-3 font-bold num">${{ g.total|floatformat:0 }}</td>
-                  <td colspan="2"></td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        </div>
-      </div>
+  <!-- Tarjetas por cartera: clic filtra la tabla de abajo -->
+  <div class="launcher-grid mb-6">
+    <a href="?op={{ selected_op }}&fecha={{ selected_fecha }}" class="launcher-card {% if not selected_cartera %}active{% endif %}">
+      <div class="lc-nm">Todas las carteras</div>
+      <div class="lc-amt">${{ gran_total.total|floatformat:0 }}</div>
+      <div class="lc-ct">{{ gran_total.count }} compromiso(s)</div>
+    </a>
+    {% for c in carteras_launcher %}
+      <a href="?op={{ selected_op }}&fecha={{ selected_fecha }}&cartera={{ c.id }}" class="launcher-card {% if c.active %}active{% endif %}">
+        <div class="lc-nm">{{ c.nombre }}</div>
+        <div class="lc-amt">${{ c.total|floatformat:0 }}</div>
+        <div class="lc-ct">{{ c.count }} compromiso(s)</div>
+      </a>
     {% endfor %}
+  </div>
+
+  <!-- Tabla de compromisos (según filtros y cartera elegida) -->
+  {% if tabla_compromisos %}
+    <div class="card" style="border:1px solid var(--border); border-radius:10px;">
+      <div class="overflow-x-auto">
+        <table class="table-dense">
+          <thead>
+            <tr>
+              <th>Cartera</th><th>Subcartera</th><th>ID</th><th>Cliente</th><th>Fecha compromiso</th>
+              <th class="num">Monto</th><th>Comentario</th><th>Ejecutivo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in tabla_compromisos %}
+              <tr>
+                <td>{{ c.subcartera.cartera.nombre|default:"-" }}</td>
+                <td>{{ c.subcartera.nombre }}</td>
+                <td class="op"><a href="{% url 'leads:detail' c.lead.pk %}" class="link">{{ c.lead.op }}</a></td>
+                <td style="font-weight:600">{{ c.lead.name }}</td>
+                <td style="font-variant-numeric:tabular-nums">{{ c.fecha_compromiso|date:"d-m-Y" }}</td>
+                <td class="num">{% if c.monto %}${{ c.monto|floatformat:0 }}{% else %}-{% endif %}</td>
+                <td>{{ c.comentario|default:"-"|truncatechars:60 }}</td>
+                <td>{{ c.created_by.username|default:"-" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
   {% else %}
     <p class="empty-state">No hay compromisos de pago para estos filtros.</p>
   {% endif %}

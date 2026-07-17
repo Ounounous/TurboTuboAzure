@@ -5,11 +5,11 @@
 
 :root,
 html[data-theme="azul-claro"] {
-  --bg-page: #F7FAFD;
+  --bg-page: #EEF4FB;
   --surface: #FFFFFF;
-  --surface-alt: #EAF3FC;
-  --surface-alt-hover: #DCEAF9;
-  --border: #D7E6F5;
+  --surface-alt: #DCEAF9;
+  --surface-alt-hover: #CBE0F5;
+  --border: #B9D3EC;
   --text: #12283F;
   --text-muted: #55738C;
   --accent: #1E6FBE;
@@ -21,7 +21,7 @@ html[data-theme="azul-claro"] {
   --field-border: #C7D8EA;
   --field-placeholder: #8199AF;
   --field-label: var(--text);
-  --nav-bg: #EAF3FC;
+  --nav-bg: #FFFFFF;
   --nav-text: #12283F;
   --nav-text-muted: #55738C;
   --nav-active-bg: #CFE4F8;
@@ -63,11 +63,11 @@ html[data-theme="azul-oscuro"] {
 }
 
 html[data-theme="oliva-claro"] {
-  --bg-page: #F9FAF4;
+  --bg-page: #F1F2E6;
   --surface: #FFFFFF;
-  --surface-alt: #EEF0E3;
-  --surface-alt-hover: #E2E6D2;
-  --border: #DEE3CB;
+  --surface-alt: #E2E6D0;
+  --surface-alt-hover: #D3D9BC;
+  --border: #C7CFAE;
   --text: #2B3324;
   --text-muted: #5C644A;
   --accent: #5C7A2E;
@@ -78,7 +78,7 @@ html[data-theme="oliva-claro"] {
   --field-border: #CFD6BB;
   --field-placeholder: #8A916F;
   --field-label: var(--text);
-  --nav-bg: #EEF0E3;
+  --nav-bg: #FFFFFF;
   --nav-text: #2B3324;
   --nav-text-muted: #5C644A;
   --nav-active-bg: #D3D9BC;
@@ -119,11 +119,16 @@ html[data-theme="oliva-oscuro"] {
 }
 
 /* ---------------- base ---------------- */
+html, body { height: 100%; }
 body {
   background: var(--bg-page);
   color: var(--text);
   transition: background-color .15s ease, color .15s ease;
 }
+/* Footer siempre al fondo del viewport, aunque el contenido de la página sea corto. */
+body.site-body { display: flex; flex-direction: column; min-height: 100vh; }
+.site-main { flex: 1 0 auto; }
+.site-footer { flex-shrink: 0; }
 
 /* ---------------- top nav ---------------- */
 .topnav {
@@ -242,17 +247,40 @@ label { color: var(--field-label); }
   background: var(--surface-alt);
   border: 1px solid var(--border);
   border-radius: .9rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .05), 0 1px 6px rgba(15, 23, 42, .04);
 }
 .card-selected {
   background: var(--nav-active-bg);
   border: 1px solid var(--accent);
   border-radius: .9rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .05), 0 1px 6px rgba(15, 23, 42, .04);
 }
 .list-head {
   background: var(--surface-alt);
   color: var(--text-muted);
   font-weight: 600;
 }
+/* Tarjetas lanzadoras por cartera (Pagos / Compromisos): cada una filtra la tabla al hacer clic. */
+.launcher-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+}
+.launcher-card {
+  display: block;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: .9rem;
+  padding: 14px 16px;
+  text-decoration: none;
+  color: var(--text);
+  transition: border-color .15s;
+}
+.launcher-card:hover { border-color: var(--accent); background: var(--surface-alt); }
+.launcher-card.active { border-color: var(--accent); background: var(--nav-active-bg); }
+.launcher-card .lc-nm { font-weight: 700; font-size: 13.5px; margin-bottom: 8px; }
+.launcher-card .lc-amt { font-size: 21px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.launcher-card .lc-ct { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
 /* Encabezados de tabla siempre alineados a la izquierda (el <th> por defecto centra). */
 .list-head th { text-align: left; }
 .row-alt { background: var(--surface-alt); }

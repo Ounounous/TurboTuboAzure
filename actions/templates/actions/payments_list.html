@@ -44,72 +44,59 @@
     </div>
   {% endif %}
 
-  <!-- Sumatoria de pagos de este mes: total y por cartera -->
+  <!-- Sumatoria de pagos de este mes: total y tarjetas por cartera (filtran la tabla de abajo) -->
   <h2 class="text-lg font-bold mb-2">Pagos de este mes</h2>
   <div class="card p-4 mb-4 flex flex-wrap items-center justify-between gap-3">
     <span class="font-bold">Total (todas las carteras)</span>
     <span>{{ resumen_mes_total.count }} pago(s) · <strong>${{ resumen_mes_total.total|floatformat:0 }}</strong></span>
   </div>
-  {% if mes_cartera %}
-    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-8">
-      {% for m in mes_cartera %}
-        <div class="card p-4">
-          <p class="font-semibold mb-1">{{ m.cartera }}</p>
-          <p class="text-xl font-bold">${{ m.total|floatformat:0 }}</p>
-          <p class="muted text-sm">{{ m.count }} pago(s)</p>
-        </div>
-      {% endfor %}
+  <div class="launcher-grid mb-8">
+    <a href="?q={{ q }}" class="launcher-card {% if not selected_cartera %}active{% endif %}">
+      <div class="lc-nm">Todas las carteras</div>
+      <div class="lc-amt">${{ resumen_mes_total.total|floatformat:0 }}</div>
+      <div class="lc-ct">{{ resumen_mes_total.count }} pago(s) este mes</div>
+    </a>
+    {% for c in carteras_launcher %}
+      <a href="?q={{ q }}&cartera={{ c.id }}" class="launcher-card {% if c.active %}active{% endif %}">
+        <div class="lc-nm">{{ c.nombre }}</div>
+        <div class="lc-amt">${{ c.total|floatformat:0 }}</div>
+        <div class="lc-ct">{{ c.count }} pago(s) este mes</div>
+      </a>
+    {% endfor %}
+  </div>
+
+  <!-- Tabla de pagos (todas las fechas, según la cartera elegida arriba) -->
+  <h2 class="text-lg font-bold mb-2">Pagos{% if selected_cartera %} · {% for c in carteras_launcher %}{% if c.active %}{{ c.nombre }}{% endif %}{% endfor %}{% endif %}</h2>
+  {% if tabla_pagos %}
+    <div class="card" style="border:1px solid var(--border); border-radius:10px;">
+      <div class="overflow-x-auto">
+        <table class="table-dense">
+          <thead>
+            <tr>
+              <th>Cartera</th><th>Subcartera</th><th>ID</th><th>Cliente</th><th>Fecha</th>
+              <th class="num">Monto</th><th>Tipo</th><th>Comprobante</th><th>Registrado por</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in tabla_pagos %}
+              <tr>
+                <td>{{ p.subcartera.cartera.nombre|default:"-" }}</td>
+                <td>{{ p.subcartera.nombre }}</td>
+                <td class="op"><a href="{% url 'leads:detail' p.lead.pk %}" class="link">{{ p.lead.op }}</a></td>
+                <td style="font-weight:600">{{ p.lead.name }}</td>
+                <td style="font-variant-numeric:tabular-nums">{{ p.fecha|date:"d-m-Y" }}</td>
+                <td class="num">${{ p.monto|floatformat:0 }}</td>
+                <td>{{ p.get_tipo_display }}</td>
+                <td>{% if p.comprobante %}<a href="{{ p.comprobante.url }}" target="_blank" class="link">Ver</a>{% else %}-{% endif %}</td>
+                <td>{{ p.created_by.username|default:"-" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
   {% else %}
-    <p class="muted mb-8">No hay pagos registrados este mes.</p>
-  {% endif %}
-
-  <!-- Todos los pagos, una tabla por cartera con su suma -->
-  <h2 class="text-lg font-bold mb-2">Todos los pagos por cartera</h2>
-  {% if grupos %}
-    {% for g in grupos %}
-      <div class="mb-8">
-        <div class="flex flex-wrap items-center justify-between gap-3 mb-2">
-          <h3 class="text-lg font-bold">{{ g.cartera }}</h3>
-          <span class="muted">{{ g.count }} pago(s) · <strong>${{ g.total|floatformat:0 }}</strong></span>
-        </div>
-        <div class="card" style="border:1px solid var(--border); border-radius:10px;">
-          <div class="overflow-x-auto">
-            <table class="table-dense">
-              <thead>
-                <tr>
-                  <th>Subcartera</th><th>ID</th><th>Cliente</th><th>Fecha</th>
-                  <th class="num">Monto</th><th>Tipo</th><th>Comprobante</th><th>Registrado por</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for p in g.items %}
-                  <tr>
-                    <td>{{ p.subcartera.nombre }}</td>
-                    <td class="op"><a href="{% url 'leads:detail' p.lead.pk %}" class="link">{{ p.lead.op }}</a></td>
-                    <td style="font-weight:600">{{ p.lead.name }}</td>
-                    <td style="font-variant-numeric:tabular-nums">{{ p.fecha|date:"d-m-Y" }}</td>
-                    <td class="num">${{ p.monto|floatformat:0 }}</td>
-                    <td>{{ p.get_tipo_display }}</td>
-                    <td>{% if p.comprobante %}<a href="{{ p.comprobante.url }}" target="_blank" class="link">Ver</a>{% else %}-{% endif %}</td>
-                    <td>{{ p.created_by.username|default:"-" }}</td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-              <tfoot>
-                <tr class="list-head">
-                  <td class="py-2 px-3 font-bold" colspan="4">Subtotal {{ g.cartera }}</td>
-                  <td class="py-2 px-3 font-bold num">${{ g.total|floatformat:0 }}</td>
-                  <td colspan="3"></td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        </div>
-      </div>
-    {% endfor %}
-  {% else %}
-    <p class="empty-state">No hay pagos registrados todavía.</p>
+    <p class="empty-state">No hay pagos registrados para estos filtros.</p>
   {% endif %}
 </div>
 {% endblock %}

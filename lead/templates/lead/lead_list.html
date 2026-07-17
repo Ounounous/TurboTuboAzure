@@ -118,6 +118,7 @@
                     <span class="row-actions">
                       <a href="{% url 'leads:detail' lead.pk %}" title="Ver detalles">👁️</a>
                       <a href="{% url 'actions:multistep_step_with_lead' step=2 lead_id=lead.pk %}" title="Gestionar" onclick="openGestionModal(this.href); return false;">⚡</a>
+                      <a href="{% url 'actions:payment_create' lead.pk %}" title="Ingresar pago" onclick="openGestionModal(this.href); return false;">💵</a>
                       <button type="button" title="Agregar nota" onclick="openNoteModal({{ lead.pk }}, '{{ lead.op|escapejs }}')">📝</button>
                     </span>
                   </td>

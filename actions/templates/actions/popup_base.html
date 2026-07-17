@@ -11,8 +11,8 @@
             document.documentElement.setAttribute('data-theme', saved || 'azul-claro');
         })();
     </script>
-    <link rel="stylesheet" href="{% static 'main.min.css' %}">
-    <link rel="stylesheet" href="{% static 'theme.css' %}">
+    <link rel="stylesheet" href="{% static 'main.min.css' %}?v={{ asset_v }}">
+    <link rel="stylesheet" href="{% static 'theme.css' %}?v={{ asset_v }}">
     <title>{% block title %}Gestión{% endblock %}</title>
 </head>
 <body>

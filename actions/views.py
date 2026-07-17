@@ -735,41 +735,44 @@ class PaymentCommitmentListView(SupervisorRequiredMixin, View):
         selected_cartera = request.GET.get('cartera', '').strip()
         selected_fecha = request.GET.get('fecha', '').strip()
 
-        filtered = PaymentCommitment.objects.select_related('lead', 'subcartera__cartera', 'created_by')
+        # Filtros que NO son de cartera (op/fecha) — se aplican tanto a las tarjetas como a la tabla.
+        base_filtered = PaymentCommitment.objects.select_related('lead', 'subcartera__cartera', 'created_by')
         if selected_op:
-            filtered = filtered.filter(lead__op__icontains=selected_op)
-        if selected_cartera:
-            filtered = filtered.filter(subcartera__cartera_id=selected_cartera)
+            base_filtered = base_filtered.filter(lead__op__icontains=selected_op)
         if selected_fecha:
             parsed = parse_date(selected_fecha)
             if parsed:
-                filtered = filtered.filter(fecha_compromiso=parsed)
-        filtered = filtered.order_by('-fecha_compromiso', '-created_at')
+                base_filtered = base_filtered.filter(fecha_compromiso=parsed)
 
-        # Cada cartera con su propia tabla y su propia suma.
-        grupos = {}
-        for c in filtered:
-            nom = c.subcartera.cartera.nombre if c.subcartera and c.subcartera.cartera else '(sin cartera)'
-            g = grupos.setdefault(nom, {'items': [], 'total': 0, 'count': 0})
-            g['items'].append(c)
-            g['total'] += c.monto or 0
-            g['count'] += 1
-        grupos_list = [{'cartera': nom, **data} for nom, data in sorted(grupos.items())]
-        gran_total = sum(g['total'] for g in grupos_list)
-        gran_count = sum(g['count'] for g in grupos_list)
+        # Tarjetas: una por cartera (con los filtros de op/fecha ya aplicados, pero SIN el de
+        # cartera, para que las tarjetas muestren el total real de cada una y sirvan de filtro).
+        carteras_launcher = []
+        for cartera in Cartera.objects.all():
+            resumen = _resumen(base_filtered.filter(subcartera__cartera=cartera))
+            carteras_launcher.append({
+                'id': cartera.id, 'nombre': cartera.nombre,
+                'count': resumen['count'], 'total': resumen['total'],
+                'active': selected_cartera == str(cartera.id),
+            })
+        gran_total = _resumen(base_filtered)
+
+        # Tabla: los mismos filtros, más el de cartera si se eligió una tarjeta.
+        tabla_qs = base_filtered
+        if selected_cartera:
+            tabla_qs = tabla_qs.filter(subcartera__cartera_id=selected_cartera)
+        tabla_compromisos = list(tabla_qs.order_by('-fecha_compromiso', '-created_at')[:300])
 
         # Resumen por fecha de compromiso (hoy / esta semana / este mes), sobre todos los compromisos.
         today = timezone.localdate()
         week_start, week_end, month_start, next_month = _rango_semana_mes(today)
         base = PaymentCommitment.objects.all()
         context = {
-            'grupos': grupos_list,
+            'carteras_launcher': carteras_launcher,
             'gran_total': gran_total,
-            'gran_count': gran_count,
+            'tabla_compromisos': tabla_compromisos,
             'resumen_hoy': _resumen(base.filter(fecha_compromiso=today)),
             'resumen_semana': _resumen(base.filter(fecha_compromiso__gte=week_start, fecha_compromiso__lte=week_end)),
             'resumen_mes': _resumen(base.filter(fecha_compromiso__gte=month_start, fecha_compromiso__lt=next_month)),
-            'carteras': Cartera.objects.all(),
             'selected_op': selected_op,
             'selected_cartera': selected_cartera,
             'selected_fecha': selected_fecha,
@@ -1111,11 +1114,12 @@ class PaymentCreateView(LoginRequiredMixin, View):
 
 
 class PaymentListView(LoginRequiredMixin, View):
-    """Dashboard de pagos: buscador para ingresar un pago, tablas por cartera y sumas del mes."""
+    """Dashboard de pagos: buscador para ingresar un pago, tarjetas por cartera y tabla filtrable."""
     template_name = 'actions/payments_list.html'
 
     def get(self, request, *args, **kwargs):
         es_super = _es_supervisor(request.user)
+        selected_cartera = request.GET.get('cartera', '').strip()
 
         payments = Payment.objects.select_related('lead', 'subcartera__cartera', 'created_by')
         if not es_super:
@@ -1133,35 +1137,35 @@ class PaymentListView(LoginRequiredMixin, View):
                 leads.filter(Q(op__icontains=q) | Q(rut__icontains=q) | Q(name__icontains=q))[:20]
             )
 
-        # Todas los pagos agrupados por cartera, cada uno con su suma.
-        grupos = {}
-        for p in payments:
-            nom = p.subcartera.cartera.nombre if p.subcartera and p.subcartera.cartera else '(sin cartera)'
-            g = grupos.setdefault(nom, {'items': [], 'total': 0, 'count': 0})
-            g['items'].append(p)
-            g['total'] += p.monto or 0
-            g['count'] += 1
-        grupos_list = [{'cartera': nom, **data} for nom, data in sorted(grupos.items())]
-
         # Sumatoria de pagos de ESTE MES: total y por cartera (N° y monto).
         today = timezone.localdate()
         _, _, month_start, next_month = _rango_semana_mes(today)
         mes_qs = payments.filter(fecha__gte=month_start, fecha__lt=next_month)
         resumen_mes_total = _resumen(mes_qs, 'monto')
-        mes_cartera = {}
-        for p in mes_qs:
-            nom = p.subcartera.cartera.nombre if p.subcartera and p.subcartera.cartera else '(sin cartera)'
-            d = mes_cartera.setdefault(nom, {'count': 0, 'total': 0})
-            d['count'] += 1
-            d['total'] += p.monto or 0
-        mes_cartera_list = [{'cartera': nom, **data} for nom, data in sorted(mes_cartera.items())]
+
+        # Tarjetas: una por cartera (sobre los pagos de este mes), sirven de filtro para la tabla.
+        carteras_launcher = []
+        for cartera in Cartera.objects.all():
+            resumen = _resumen(mes_qs.filter(subcartera__cartera=cartera), 'monto')
+            carteras_launcher.append({
+                'id': cartera.id, 'nombre': cartera.nombre,
+                'count': resumen['count'], 'total': resumen['total'],
+                'active': selected_cartera == str(cartera.id),
+            })
+
+        # Tabla: todos los pagos (no solo los de este mes), filtrados por la cartera elegida.
+        tabla_qs = payments
+        if selected_cartera:
+            tabla_qs = tabla_qs.filter(subcartera__cartera_id=selected_cartera)
+        tabla_pagos = list(tabla_qs[:300])
 
         context = {
             'q': q,
             'lead_results': lead_results,
-            'grupos': grupos_list,
+            'carteras_launcher': carteras_launcher,
             'resumen_mes_total': resumen_mes_total,
-            'mes_cartera': mes_cartera_list,
+            'tabla_pagos': tabla_pagos,
+            'selected_cartera': selected_cartera,
         }
         return render(request, self.template_name, context)
 
