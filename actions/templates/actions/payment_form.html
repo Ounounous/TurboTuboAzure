@@ -1,0 +1,48 @@
+{% extends 'actions/popup_base.html' %}
+
+{% block title %}Registrar pago{% endblock %}
+
+{% block content %}
+<div class="mx-auto mt-4 px-6 pb-6">
+  <h1 class="text-2xl font-bold mb-4">Registrar pago</h1>
+
+  <div class="card p-4 mb-4">
+    <p class="mb-1"><strong>Cliente:</strong> {{ lead.op }} - {{ lead.name }}</p>
+    <p class="muted text-sm">Cartera: {{ lead.subcartera.cartera.nombre }} · Subcartera: {{ lead.subcartera.nombre }}</p>
+  </div>
+
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+
+    <div class="form-group mb-4">
+      <label class="font-semibold block mb-1" for="{{ form.monto.id_for_label }}">Monto ($):</label>
+      {{ form.monto.errors }}
+      {{ form.monto }}
+    </div>
+
+    <div class="form-group mb-4">
+      <label class="font-semibold block mb-1" for="{{ form.fecha.id_for_label }}">Fecha del pago:</label>
+      {{ form.fecha.errors }}
+      {{ form.fecha }}
+    </div>
+
+    <div class="form-group mb-4">
+      <label class="font-semibold block mb-1" for="{{ form.tipo.id_for_label }}">Tipo:</label>
+      {{ form.tipo.errors }}
+      {{ form.tipo }}
+    </div>
+
+    <div class="form-group mb-4">
+      <label class="font-semibold block mb-1" for="{{ form.comprobante.id_for_label }}">Comprobante (PNG / JPG / PDF):</label>
+      {{ form.comprobante.errors }}
+      {{ form.comprobante }}
+    </div>
+
+    <div class="flex gap-3">
+      <button type="submit" class="btn btn-primary">Guardar pago</button>
+      <a href="{% url 'actions:popup_close' %}" class="btn btn-secondary">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

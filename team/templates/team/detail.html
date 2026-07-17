@@ -3,24 +3,27 @@
 {% block title %}{{ team.name }}{% endblock %}
 
 {% block content %}
-    <div class="py-6 px-6">
-        <h1 class="mb-6 text-xl">{{ team.name }}</h1>
-
-        <a href="{% url 'team:list' %}" class="inline-block py-4 px-6 bg-teal-500 rounded-xl text-white">Switch team</a>
-
+  <div class="py-6 px-6" style="max-width: 640px;">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+      <h1 class="text-xl font-bold">{{ team.name }}</h1>
+      <div class="flex gap-3">
+        <a href="{% url 'team:list' %}" class="btn btn-secondary">Cambiar equipo</a>
         {% if team.created_by == request.user %}
-            <a href="{% url 'team:edit' team.id %}" class="inline-block py-4 px-6 bg-sky-600 rounded-xl">(Edit)</a>
+          <a href="{% url 'team:edit' team.id %}" class="btn btn-secondary">Editar</a>
         {% endif %}
+      </div>
+    </div>
 
-        <p class="mt-6"><strong>Team Owner:</strong> {{ team.created_by}}</p>
-
-        <hr class="my-4">
-
-        <h2 class="font-semibold">Team members:</h2>
-
+    <div class="card p-4">
+      <p class="mb-3"><strong>Dueño del equipo:</strong> {{ team.created_by }}</p>
+      <h2 class="font-bold mb-2">Miembros</h2>
+      <ul class="list-disc list-inside">
         {% for member in team.members.all %}
-            <p>{{ member.username }}</p>
+          <li>{{ member.username }}</li>
+        {% empty %}
+          <li class="muted">Sin miembros.</li>
         {% endfor %}
-
-    </div> 
+      </ul>
+    </div>
+  </div>
 {% endblock %}

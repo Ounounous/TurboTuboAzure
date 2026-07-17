@@ -163,10 +163,12 @@ class Command(BaseCommand):
                 cartera=cartera, nombre=nombre,
                 defaults={'canal': canal, 'es_llamada': es_llamada, 'codigo': codigo},
             )
-            if not created:
-                medio.codigo = codigo
-                medio.save(update_fields=['codigo'])
-            else:
+            medio.codigo = codigo
+            medio.canal = canal
+            medio.es_llamada = es_llamada
+            medio.permite_manual = medio.calcular_permite_manual()
+            medio.save(update_fields=['codigo', 'canal', 'es_llamada', 'permite_manual'])
+            if created:
                 medios_creados += 1
 
         resultados_creados, resultados_actualizados = 0, 0

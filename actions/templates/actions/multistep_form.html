@@ -8,19 +8,27 @@
   <form method="post">
     {% csrf_token %}
     {{ form.as_p }}
-    <button type="submit" class="py-2 px-4 bg-teal-500 text-white rounded-xl">Siguiente</button>
+    <button type="submit" class="btn btn-primary">Siguiente</button>
   </form>
 
   {% elif step == 2 %}
+  <div class="mb-4">
+    {% include 'lead/partials/_notes.html' with lead=lead notes=lead_notes note_next='/dashboard/actions/multistep/2/' %}
+  </div>
   <form method="post">
     {% csrf_token %}
     <p class="font-semibold mb-2">¿A qué teléfono o email vas a gestionar?</p>
     {{ demographic_form.as_p }}
-    <button type="submit" class="py-2 px-4 bg-teal-500 text-white rounded-xl">Siguiente</button>
-    <a href="{% url 'actions:cancel' lead.id %}" class="py-2 px-4 bg-gray-300 rounded-xl inline-block">Cancelar</a>
+    <button type="submit" class="btn btn-primary">Siguiente</button>
+    <a href="{% url 'actions:cancel' lead.id %}" class="btn btn-secondary">Cancelar</a>
   </form>
 
   {% elif step == 3 %}
+  {% if lead_notes %}
+  <div class="mb-4">
+    {% include 'lead/partials/_notes.html' with lead=lead notes=lead_notes note_readonly=1 %}
+  </div>
+  {% endif %}
   <p class="mb-4">
     Gestionando:
     {% if selected_phone %}
@@ -40,15 +48,15 @@
       {{ action_form.medio.errors }}
 
       {% if not action_form.fields.medio.queryset %}
-        <p class="text-red-600 bg-red-50 border border-red-200 rounded-xl py-2 px-4">
+        <p class="alert alert-danger">
           La cartera <strong>{{ lead.subcartera.cartera.nombre }}</strong> todavía no tiene un árbol de gestiones cargado.
           Pídele a un administrador que lo importe antes de poder registrar esta gestión.
         </p>
       {% elif canal == 'telefono' %}
-        <div class="flex gap-2" id="medio-buttons">
+        <div class="flex gap-3" id="medio-buttons">
           {% for medio in action_form.fields.medio.queryset %}
             <button type="button"
-                    class="medio-btn py-2 px-4 rounded-xl border"
+                    class="medio-btn"
                     data-medio-id="{{ medio.id }}"
                     data-nombre="{{ medio.nombre }}"
                     {% if 'whatsapp' in medio.nombre|lower %}
@@ -57,16 +65,16 @@
                       data-native-url="tel:{{ phone_digits }}"
                       {% if has_pbx %}data-pbx-call="1"{% endif %}
                     {% endif %}>
-              {% if 'whatsapp' in medio.nombre|lower %}💬{% else %}☎️{% endif %} {{ medio.nombre }}
+              {% if 'whatsapp' in medio.nombre|lower %}💬 WhatsApp{% else %}☎️ Llamar{% endif %}
             </button>
           {% endfor %}
         </div>
-        {% if has_pbx %}<p class="text-sm text-gray-500 mt-1">☎️ marcará por la central telefónica (pbxip.cl) a tu anexo, luego te conecta con el cliente.</p>{% endif %}
+        {% if has_pbx %}<p class="text-sm mt-1" style="color:var(--text-muted)">☎️ marcará por la central telefónica (pbxip.cl) a tu anexo, luego te conecta con el cliente.</p>{% endif %}
       {% else %}
-        <div class="flex gap-2 items-center" id="medio-buttons">
+        <div class="flex gap-3 items-center" id="medio-buttons">
           {% for medio in action_form.fields.medio.queryset %}
             <button type="button"
-                    class="medio-btn py-2 px-4 rounded-xl border"
+                    class="medio-btn"
                     data-medio-id="{{ medio.id }}"
                     data-nombre="{{ medio.nombre }}"
                     data-native-url="mailto:{{ selected_email }}">
@@ -111,10 +119,10 @@
       {{ action_form.comment }}
     </div>
 
-    <div class="flex gap-2">
-      <button type="submit" name="submit_action" value="save" class="py-2 px-4 bg-teal-500 text-white rounded-xl">Grabar Acción</button>
-      <button type="submit" name="submit_action" value="add_another" class="py-2 px-4 bg-blue-500 text-white rounded-xl">Grabar y agregar otra</button>
-      <a href="{% url 'actions:cancel' lead.id %}" class="py-2 px-4 bg-gray-300 rounded-xl inline-block">Cancelar</a>
+    <div class="flex gap-3">
+      <button type="submit" name="submit_action" value="save" class="btn btn-primary">Grabar Acción</button>
+      <button type="submit" name="submit_action" value="add_another" class="btn btn-primary">Grabar y agregar otra</button>
+      <a href="{% url 'actions:cancel' lead.id %}" class="btn btn-secondary">Cancelar</a>
     </div>
   </form>
 
@@ -137,11 +145,9 @@
 
       function selectMedio(btn) {
         medioButtons.forEach(function (b) {
-          b.classList.remove('bg-teal-500', 'text-white');
-          b.classList.add('bg-white');
+          b.classList.remove('is-selected');
         });
-        btn.classList.add('bg-teal-500', 'text-white');
-        btn.classList.remove('bg-white');
+        btn.classList.add('is-selected');
         medioSelect.value = btn.dataset.medioId;
       }
 

@@ -61,6 +61,10 @@ class Command(BaseCommand):
                 cartera=cartera, nombre=medio_nombre,
                 defaults={'canal': canal, 'es_llamada': medio_nombre.upper() in MEDIOS_LLAMADA}
             )
+            nuevo_permite = medio.calcular_permite_manual()
+            if medio.permite_manual != nuevo_permite:
+                medio.permite_manual = nuevo_permite
+                medio.save(update_fields=['permite_manual'])
             if medio_created:
                 medios_creados += 1
 

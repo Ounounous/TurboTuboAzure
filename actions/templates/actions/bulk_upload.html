@@ -1,0 +1,45 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Carga masiva de gestiones{% endblock %}
+
+{% block content %}
+<div class="container mx-auto mt-8 px-6 pb-16" style="max-width: 900px;">
+  <h1 class="text-2xl font-bold mb-2">Carga masiva de gestiones</h1>
+  <p class="muted mb-6">
+    Para gestiones de campañas masivas (IVR, SMS, discador, bot, correos/WhatsApp entrantes, etc.)
+    que no se registran una por una. Cada fila del Excel se ingresa como una gestión ya realizada.
+  </p>
+
+  <div class="card p-6 mb-6">
+    <h2 class="text-lg font-bold mb-3">1. Descarga la plantilla</h2>
+    <p class="muted mb-3">
+      La plantilla trae los encabezados y una fila de ejemplo. El <strong>medio</strong> y el
+      <strong>resultado</strong> deben coincidir exactamente con el árbol de gestiones de la cartera.
+    </p>
+    <a href="{% url 'actions:bulk_template' %}" class="btn btn-secondary">Descargar plantilla (.xlsx)</a>
+  </div>
+
+  <div class="card p-6 mb-6">
+    <h2 class="text-lg font-bold mb-3">2. Sube el archivo</h2>
+    <form method="post" enctype="multipart/form-data" class="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+      {% csrf_token %}
+      <input type="file" name="excel_file" accept=".xlsx" required>
+      <button type="submit" class="btn btn-primary">Cargar gestiones</button>
+    </form>
+  </div>
+
+  <div class="card p-6">
+    <h2 class="text-lg font-bold mb-3">Columnas</h2>
+    <ul class="list-disc list-inside space-y-1">
+      <li><strong>cartera</strong>, <strong>subcartera</strong>, <strong>op</strong> — para identificar al cliente (obligatorias).</li>
+      <li><strong>medio</strong> — nombre del medio tal cual el árbol (ej. IVR, SMS). Obligatoria.</li>
+      <li><strong>resultado</strong> — nombre del estado/respuesta. Obligatoria.</li>
+      <li><strong>sub_estado</strong> — tipo de contacto (ej. DIRECTO). Solo necesaria si el resultado se repite bajo distintos sub estados.</li>
+      <li><strong>comentario</strong>, <strong>telefono</strong>, <strong>email</strong> — opcionales.</li>
+      <li><strong>fecha_gestion</strong> — fecha real de la gestión (para el reporte). Si se omite, queda con la fecha de hoy.</li>
+      <li><strong>hora_gestion</strong> — hora de la gestión (HH:MM). Junto con la fecha, la gestión queda guardada con fecha y hora exactas. Si se omite, se usa el mediodía.</li>
+      <li><strong>usuario</strong> — username del ejecutivo a acreditar. Si se omite, queda a tu nombre.</li>
+    </ul>
+  </div>
+</div>
+{% endblock %}

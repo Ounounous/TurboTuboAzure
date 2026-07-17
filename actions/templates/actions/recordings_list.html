@@ -6,49 +6,44 @@
 <div class="py-6 px-6">
   <h1 class="mb-4 text-xl">Grabaciones de llamadas</h1>
 
-  <form method="get" class="mb-4 flex flex-wrap items-end gap-4">
-    <div>
-      <label class="font-semibold block mb-1" for="op">ID (OP):</label>
-      <input type="text" name="op" id="op" value="{{ selected_op }}" class="border p-2 rounded">
-    </div>
-    <div>
-      <label class="font-semibold block mb-1" for="cartera">Cartera:</label>
-      <select name="cartera" id="cartera" class="border p-2 rounded">
+  <form method="get" class="mb-4 flex flex-wrap items-end gap-3">
+    <div><label class="font-semibold block mb-1" for="op">ID (OP)</label><input type="text" name="op" id="op" value="{{ selected_op }}"></div>
+    <div><label class="font-semibold block mb-1" for="cartera">Cartera</label>
+      <select name="cartera" id="cartera">
         <option value="">--- Todas ---</option>
-        {% for cartera in carteras %}
-          <option value="{{ cartera.id }}" {% if selected_cartera == cartera.id|stringformat:"s" %}selected{% endif %}>{{ cartera.nombre }}</option>
-        {% endfor %}
+        {% for cartera in carteras %}<option value="{{ cartera.id }}" {% if selected_cartera == cartera.id|stringformat:"s" %}selected{% endif %}>{{ cartera.nombre }}</option>{% endfor %}
       </select>
     </div>
-    <div>
-      <label class="font-semibold block mb-1" for="fecha">Fecha:</label>
-      <input type="date" name="fecha" id="fecha" value="{{ selected_fecha }}" class="border p-2 rounded">
-    </div>
-    <button type="submit" class="py-2 px-4 bg-teal-500 text-white rounded-xl">Filtrar</button>
+    <div><label class="font-semibold block mb-1" for="fecha">Fecha</label><input type="date" name="fecha" id="fecha" value="{{ selected_fecha }}"></div>
+    <button type="submit" class="btn btn-primary">Filtrar</button>
   </form>
 
-  <div class="mb-4 space-x-2">
+  <div class="mb-4 flex items-center gap-3">
     <span class="font-semibold">Mostrar:</span>
-    <a href="?limit=10&op={{ selected_op }}&cartera={{ selected_cartera }}&fecha={{ selected_fecha }}" class="{% if limit == 10 %}font-bold underline{% endif %}">10</a>
-    <a href="?limit=50&op={{ selected_op }}&cartera={{ selected_cartera }}&fecha={{ selected_fecha }}" class="{% if limit == 50 %}font-bold underline{% endif %}">50</a>
-    <a href="?limit=100&op={{ selected_op }}&cartera={{ selected_cartera }}&fecha={{ selected_fecha }}" class="{% if limit == 100 %}font-bold underline{% endif %}">100</a>
+    <span class="pag">
+      <a href="?limit=10&op={{ selected_op }}&cartera={{ selected_cartera }}&fecha={{ selected_fecha }}" class="{% if limit == 10 %}on{% endif %}">10</a>
+      <a href="?limit=50&op={{ selected_op }}&cartera={{ selected_cartera }}&fecha={{ selected_fecha }}" class="{% if limit == 50 %}on{% endif %}">50</a>
+      <a href="?limit=100&op={{ selected_op }}&cartera={{ selected_cartera }}&fecha={{ selected_fecha }}" class="{% if limit == 100 %}on{% endif %}">100</a>
+    </span>
   </div>
 
   {% if recordings %}
-    <div class="space-y-4 mb-10">
+    <div class="space-y-3 mb-10">
       {% for rec in recordings %}
-        <div class="bg-gray-100 py-4 px-4 rounded-xl">
-          <p class="mb-2 text-sm">
-            <a href="{% url 'leads:detail' rec.lead.pk %}" class="text-blue-600 font-semibold">{{ rec.lead.op }} - {{ rec.lead.name }}</a>
-            · {{ rec.lead.subcartera.cartera.nombre }} / {{ rec.lead.subcartera.nombre }}
-            · {{ rec.user.username|default:"-" }}
-            · {{ rec.call_date|date:"d-M-Y H:i"|default:rec.created_at|date:"d-M-Y H:i" }}
-            {% if rec.duration_seconds %} · {{ rec.duration_seconds }}s{% endif %}
-          </p>
-          <audio controls class="w-full">
+        <div class="card py-2 px-3 flex flex-wrap items-center gap-x-5 gap-y-1">
+          <div class="text-sm" style="min-width: 240px;">
+            <a href="{% url 'leads:detail' rec.lead.pk %}" class="link font-semibold">{{ rec.lead.op }} - {{ rec.lead.name }}</a>
+            <div class="muted">
+              📅 {% if rec.call_date %}{{ rec.call_date|date:"d-m-Y H:i" }}{% else %}{{ rec.created_at|date:"d-m-Y H:i" }}{% endif %}
+              · {{ rec.lead.subcartera.cartera.nombre }}
+              · {{ rec.user.username|default:"-" }}
+              {% if rec.duration_seconds %} · {{ rec.duration_seconds }}s{% endif %}
+            </div>
+          </div>
+          <audio controls preload="none" style="width: 300px; max-width: 100%; height: 34px;">
             <source src="{{ rec.audio_file.url }}" type="audio/mpeg">
           </audio>
-          <a href="{{ rec.audio_file.url }}" download class="text-sm text-blue-600">Descargar</a>
+          <a href="{{ rec.audio_file.url }}" download class="text-sm link">Descargar</a>
         </div>
       {% endfor %}
     </div>
@@ -65,7 +60,7 @@
   <form method="post" action="{% url 'actions:recordings_export' %}" enctype="multipart/form-data">
     {% csrf_token %}
     <input type="file" name="excel_file" required>
-    <button type="submit" class="py-2 px-4 bg-blue-500 text-white rounded-xl mt-2">Descargar ZIP</button>
+    <button type="submit" class="btn btn-primary mt-2">Descargar ZIP</button>
   </form>
 </div>
 {% endblock %}

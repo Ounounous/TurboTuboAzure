@@ -115,12 +115,28 @@ class Lead(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     modified_at = models.DateTimeField(auto_now=True)
     assigned_to = models.ForeignKey(User, related_name='assigned_leads', on_delete=models.SET_NULL, null=True, blank=True)
+    # Favoritos por usuario: cada ejecutivo marca sus propios clientes destacados.
+    favorited_by = models.ManyToManyField(User, related_name='favorite_leads', blank=True)
+
+    # Color semántico del status para la UI (separado del color de marca).
+    STATUS_COLOR = {
+        INUBICABLE: 'amber',
+        NO_CONTACTADO: 'slate',
+        CONTACTADO: 'blue',
+        COMPROMISO: 'teal',
+        PAGANDO: 'green',
+        AL_DIA: 'green',
+    }
 
     class Meta:
         ordering = ('name',)
-    
+
     def __str__(self):
         return self.op
+
+    @property
+    def status_color(self):
+        return self.STATUS_COLOR.get(self.status, 'slate')
 
 class StatusChangeLog(models.Model):
     lead = models.ForeignKey('Lead', on_delete=models.CASCADE)
@@ -156,3 +172,24 @@ class LeadAssignment(models.Model):
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='lead_assignments')
     assigned_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='assignments_made')
     assigned_at = models.DateTimeField(auto_now_add=True)
+
+
+class LeadNote(models.Model):
+    """
+    Nota interna sobre un lead. A diferencia de una gestión (Action), la nota NO entra en los
+    reportes de cartera (Tanner/Nuevo Capital/Galgo): es un recordatorio del equipo, visible al
+    abrir el detalle del lead y el formulario de gestión.
+
+    Pensada como base del futuro motor de tareas: una nota podrá convertirse en tarea con fecha
+    de vencimiento y responsable. Por ahora se mantiene simple (solo el texto y quién la creó).
+    """
+    lead = models.ForeignKey(Lead, related_name='notes', on_delete=models.CASCADE)
+    author = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='lead_notes')
+    body = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Nota de {self.author} en {self.lead.op}"

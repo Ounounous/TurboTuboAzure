@@ -80,12 +80,12 @@ class Command(BaseCommand):
                 cartera=cartera, nombre=nombre,
                 defaults={'canal': info['canal'], 'es_llamada': info['es_llamada'], 'es_inbound': info['es_inbound']},
             )
-            if not created:
-                medio.canal = info['canal']
-                medio.es_llamada = info['es_llamada']
-                medio.es_inbound = info['es_inbound']
-                medio.save(update_fields=['canal', 'es_llamada', 'es_inbound'])
-            else:
+            medio.canal = info['canal']
+            medio.es_llamada = info['es_llamada']
+            medio.es_inbound = info['es_inbound']
+            medio.permite_manual = medio.calcular_permite_manual()
+            medio.save(update_fields=['canal', 'es_llamada', 'es_inbound', 'permite_manual'])
+            if created:
                 medios_creados += 1
 
         resultados_creados, resultados_actualizados = 0, 0

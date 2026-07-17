@@ -1,7 +1,25 @@
 {% extends 'core/base.html'%}
 
-{% block title %}Tubo CRM{% endblock %}
+{% block title %}TurboTubo{% endblock %}
 
 {% block content %}
-Front page
+<div class="py-10 px-6" style="max-width: 760px;">
+  <h1 class="text-2xl font-bold mb-2">TurboTubo</h1>
+  <p class="muted mb-6">Gestión de cobranza multi-cartera.</p>
+
+  {% if request.user.is_authenticated %}
+    <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      <a href="{% url 'leads:list' %}" class="card p-4 link" style="text-decoration:none;">👥 Clientes</a>
+      <a href="{% url 'actions:index' %}" class="card p-4 link" style="text-decoration:none;">⚡ Gestiones</a>
+      <a href="{% url 'actions:payments_list' %}" class="card p-4 link" style="text-decoration:none;">💵 Pagos</a>
+      {% if request.user.userprofile.user_type in 'admin,owner,supervisor' %}
+        <a href="{% url 'actions:commitments_list' %}" class="card p-4 link" style="text-decoration:none;">🤝 Compromisos</a>
+        <a href="{% url 'actions:recordings_list' %}" class="card p-4 link" style="text-decoration:none;">🎙️ Grabaciones</a>
+      {% endif %}
+      <a href="{% url 'userprofile:myaccount' %}" class="card p-4 link" style="text-decoration:none;">⚙️ Mi cuenta</a>
+    </div>
+  {% else %}
+    <a href="{% url 'login' %}" class="btn btn-primary">Iniciar sesión</a>
+  {% endif %}
+</div>
 {% endblock %}

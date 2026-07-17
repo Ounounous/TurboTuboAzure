@@ -1,0 +1,35 @@
+{% comment %}
+  Panel de notas internas de un lead. Reutilizable en el detalle del lead y en el
+  formulario de gestión. Las notas NO entran en los reportes de cartera.
+  Contexto esperado:
+    - lead: el Lead
+    - notes: queryset/lista de LeadNote (opcional; si no viene usa lead.notes.all)
+    - note_next: URL a la que volver tras guardar (opcional)
+{% endcomment %}
+<div class="card p-4">
+  <div class="flex items-center justify-between mb-3">
+    <h2 class="text-lg font-bold">📝 Notas internas</h2>
+    <span class="muted text-sm">No salen en los reportes</span>
+  </div>
+
+  {% with note_list=notes|default:lead.notes.all %}
+    {% if note_list %}
+      <div class="space-y-3 mb-4">
+        {% for note in note_list %}
+          <div class="row-alt rounded-lg py-2 px-3">
+            <p class="text-sm muted mb-1">
+              <strong>{{ note.author.username|default:"—" }}</strong> · {{ note.created_at|date:"d-M-Y H:i" }}
+            </p>
+            <p class="whitespace-pre-line">{{ note.body }}</p>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="muted mb-4">Este cliente no tiene notas todavía.</p>
+    {% endif %}
+  {% endwith %}
+
+  {% if not note_readonly %}
+    <button type="button" class="btn btn-primary" onclick="openNoteModal({{ lead.pk }}, '{{ lead.op|escapejs }}')">Agregar nota</button>
+  {% endif %}
+</div>

@@ -4,34 +4,36 @@
 
 {% block content %}
   <div class="py-6 px-6">
-    <h1 class="mb-4 text-xl">Carteras</h1>
-
-    <div class="flex justify-between mb-4">
-      <div>
-        <a href="{% url 'cartera:add' %}" class="inline-block py-4 px-6 bg-teal-400 rounded-xl text-white">Agregar Cartera</a>
-      </div>
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+      <h1 class="text-xl font-bold">Carteras</h1>
+      <a href="{% url 'cartera:add' %}" class="btn btn-primary">Agregar Cartera</a>
     </div>
 
     {% if carteras %}
-      <div class="mt-6 flex justify-between">
-        <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Nombre</p>
-        <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Activo</p>
-        <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Subcarteras</p>
-        <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Acciones</p>
-      </div>
-
-      {% for cartera in carteras %}
-        <div class="flex justify-between">
-          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ cartera.nombre }}</p>
-          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ cartera.activo|yesno:"Sí,No" }}</p>
-          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ cartera.subcarteras.count }}</p>
-          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">
-            <a href="{% url 'cartera:detail' cartera.pk %}" class="btn btn-primary">Ver Detalles</a>
-          </p>
+      <div class="card" style="border:1px solid var(--border); border-radius:10px;">
+        <div class="overflow-x-auto">
+          <table class="table-dense">
+            <thead>
+              <tr><th>Nombre</th><th>Activo</th><th class="num">Subcarteras</th><th>Acciones</th></tr>
+            </thead>
+            <tbody>
+              {% for cartera in carteras %}
+                <tr>
+                  <td style="font-weight:600">{{ cartera.nombre }}</td>
+                  <td>
+                    {% if cartera.activo %}<span class="dot-st"><span class="d st-green"></span>Activo</span>
+                    {% else %}<span class="dot-st"><span class="d st-slate"></span>Inactivo</span>{% endif %}
+                  </td>
+                  <td class="num">{{ cartera.subcarteras.count }}</td>
+                  <td><a href="{% url 'cartera:detail' cartera.pk %}" class="btn btn-secondary">Ver detalles</a></td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
         </div>
-      {% endfor %}
+      </div>
     {% else %}
-      <p>No existen carteras todavía</p>
+      <p class="empty-state">No existen carteras todavía.</p>
     {% endif %}
   </div>
 {% endblock %}

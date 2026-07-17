@@ -1,0 +1,82 @@
+{% comment %}
+  Modal para agregar una nota interna a un lead sin salir de la página.
+  Se abre con openNoteModal(leadPk, leadLabel). Envía la nota por fetch (AJAX) a
+  leads:add_note y recarga la vista para reflejarla. Incluir en base.html y popup_base.html.
+{% endcomment %}
+<dialog id="note-dialog" class="rounded-xl p-0 w-11/12 max-w-lg">
+  <form id="note-modal-form" class="card p-0" style="border-radius:.75rem;overflow:hidden;">
+    <div class="flex justify-between items-center py-3 px-4" style="background:var(--nav-bg);color:var(--nav-text);">
+      <strong>📝 Nueva nota <span id="note-modal-label" class="font-normal"></span></strong>
+      <button type="button" onclick="closeNoteModal()" class="text-xl" aria-label="Cerrar">✕</button>
+    </div>
+    <div class="p-4">
+      <p class="muted text-sm mb-2">Las notas no salen en los reportes. Sirven de recordatorio para el equipo.</p>
+      <textarea id="note-modal-body" rows="4" required placeholder="Escribe una nota sobre este cliente..." class="w-full"></textarea>
+      <p id="note-modal-error" class="field-error mt-1" style="display:none;"></p>
+      <div class="flex gap-3 mt-3">
+        <button type="submit" class="btn btn-primary">Guardar nota</button>
+        <button type="button" onclick="closeNoteModal()" class="btn btn-secondary">Cancelar</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+<script>
+  (function () {
+    var dialog = document.getElementById('note-dialog');
+    var form = document.getElementById('note-modal-form');
+    var bodyInput = document.getElementById('note-modal-body');
+    var errorEl = document.getElementById('note-modal-error');
+    var currentPk = null;
+
+    function getCsrf() {
+      var m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+      return m ? m[1] : '';
+    }
+
+    window.openNoteModal = function (pk, label) {
+      currentPk = pk;
+      bodyInput.value = '';
+      errorEl.style.display = 'none';
+      document.getElementById('note-modal-label').textContent = label ? ('· ' + label) : '';
+      if (typeof dialog.showModal === 'function') {
+        dialog.showModal();
+      } else {
+        dialog.setAttribute('open', 'open');
+      }
+      bodyInput.focus();
+    };
+
+    window.closeNoteModal = function () {
+      if (typeof dialog.close === 'function') { dialog.close(); }
+      else { dialog.removeAttribute('open'); }
+    };
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var body = bodyInput.value.trim();
+      if (!body) { errorEl.textContent = 'La nota no puede estar vacía.'; errorEl.style.display = ''; return; }
+      var data = new URLSearchParams({ body: body });
+      fetch('/dashboard/leads/' + currentPk + '/add-note/', {
+        method: 'POST',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRFToken': getCsrf(),
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: data,
+      }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (res) {
+          if (res.ok && res.j.ok) {
+            closeNoteModal();
+            window.location.reload();
+          } else {
+            errorEl.textContent = (res.j && res.j.error) || 'No se pudo guardar la nota.';
+            errorEl.style.display = '';
+          }
+        }).catch(function () {
+          errorEl.textContent = 'Error de conexión al guardar la nota.';
+          errorEl.style.display = '';
+        });
+    });
+  })();
+</script>

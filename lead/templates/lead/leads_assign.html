@@ -1,24 +1,27 @@
 {% extends 'core/base.html' %}
 
-{% block title %}Assign Leads{% endblock %}
+{% block title %}Asignaciones{% endblock %}
 
 {% block content %}
-<div class="py-6 px-6">
-    <h2 class="mt-6 mb-4 text-xl">upload a file:</h2>
+<div class="py-6 px-6" style="max-width: 720px;">
+  <h1 class="mb-4 text-xl font-bold">Asignaciones</h1>
+
+  <div class="card p-4 mb-4">
+    <h2 class="mb-3 text-lg font-bold">Asignar desde Excel</h2>
     <form method="post" enctype="multipart/form-data">
-        {% csrf_token %}
-        {{ upload_form.as_p }}
-        <button type="submit" class="bg-teal-400 rounded-xl text-white py-2 px-4">Upload File</button>
+      {% csrf_token %}
+      {{ upload_form.as_p }}
+      <button type="submit" class="btn btn-primary mt-2">Subir archivo</button>
     </form>
+  </div>
 
-    <h1 class="mb-4 text-xl">Assign Leads</h1>
-
+  <div class="card p-4">
+    <h2 class="mb-3 text-lg font-bold">Asignar manualmente</h2>
     <form method="post" enctype="multipart/form-data">
-        {% csrf_token %}
-        {{ form.as_p }}
-        <button type="submit" class="bg-teal-400 rounded-xl text-white py-2 px-4">Assign Leads</button>
+      {% csrf_token %}
+      {{ form.as_p }}
+      <button type="submit" class="btn btn-primary mt-2">Asignar clientes</button>
     </form>
-
-
+  </div>
 </div>
 {% endblock %}

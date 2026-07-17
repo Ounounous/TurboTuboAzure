@@ -1,17 +1,16 @@
 {% extends 'core/base.html' %}
 
-{% block title %}Edit team - ({{ team.name }}){% endblock %}
+{% block title %}Editar equipo - {{ team.name }}{% endblock %}
 
 {% block content %}
-    <div class="py-6 px-6">
-        <h1 class="text-xl">Edit team - ({{ team.name }})</h1>
-
-        <form method="post" action=".">
-            {% csrf_token %}
-
-            {{ form.as_p}}
-
-            <button class="py-4 px-8 bg-pink-600 text-white rounded-xl">Submit</button>
-        </form>
+  <div class="py-6 px-6" style="max-width: 560px;">
+    <h1 class="text-xl font-bold mb-4">Editar equipo - {{ team.name }}</h1>
+    <div class="card p-4">
+      <form method="post" action=".">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button class="btn btn-primary mt-2">Guardar</button>
+      </form>
     </div>
+  </div>
 {% endblock %}

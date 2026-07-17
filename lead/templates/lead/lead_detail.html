@@ -3,261 +3,282 @@
 {% block title %}{{ lead.name }}{% endblock %}
 
 {% block content %}
-  <div class="py-6 px-6">
-    <h1 class="mb-4 text-xl">Operación N° {{ lead.op }} - {{ lead.name }}</h1>
+<div class="py-6 px-6">
+  <a href="{% url 'leads:list' %}" class="link mb-4" style="font-size:13px; display:inline-block;">← Volver a clientes</a>
 
-    <details>
-      <summary>Información Cliente</summary>
-      <div class="grid grid-cols-2 gap-4">
-        <div class="flex flex-col">
-          <p class="font-semibold">OP:</p>
-          <p class="mb-2 ml-2">{{ lead.op }}</p>
+  <div class="detail-grid">
+    <!-- ============ Izquierda: deuda + información ============ -->
+    <div style="display:flex; flex-direction:column; gap:16px;">
+
+      <div class="card p-4" style="text-align:center;">
+        <div class="avatar-lg">{{ initials }}</div>
+        <div style="font-size:16px; font-weight:800;">{{ lead.name }}</div>
+        <div class="muted" style="font-size:12.5px; margin-bottom:8px;">{{ lead.op }} · {{ lead.rut }}-{{ lead.dv }}</div>
+        <span class="dot-st"><span class="d st-{{ lead.status_color }}"></span>{{ lead.get_status_display }}</span>
+
+        <div class="debt-highlight">
+          <div class="lbl">Saldo deuda</div>
+          <div class="amt">${{ lead.saldo_deuda|floatformat:0 }}</div>
         </div>
-        <div class="flex flex-col">
-          <p class="font-semibold">Name:</p>
-          <p class="mb-2 ml-2">{{ lead.name }}</p>
-        </div>
-        <div class="flex flex-col">
-          <p class="font-semibold">RUT:</p>
-          <p class="mb-2 ml-2">{{ lead.rut }}-{{ lead.dv }}</p>
-        </div>
-        <div class="flex flex-col">
-          <p class="font-semibold">Cartera:</p>
-          <p class="mb-2 ml-2">{{ lead.subcartera.cartera.nombre }}</p>
-        </div>
-        <div class="flex flex-col">
-          <p class="font-semibold">Subcartera:</p>
-          <p class="mb-2 ml-2">{{ lead.subcartera.nombre }}</p>
-        </div>
-        <div class="flex flex-col">
-          <p class="font-semibold">Saldo Insoluto:</p>
-          <p class="mb-2 ml-2">{{ lead.saldo_insoluto }}</p>
-        </div>
-        <div class="flex flex-col">
-          <p class="font-semibold">Saldo Deuda:</p>
-          <p class="mb-2 ml-2">{{ lead.saldo_deuda }}</p>
-        </div>
-        <div class="flex flex-col">
-          <p class="font-semibold">Valor Cuota:</p>
-          <p class="mb-2 ml-2">{{ lead.valor_cuota }}</p>
-        </div>
-        <div class="flex flex-col">
-          <p class="font-semibold">Cuotas Atrasadas:</p>
-          <p class="mb-2 ml-2">{{ lead.cuotas_atrasadas }}</p>
-        </div>
-        <div class="flex flex-col">
-          <p class="font-semibold">Status:</p>
-          <p class="mb-2 ml-2">{{ lead.status }}</p>
-        </div>
-        <div class="flex flex-col">
-          <p class="font-semibold">Tiene Aval:</p>
-          <p class="mb-2 ml-2">{{ lead.tiene_aval }}</p>
-        </div>
-        <div class="flex flex-col">
-          <p class="font-semibold">Tipo Cobranza:</p>
-          <p class="mb-2 ml-2">{{ lead.tipo_cobranza }}</p>
-        </div>
-        <div class="flex flex-col">
-          <p class="font-semibold">Ciclo Cartera:</p>
-          <p class="mb-2 ml-2">{{ lead.ciclo_cartera }}</p>
-        </div>
-        <div class="flex flex-col">
-          <p class="font-semibold">Ciclo:</p>
-          <p class="mb-2 ml-2">{{ lead.ciclo }}</p>
-        </div>
-        <div class="flex flex-col">
-          <p class="font-semibold">Activo:</p>
-          <p class="mb-2 ml-2">{{ lead.activo }}</p>
+
+        <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
+          <a href="{% url 'actions:multistep_step_with_lead' step=2 lead_id=lead.pk %}" class="btn btn-primary" onclick="openGestionModal(this.href); return false;">⚡ Gestionar</a>
+          <a href="{% url 'actions:payment_create' lead.pk %}" class="btn btn-secondary" onclick="openGestionModal(this.href); return false;">💵 Pago</a>
         </div>
       </div>
-      <hr class="my-4">
-      <a href="{% url 'leads:edit' lead.id %}" class="py-2 px-4 rounded-xl bg-teal-500 text-white">Editar Estado</a>
-    </details>
 
-
-  </details>
-
-  <hr class="my-4">
-
-    <details style="display:none;">
-      <summary>Editar</summary>
-      <form id="lead_delete_form" method="post" action="{% url 'leads:delete' lead.id %}">
-        {% csrf_token %}
-      </form>
-      <a href="{% url 'leads:convert' lead.id %}" class="py-2 px-4 rounded-xl bg-blue-500 text-white">Convert to client</a>
-      <a href="{% url 'leads:edit' lead.id %}" class="py-2 px-4 rounded-xl bg-teal-500 text-white">Edit</a>
-      <a href="#" onclick="document.getElementById('lead_delete_form').submit();" class="py-2 px-4 rounded-xl bg-red-500 text-white">Delete</a>
-    </details>
-
-    <hr class="my-4">
-
-    <details class="bg-white shadow rounded-lg p-4">
-      <summary class="font-bold cursor-pointer">Gestiones</summary>
-      <div class="mt-4">
-        <div class="mb-4">
-          <a href="{% url 'actions:multistep_step_with_lead' step=2 lead_id=lead.pk %}" class="py-2 px-4 rounded-xl bg-blue-500 text-white" onclick="openGestionModal(this.href); return false;">Add New Action</a>
+      <div class="card p-4">
+        <div class="kv-list">
+          <div class="kv"><span class="k">Cartera</span><span class="v">{{ lead.subcartera.cartera.nombre }} / {{ lead.subcartera.nombre }}</span></div>
+          <div class="kv"><span class="k">Saldo insoluto</span><span class="v">${{ lead.saldo_insoluto|floatformat:0 }}</span></div>
+          <div class="kv"><span class="k">Valor cuota</span><span class="v">${{ lead.valor_cuota|floatformat:0 }}</span></div>
+          <div class="kv"><span class="k">Cuotas atrasadas</span><span class="v">{{ lead.cuotas_atrasadas }}</span></div>
+          <div class="kv"><span class="k">Ciclo</span><span class="v">{{ lead.ciclo }}</span></div>
+          <div class="kv"><span class="k">Tipo cobranza</span><span class="v">{{ lead.get_tipo_cobranza_display }}</span></div>
+          <div class="kv"><span class="k">Última gestión</span><span class="v">
+            {% if dias_ultima_gestion is None %}<span class="dias na">N/A</span>
+            {% else %}<span class="dias {% if dias_ultima_gestion <= 3 %}ok{% elif dias_ultima_gestion < 10 %}warn{% else %}late{% endif %}">{{ dias_ultima_gestion }} d</span>{% endif %}
+          </span></div>
+          {% if next_commitment %}
+            <div class="kv"><span class="k">Próx. compromiso</span><span class="v">{{ next_commitment.fecha_compromiso|date:"d-m-Y" }}{% if next_commitment.monto %} · ${{ next_commitment.monto|floatformat:0 }}{% endif %}</span></div>
+          {% endif %}
         </div>
-        
+      </div>
+
+      <div class="card p-4">
+        <h3 style="margin:0 0 10px; font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted);">Contacto</h3>
+        <div class="kv-list">
+          {% for phone in phones %}
+            {% if phone.phone_type == 'principal' %}
+              <div class="kv"><span class="k">📞 Teléfono</span><span class="v">{{ phone.phone_number }}</span></div>
+            {% endif %}
+          {% endfor %}
+          {% with demo=demographics.first %}
+            <div class="kv"><span class="k">✉️ Email</span><span class="v">{{ demo.principal_email|default:"-" }}</span></div>
+            <div class="kv"><span class="k">📍 Dirección</span><span class="v">{{ demo.principal_address|default:"-" }}</span></div>
+          {% endwith %}
+          {% if aval_demographics %}
+            <div class="kv"><span class="k">Aval</span><span class="v">{{ aval_demographics.aval_name }} · {{ aval_demographics.aval_rut }}-{{ aval_demographics.aval_dv }}</span></div>
+          {% endif %}
+        </div>
+      </div>
+
+      <details class="card p-4">
+        <summary class="cursor-pointer font-semibold" style="font-size:12.5px; color:var(--text-muted);">Más opciones</summary>
+        <div class="mt-3" style="display:flex; flex-direction:column; gap:8px;">
+          <a href="{% url 'leads:edit' lead.id %}" class="btn btn-secondary">Editar estado</a>
+          <a href="{% url 'leads:convert' lead.id %}" class="btn btn-secondary">Convertir a cliente</a>
+          <form id="lead_delete_form" method="post" action="{% url 'leads:delete' lead.id %}">{% csrf_token %}</form>
+          <a href="#" onclick="document.getElementById('lead_delete_form').submit();" class="btn btn-danger">Eliminar</a>
+        </div>
+      </details>
+    </div>
+
+    <!-- ============ Derecha: gestiones / notas / pagos (pestañas) ============ -->
+    <div class="card p-4">
+      <div class="tabs">
+        <button type="button" class="tab-btn is-active" data-tab="gestiones">Gestiones</button>
+        <button type="button" class="tab-btn" data-tab="compromisos">Compromisos</button>
+        <button type="button" class="tab-btn" data-tab="pagos">Pagos</button>
+        <button type="button" class="tab-btn" data-tab="notas">📝 Notas</button>
+        <button type="button" class="tab-btn" data-tab="grabaciones">Grabaciones</button>
+        <button type="button" class="tab-btn" data-tab="demografia">Demografía</button>
+        <button type="button" class="tab-btn" data-tab="archivos">Archivos</button>
+        <button type="button" class="tab-btn" data-tab="comentarios">Comentarios</button>
+      </div>
+
+      <!-- Gestiones -->
+      <div class="tab-panel is-active" data-panel="gestiones">
+        <div class="mb-4">
+          <a href="{% url 'actions:multistep_step_with_lead' step=2 lead_id=lead.pk %}" class="btn btn-primary" onclick="openGestionModal(this.href); return false;">Nueva gestión</a>
+        </div>
         {% if lead.actions.all %}
           <div class="overflow-x-auto">
-            <table class="min-w-full">
-              <thead>
-                <tr class="bg-gray-200">
-                  <th class="py-2 px-2 text-left">Action Type</th>
-                  <th class="py-2 px-2 text-left">Result</th>
-                  <th class="py-2 px-2 text-left">User</th>
-                  <th class="py-2 px-2 text-left">Date</th>
-                  <th class="py-2 px-2 text-left">Phone</th>
-                  <th class="py-2 px-2 text-left">Email</th>
-                  <th class="py-2 px-2 text-left">Comentario</th>
-                  <th class="py-2 px-2 text-left">Target</th>
-                </tr>
-              </thead>
+            <table class="table-dense">
+              <thead><tr><th>Medio</th><th>Resultado</th><th>Usuario</th><th>Fecha</th><th>Teléfono</th><th>Email</th><th>Comentario</th><th>Target</th></tr></thead>
               <tbody>
                 {% for action in lead.actions.all %}
-                  <tr class="{% cycle '' 'bg-gray-100' %}">
-                    <td class="py-2 px-2">{{ action.medio.nombre }}</td>
-                    <td class="py-2 px-2">{{ action.resultado.nombre }}</td>
-                    <td class="py-2 px-2">{{ action.user }}</td>
-                    <td class="py-2 px-2">{{ action.created_at|date:"d-M-Y H:i" }}</td>
-                    <td class="py-2 px-2">{{ action.phone|default_if_none:"-" }}</td>
-                    <td class="py-2 px-2">{{ action.email|default_if_none:"-" }}</td>
-                    <td class="py-2 px-2">{{ action.comment|default_if_none:"-" }}</td>
-                    <td class="py-2 px-2">{{ action.target|capfirst|default_if_none:"-" }}</td>
+                  <tr>
+                    <td style="font-weight:600">{{ action.medio.nombre }}</td>
+                    <td>{{ action.resultado.nombre }}</td>
+                    <td>{{ action.user }}</td>
+                    <td style="font-variant-numeric:tabular-nums; color:var(--text-muted)">{{ action.created_at|date:"d-m-Y H:i" }}</td>
+                    <td>{{ action.phone|default_if_none:"-" }}</td>
+                    <td>{{ action.email|default_if_none:"-" }}</td>
+                    <td>{{ action.comment|default_if_none:"-" }}</td>
+                    <td>{{ action.target|capfirst|default_if_none:"-" }}</td>
                   </tr>
                 {% endfor %}
               </tbody>
             </table>
           </div>
         {% else %}
-          <p>No actions recorded for this lead yet.</p>
+          <p class="muted">Sin gestiones registradas para este cliente.</p>
         {% endif %}
-
       </div>
-    </details>
 
-    <hr class="my-4">
-
-    <details class="bg-white shadow rounded-lg p-4">
-      <summary class="font-bold cursor-pointer">Grabaciones de llamadas</summary>
-      <div class="mt-4">
-        {% if lead.pending_pbx_calls.all|length %}
-          {% with pending_count=lead.pending_pbx_calls.all|length %}
-            {% for pc in lead.pending_pbx_calls.all %}
-              {% if not pc.resolved %}
-                <p class="text-sm text-gray-500 mb-2">⏳ Llamada iniciada {{ pc.requested_at|date:"d-M-Y H:i" }}, buscando su grabación...</p>
-              {% endif %}
-            {% endfor %}
-          {% endwith %}
+      <!-- Compromisos -->
+      <div class="tab-panel" data-panel="compromisos">
+        {% if lead.payment_commitments.all %}
+          <div class="overflow-x-auto">
+            <table class="table-dense">
+              <thead><tr><th>Fecha compromiso</th><th class="num">Monto</th><th>Comentario</th><th>Ejecutivo</th></tr></thead>
+              <tbody>
+                {% for pc in lead.payment_commitments.all %}
+                  <tr>
+                    <td style="font-variant-numeric:tabular-nums">{{ pc.fecha_compromiso|date:"d-m-Y" }}</td>
+                    <td class="num">{% if pc.monto %}${{ pc.monto|floatformat:0 }}{% else %}-{% endif %}</td>
+                    <td>{{ pc.comentario|default:"-"|truncatechars:80 }}</td>
+                    <td>{{ pc.created_by.username|default:"-" }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <p class="muted">Este cliente no tiene compromisos de pago.</p>
         {% endif %}
+        <p class="muted mt-4" style="font-size:12px; border-top:1px dashed var(--border); padding-top:10px;">
+          <strong>Compromisos rotos:</strong> próximamente — cuando un cliente incumpla un compromiso pasará
+          automáticamente al status “Compromiso roto” y aparecerá aquí.
+        </p>
+      </div>
 
+      <!-- Pagos -->
+      <div class="tab-panel" data-panel="pagos">
+        <div class="mb-4">
+          <a href="{% url 'actions:payment_create' lead.pk %}" class="btn btn-primary" onclick="openGestionModal(this.href); return false;">Ingresar pago</a>
+        </div>
+        {% if lead.payments.all %}
+          <div class="overflow-x-auto">
+            <table class="table-dense">
+              <thead><tr><th>Fecha</th><th class="num">Monto</th><th>Tipo</th><th>Comprobante</th><th>Registrado por</th></tr></thead>
+              <tbody>
+                {% for p in lead.payments.all %}
+                  <tr>
+                    <td style="font-variant-numeric:tabular-nums">{{ p.fecha|date:"d-m-Y" }}</td>
+                    <td class="num">${{ p.monto|floatformat:0 }}</td>
+                    <td>{{ p.get_tipo_display }}</td>
+                    <td>{% if p.comprobante %}<a href="{{ p.comprobante.url }}" target="_blank" class="link">Ver comprobante</a>{% else %}-{% endif %}</td>
+                    <td>{{ p.created_by.username|default:"-" }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <p class="muted">Este cliente no tiene pagos registrados.</p>
+        {% endif %}
+      </div>
+
+      <!-- Notas -->
+      <div class="tab-panel" data-panel="notas">
+        {% include 'lead/partials/_notes.html' with note_next=request.path %}
+      </div>
+
+      <!-- Grabaciones -->
+      <div class="tab-panel" data-panel="grabaciones">
+        {% if lead.pending_pbx_calls.all|length %}
+          {% for pc in lead.pending_pbx_calls.all %}
+            {% if not pc.resolved %}
+              <p class="text-sm muted mb-2">⏳ Llamada iniciada {{ pc.requested_at|date:"d-m-Y H:i" }}, buscando su grabación...</p>
+            {% endif %}
+          {% endfor %}
+        {% endif %}
         {% if lead.call_recordings.all %}
-          <div class="space-y-4">
+          <div class="space-y-3">
             {% for rec in lead.call_recordings.all %}
-              <div class="bg-gray-100 py-4 px-4 rounded-xl">
+              <div class="card py-3 px-3">
                 <p class="mb-2 text-sm">
-                  <strong>{{ rec.user.username|default:"-" }}</strong> · {{ rec.call_date|date:"d-M-Y H:i"|default:rec.created_at|date:"d-M-Y H:i" }}
+                  <strong>{{ rec.user.username|default:"-" }}</strong> · {{ rec.call_date|date:"d-m-Y H:i"|default:rec.created_at|date:"d-m-Y H:i" }}
                   {% if rec.duration_seconds %} · {{ rec.duration_seconds }}s{% endif %}
                 </p>
-                <audio controls class="w-full">
+                <audio controls style="width:300px; max-width:100%; height:34px;">
                   <source src="{{ rec.audio_file.url }}" type="audio/mpeg">
                 </audio>
               </div>
             {% endfor %}
           </div>
         {% else %}
-          <p>No hay grabaciones todavía.</p>
+          <p class="muted">No hay grabaciones todavía.</p>
         {% endif %}
       </div>
-    </details>
 
-    <details>
-      <summary>Demographics</summary>
-<div>
-  {% for demographic in demographics %}
-    <p class="font-semibold">OP:</p>
-    <p class="mb-2">{{ demographic.op }}</p>
-    <p class="font-semibold">Cartera:</p>
-    <p class="mb-2">{{ demographic.cartera }}</p>
-    <p class="font-semibold">Email:</p>
-    <p class="mb-2">{{ demographic.principal_email }}</p>
-    <p class="font-semibold">Address:</p>
-    <p class="mb-2">{{ demographic.principal_address }}</p>
-  {% endfor %}
-  <p class="font-semibold">Phones:</p>
-  <ul>
-    {% for phone in lead.phone_set.all %}
-      {% if phone.phone_type == 'principal' %}
-        <li>{{ phone.phone_number }} ({{ phone.get_phone_number_status_display }})</li>
-      {% endif %}
-    {% endfor %}
-  </ul>
-  <p class="font-semibold">Bienes:</p>
-  <ul>
-    {% for item in lead.iditem_set.all %}
-      <li>{{ item.item_type }} - {{ item.patente }} - {{ item.marca }} - {{ item.modelo }}</li>
-    {% endfor %}
-  </ul>
-  {% if aval_demographics %}
-    <hr class="my-4">
-    <p class="font-semibold">AVAL Demographics:</p>
-    <p class="font-semibold">Name:</p>
-    <p class="mb-2">{{ aval_demographics.aval_name }}</p>
-    <p class="font-semibold">RUT:</p>
-    <p class="mb-2">{{ aval_demographics.aval_rut }}-{{ aval_demographics.aval_dv }}</p>
-    <p class="font-semibold">Phone Numbers:</p>
-    <ul>
-      {% for phone in lead.phone_set.all %}
-        {% if phone.phone_type == 'aval' %}
-          <li>{{ phone.phone_number }}</li>
-        {% endif %}
-      {% endfor %}
-    </ul>
-    <p class="font-semibold">Email:</p>
-    <p class="mb-2">{{ aval_demographics.aval_email }}</p>
-  {% endif %}
-</div>
-</details>
-
-    <hr class="my-4">
-
-    <details style="display:none;">
-      <summary>Comments</summary>
-      <div class="space-y-4">
-        {% for comment in lead.comments.all %}
-          <div class="bg-gray-100 py-6 px-6 rounded-xl">
-            <p class="mb-2"><strong>{{ comment.created_by }}</strong> @ {{ comment.created_at}}</p>
-            {{ comment.content}}
+      <!-- Demografía -->
+      <div class="tab-panel" data-panel="demografia">
+        <h3 class="font-bold mb-2">Bienes</h3>
+        <ul class="list-disc list-inside mb-4">
+          {% for item in lead.iditem_set.all %}
+            <li>{{ item.item_type }} - {{ item.patente }} - {{ item.marca }} - {{ item.modelo }}</li>
+          {% empty %}
+            <li class="muted">Sin bienes registrados.</li>
+          {% endfor %}
+        </ul>
+        {% if aval_demographics %}
+          <h3 class="font-bold mb-2">Aval</h3>
+          <div class="kv-list" style="max-width:420px;">
+            <div class="kv"><span class="k">Nombre</span><span class="v">{{ aval_demographics.aval_name }}</span></div>
+            <div class="kv"><span class="k">RUT</span><span class="v">{{ aval_demographics.aval_rut }}-{{ aval_demographics.aval_dv }}</span></div>
+            <div class="kv"><span class="k">Email</span><span class="v">{{ aval_demographics.aval_email|default:"-" }}</span></div>
+            {% for phone in phones %}
+              {% if phone.phone_type == 'aval' %}
+                <div class="kv"><span class="k">Teléfono</span><span class="v">{{ phone.phone_number }}</span></div>
+              {% endif %}
+            {% endfor %}
           </div>
-        {% endfor %}
+        {% endif %}
       </div>
-      <form method="post" action="{% url 'leads:add_comment' lead.id %}">
-        {% csrf_token %}
-        {{ form.as_p }}
-        <button class="py-2 px-4 rounded-xl bg-blue-500 text-white">Submit</button>
-      </form>
-    </details>
 
-    <hr class="my-4">
-
-    <details style="display:none;">
-      <summary>Files</summary>
-      <div>
+      <!-- Archivos -->
+      <div class="tab-panel" data-panel="archivos">
         {% for file in lead.files.all %}
-          <div class="bg-gray-100 py-6 px-6 rounded-xl my-4">
-            <p class="mb-2"><strong>{{ file.created_by }}</strong> @ {{ file.created_at}}</p>
-            <a href="{{ file.file.url }}">Download</a>
+          <div class="card py-3 px-3 mb-2">
+            <p class="mb-1 text-sm"><strong>{{ file.created_by }}</strong> · {{ file.created_at|date:"d-m-Y H:i" }}</p>
+            <a href="{{ file.file.url }}" class="link">Descargar</a>
           </div>
+        {% empty %}
+          <p class="muted mb-4">Sin archivos.</p>
         {% endfor %}
+        <form method="post" action="{% url 'leads:add_file' lead.id %}" enctype="multipart/form-data" class="mt-4">
+          {% csrf_token %}
+          {{ fileform.as_p }}
+          <button class="btn btn-primary mt-2">Subir archivo</button>
+        </form>
       </div>
-      <form method="post" action="{% url 'leads:add_file' lead.id %}" enctype="multipart/form-data">
-        {% csrf_token %}
-        {{ fileform.as_p }}
-        <button class="py-2 px-4 rounded-xl bg-blue-500 text-white">Submit</button>
-      </form>
-    </details>
 
-    <hr class="my-4">
-    <a href="{% url 'leads:list' %}" class="py-2 px-4 rounded-xl bg-pink-700 text-white">Back to leads</a>
+      <!-- Comentarios -->
+      <div class="tab-panel" data-panel="comentarios">
+        {% for comment in lead.comments.all %}
+          <div class="card py-3 px-3 mb-2">
+            <p class="mb-1 text-sm"><strong>{{ comment.created_by }}</strong> · {{ comment.created_at|date:"d-m-Y H:i" }}</p>
+            {{ comment.content }}
+          </div>
+        {% empty %}
+          <p class="muted mb-4">Sin comentarios.</p>
+        {% endfor %}
+        <form method="post" action="{% url 'leads:add_comment' lead.id %}" class="mt-4">
+          {% csrf_token %}
+          {{ form.as_p }}
+          <button class="btn btn-primary mt-2">Comentar</button>
+        </form>
+      </div>
+    </div>
   </div>
+</div>
+
+<script>
+  (function () {
+    var tabs = document.querySelectorAll('.tab-btn');
+    var panels = document.querySelectorAll('.tab-panel');
+    tabs.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        tabs.forEach(function (b) { b.classList.remove('is-active'); });
+        panels.forEach(function (p) { p.classList.remove('is-active'); });
+        btn.classList.add('is-active');
+        var panel = document.querySelector('.tab-panel[data-panel="' + btn.dataset.tab + '"]');
+        if (panel) panel.classList.add('is-active');
+      });
+    });
+  })();
+</script>
 {% endblock %}

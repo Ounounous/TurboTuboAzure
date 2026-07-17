@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.core.validators import FileExtensionValidator
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
@@ -32,6 +33,14 @@ class Medio(models.Model):
     # Gestion entrante (el cliente nos contacto): ej. Nuevo Capital distingue "LLAMADA RECIBIDA",
     # "WHATSAPP RECIBIDO", etc. Su reporte deriva el "Origen Gestion" de esto (In=1 / Out=2).
     es_inbound = models.BooleanField(default=False)
+    # Si el gestor puede usar este medio en el formulario manual de gestion. Los medios masivos
+    # (IVR, SMS, discador, bot, correo/whatsapp/llamada RECIBIDOS) no se gestionan uno por uno:
+    # se cargan por Excel. Solo la llamada directa manual, WhatsApp y correo saliente quedan en True.
+    permite_manual = models.BooleanField(default=True)
+
+    # Nombres del medio de "llamada directa manual" segun cada cartera. En el formulario manual
+    # todos se muestran con la etiqueta unica "Llamar".
+    NOMBRES_LLAMADA_MANUAL = {'MANUAL', 'LLAMADA', 'LLAMADO', 'TELEFONICO', 'TELEFÓNICO'}
 
     class Meta:
         ordering = ('nombre',)
@@ -39,6 +48,30 @@ class Medio(models.Model):
 
     def __str__(self):
         return f"{self.cartera.nombre} / {self.nombre}"
+
+    @property
+    def es_llamada_manual(self):
+        """La llamada directa que hace el gestor a mano (se muestra como botón 'Llamar')."""
+        return (
+            self.canal == Medio.CANAL_TELEFONO
+            and not self.es_inbound
+            and self.nombre.strip().upper() in Medio.NOMBRES_LLAMADA_MANUAL
+        )
+
+    @property
+    def es_whatsapp(self):
+        return 'WHATSAPP' in self.nombre.strip().upper()
+
+    def calcular_permite_manual(self):
+        """Regla de negocio: qué medios aparecen en el formulario manual de gestión."""
+        if self.es_inbound:
+            return False
+        if self.canal == Medio.CANAL_EMAIL:
+            return True  # correo saliente se gestiona manual
+        nombre = self.nombre.strip().upper()
+        if 'WHATSAPP' in nombre:
+            return True
+        return nombre in Medio.NOMBRES_LLAMADA_MANUAL
 
 
 class Resultado(models.Model):
@@ -248,3 +281,55 @@ class CallRecording(models.Model):
 
     def __str__(self):
         return f"Grabación {self.cdr_id} - {self.lead.op}"
+
+
+class Payment(models.Model):
+    """
+    Pago registrado de un cliente. Es independiente de las gestiones (Action): un pago se
+    ingresa por su propio formulario, con su comprobante (imagen/PDF) que queda accesible
+    para admin y en el detalle del lead.
+    """
+    TIPO_PIE = 'pie'
+    TIPO_CUOTA = 'cuota'
+    CHOICES_TIPO = [
+        (TIPO_PIE, _('Pie')),
+        (TIPO_CUOTA, _('Cuota')),
+    ]
+
+    lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name='payments')
+    # Se heredan del lead al guardar (no se editan a mano), para poder agrupar/reportar por cartera.
+    subcartera = models.ForeignKey(
+        'cartera.Subcartera', on_delete=models.PROTECT, related_name='payments',
+        editable=False, null=True, blank=True,
+    )
+    monto = models.PositiveIntegerField(_('Monto'))
+    fecha = models.DateField(_('Fecha de pago'))
+    tipo = models.CharField(_('Tipo'), max_length=10, choices=CHOICES_TIPO, default=TIPO_CUOTA)
+    comprobante = models.FileField(
+        _('Comprobante'), upload_to='payment_receipts/%Y/%m/', null=True, blank=True,
+        validators=[FileExtensionValidator(['png', 'jpg', 'jpeg', 'pdf'])],
+        help_text=_('Imagen (PNG/JPG) o PDF del comprobante de pago.'),
+    )
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='payments_created')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-fecha', '-created_at']
+        verbose_name = _('Pago')
+        verbose_name_plural = _('Pagos')
+
+    def save(self, *args, **kwargs):
+        if self.lead_id and not self.subcartera_id:
+            self.subcartera = self.lead.subcartera
+        super().save(*args, **kwargs)
+
+    @property
+    def op(self):
+        return self.lead.op
+
+    @property
+    def cartera(self):
+        return self.subcartera.cartera if self.subcartera else None
+
+    def __str__(self):
+        return f"Pago {self.lead.op} - {self.monto} ({self.fecha})"

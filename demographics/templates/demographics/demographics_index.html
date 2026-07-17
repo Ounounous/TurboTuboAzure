@@ -5,53 +5,54 @@
 
 {% block content %}
 <div class="py-6 px-6">
-  <h2 class="mb-4 text-xl">Demografía</h2>
-  <div class="space-x-4 my-4">
-      <a href="?form_type=phone"><button class="py-4 px-6 bg-blue-300 rounded-xl text-white">Teléfonos</button></a>
-      <a href="?form_type=iddemographics"><button class="py-4 px-6 bg-blue-300 rounded-xl text-white">Email</button></a>
-      <a href="?form_type=address"><button class="py-4 px-6 bg-blue-300 rounded-xl text-white">Dirección</button></a>
-      <a href="?form_type=iditem"><button class="py-4 px-6 bg-blue-300 rounded-xl text-white">Bienes</button></a>
+  <h1 class="mb-2 text-xl font-bold">Subir Demografía</h1>
+  <p class="muted mb-4">Elige qué datos quieres cargar por Excel.</p>
+  <div class="chips">
+    <a href="?form_type=phone" class="chip {% if form_type == 'phone' %}active{% endif %}">📞 Teléfonos</a>
+    <a href="?form_type=iddemographics" class="chip {% if form_type == 'iddemographics' %}active{% endif %}">✉️ Email</a>
+    <a href="?form_type=address" class="chip {% if form_type == 'address' %}active{% endif %}">📍 Dirección</a>
+    <a href="?form_type=iditem" class="chip {% if form_type == 'iditem' %}active{% endif %}">🚗 Bienes</a>
   </div>
 
   <div id="upload-forms" class="mt-6">
       {% if form_type == 'phone' %}
       <div id="upload-phone-form">
           <h3 class="text-lg mb-2">Teléfonos</h3>
-          <a href="{% url 'demographics:download_template' 'phone' %}" class="inline-block mb-4 py-2 px-4 bg-teal-400 rounded-xl text-white">Descargar planilla de ejemplo</a>
+          <a href="{% url 'demographics:download_template' 'phone' %}" class="btn btn-primary mb-4">Descargar planilla de ejemplo</a>
           <form method="post" enctype="multipart/form-data" action="{% url 'demographics:upload_phone' %}">
               {% csrf_token %}
               <input type="file" name="excel_file" required>
-              <button type="submit" class="py-2 px-4 bg-blue-300 rounded-xl text-white mt-2">Subir</button>
+              <button type="submit" class="btn btn-primary mt-2">Subir</button>
           </form>
       </div>
       {% elif form_type == 'iddemographics' %}
       <div id="upload-iddemographics-form">
           <h3 class="text-lg mb-2">Email</h3>
-          <a href="{% url 'demographics:download_template' 'iddemographics' %}" class="inline-block mb-4 py-2 px-4 bg-teal-400 rounded-xl text-white">Descargar planilla de ejemplo</a>
+          <a href="{% url 'demographics:download_template' 'iddemographics' %}" class="btn btn-primary mb-4">Descargar planilla de ejemplo</a>
           <form method="post" enctype="multipart/form-data" action="{% url 'demographics:upload_iddemographics' %}">
               {% csrf_token %}
               <input type="file" name="excel_file" required>
-              <button type="submit" class="py-2 px-4 bg-blue-300 rounded-xl text-white mt-2">Subir</button>
+              <button type="submit" class="btn btn-primary mt-2">Subir</button>
           </form>
       </div>
       {% elif form_type == 'address' %}
       <div id="upload-address-form">
           <h3 class="text-lg mb-2">Dirección</h3>
-          <a href="{% url 'demographics:download_template' 'address' %}" class="inline-block mb-4 py-2 px-4 bg-teal-400 rounded-xl text-white">Descargar planilla de ejemplo</a>
+          <a href="{% url 'demographics:download_template' 'address' %}" class="btn btn-primary mb-4">Descargar planilla de ejemplo</a>
           <form method="post" enctype="multipart/form-data" action="{% url 'demographics:upload_address' %}">
               {% csrf_token %}
               <input type="file" name="excel_file" required>
-              <button type="submit" class="py-2 px-4 bg-blue-300 rounded-xl text-white mt-2">Subir</button>
+              <button type="submit" class="btn btn-primary mt-2">Subir</button>
           </form>
       </div>
       {% elif form_type == 'iditem' %}
       <div id="upload-iditem-form">
           <h3 class="text-lg mb-2">Bienes</h3>
-          <a href="{% url 'demographics:download_template' 'iditem' %}" class="inline-block mb-4 py-2 px-4 bg-teal-400 rounded-xl text-white">Descargar planilla de ejemplo</a>
+          <a href="{% url 'demographics:download_template' 'iditem' %}" class="btn btn-primary mb-4">Descargar planilla de ejemplo</a>
           <form method="post" enctype="multipart/form-data" action="{% url 'demographics:upload_iditem' %}">
               {% csrf_token %}
               <input type="file" name="excel_file" required>
-              <button type="submit" class="py-2 px-4 bg-blue-300 rounded-xl text-white mt-2">Subir</button>
+              <button type="submit" class="btn btn-primary mt-2">Subir</button>
           </form>
       </div>
       {% endif %}

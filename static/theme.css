@@ -1,0 +1,446 @@
+/* ============================================================
+   TurboTubo — sistema de diseño (4 paletas)
+   Por defecto: azul-claro. Cambia con [data-theme] en <html>.
+   ============================================================ */
+
+:root,
+html[data-theme="azul-claro"] {
+  --bg-page: #F7FAFD;
+  --surface: #FFFFFF;
+  --surface-alt: #EAF3FC;
+  --surface-alt-hover: #DCEAF9;
+  --border: #D7E6F5;
+  --text: #12283F;
+  --text-muted: #55738C;
+  --accent: #1E6FBE;
+  --accent-contrast: #FFFFFF;
+  --accent-hover: #185C9E;
+  /* campos de formulario: papel blanco con texto oscuro en TODAS las paletas */
+  --field-bg: #FFFFFF;
+  --field-text: #12283F;
+  --field-border: #C7D8EA;
+  --field-placeholder: #8199AF;
+  --field-label: var(--text);
+  --nav-bg: #EAF3FC;
+  --nav-text: #12283F;
+  --nav-text-muted: #55738C;
+  --nav-active-bg: #CFE4F8;
+  --danger: #C0392B;
+  --danger-contrast: #FFFFFF;
+  --danger-hover: #A5301F;
+  --success: #1C7A4A;
+  --success-contrast: #FFFFFF;
+  --success-hover: #166139;
+}
+
+html[data-theme="azul-oscuro"] {
+  --bg-page: #0E2038;
+  --surface: #16324F;
+  --surface-alt: #1C3E5F;
+  --surface-alt-hover: #23507C;
+  --border: rgba(255, 255, 255, 0.12);
+  --text: #F3F8FD;
+  --text-muted: #93AEC6;
+  --accent: #4FA8F5;
+  --accent-contrast: #0E2038;
+  --accent-hover: #6FBBFB;
+  /* en paleta oscura los campos siguen siendo papel claro: texto oscuro legible */
+  --field-bg: #FFFFFF;
+  --field-text: #12283F;
+  --field-border: #B9CBDD;
+  --field-placeholder: #7C93A8;
+  --field-label: var(--text);
+  --nav-bg: #163350;
+  --nav-text: #F3F8FD;
+  --nav-text-muted: #93AEC6;
+  --nav-active-bg: #23507C;
+  --danger: #E56B5A;
+  --danger-contrast: #34120C;
+  --danger-hover: #EF8B7C;
+  --success: #6FCF97;
+  --success-contrast: #0B2E1B;
+  --success-hover: #8FE0AF;
+}
+
+html[data-theme="oliva-claro"] {
+  --bg-page: #F9FAF4;
+  --surface: #FFFFFF;
+  --surface-alt: #EEF0E3;
+  --surface-alt-hover: #E2E6D2;
+  --border: #DEE3CB;
+  --text: #2B3324;
+  --text-muted: #5C644A;
+  --accent: #5C7A2E;
+  --accent-contrast: #FFFFFF;
+  --accent-hover: #4A6424;
+  --field-bg: #FFFFFF;
+  --field-text: #2B3324;
+  --field-border: #CFD6BB;
+  --field-placeholder: #8A916F;
+  --field-label: var(--text);
+  --nav-bg: #EEF0E3;
+  --nav-text: #2B3324;
+  --nav-text-muted: #5C644A;
+  --nav-active-bg: #D3D9BC;
+  --danger: #B4442E;
+  --danger-contrast: #FFFFFF;
+  --danger-hover: #973824;
+  --success: #4A6B1C;
+  --success-contrast: #FFFFFF;
+  --success-hover: #3C5717;
+}
+
+html[data-theme="oliva-oscuro"] {
+  --bg-page: #262E1F;
+  --surface: #313B27;
+  --surface-alt: #3B472E;
+  --surface-alt-hover: #4C5934;
+  --border: rgba(255, 255, 255, 0.12);
+  --text: #F5F6EA;
+  --text-muted: #B3B89B;
+  --accent: #AAC240;
+  --accent-contrast: #262E1F;
+  --accent-hover: #BFD766;
+  --field-bg: #FFFFFF;
+  --field-text: #2B3324;
+  --field-border: #C2CBA4;
+  --field-placeholder: #82895F;
+  --field-label: var(--text);
+  --nav-bg: #313B27;
+  --nav-text: #F5F6EA;
+  --nav-text-muted: #B3B89B;
+  --nav-active-bg: #4C5934;
+  --danger: #E08A6E;
+  --danger-contrast: #34160C;
+  --danger-hover: #EBA48C;
+  --success: #A9D18E;
+  --success-contrast: #17300C;
+  --success-hover: #C2E0AC;
+}
+
+/* ---------------- base ---------------- */
+body {
+  background: var(--bg-page);
+  color: var(--text);
+  transition: background-color .15s ease, color .15s ease;
+}
+
+/* ---------------- top nav ---------------- */
+.topnav {
+  background: var(--nav-bg);
+  color: var(--nav-text);
+  border-bottom: 1px solid var(--border);
+}
+.nav-brand {
+  font-weight: 800;
+  font-size: 1.05rem;
+  color: var(--accent);
+  text-decoration: none;
+}
+.nav-link {
+  color: var(--nav-text-muted);
+  padding: .55rem 1rem;
+  border-radius: .7rem;
+  font-weight: 600;
+  font-size: .9rem;
+  text-decoration: none;
+  display: inline-block;
+}
+.nav-link:hover { background: var(--surface-alt-hover); color: var(--nav-text); }
+.nav-link.is-active { background: var(--nav-active-bg); color: var(--accent); }
+
+/* ---------------- buttons ---------------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .4rem;
+  padding: .62rem 1.25rem;
+  border-radius: .75rem;
+  font-weight: 600;
+  font-size: .9rem;
+  line-height: 1.2;
+  min-height: 2.6rem;         /* misma altura para todos los botones */
+  box-sizing: border-box;
+  align-self: center;          /* evita que se estiren dentro de filas flex (form + input) */
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+.btn-primary { background: var(--accent); color: var(--accent-contrast); }
+.btn-primary:hover { background: var(--accent-hover); }
+.btn-secondary { background: var(--surface); color: var(--text); border-color: var(--border); }
+.btn-secondary:hover { background: var(--surface-alt); }
+.btn-danger { background: var(--danger); color: var(--danger-contrast); }
+.btn-danger:hover { background: var(--danger-hover); }
+.btn-success { background: var(--success); color: var(--success-contrast); }
+.btn-success:hover { background: var(--success-hover); }
+
+/* ---------------- form fields ----------------
+   Los campos de formulario son "papel": fondo claro con texto oscuro en las 4
+   paletas, para que nunca queden letras claras sobre fondo blanco. Se distinguen
+   a propósito del resto de las cajas (.card, nav) que sí siguen la paleta. */
+input[type="text"],
+input[type="date"],
+input[type="number"],
+input[type="email"],
+input[type="password"],
+input[type="search"],
+input[type="tel"],
+input[type="url"],
+input:not([type]),
+select,
+textarea {
+  background-color: var(--field-bg);
+  color: var(--field-text);
+  border: 1px solid var(--field-border);
+  border-radius: .55rem;
+  padding: .5rem .65rem;
+}
+select option { color: var(--field-text); background-color: var(--field-bg); }
+input::placeholder,
+textarea::placeholder { color: var(--field-placeholder); opacity: 1; }
+input[type="text"]:focus,
+input[type="date"]:focus,
+input[type="number"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+input[type="search"]:focus,
+input[type="tel"]:focus,
+input[type="url"]:focus,
+input:not([type]):focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+/* labels: heredan el color de texto de la paleta (legibles sobre el fondo del form) */
+label { color: var(--field-label); }
+
+/* ---------------- medio picker (multistep gestion) ---------------- */
+.medio-btn {
+  padding: .5rem 1rem;
+  border-radius: .75rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+  cursor: pointer;
+}
+.medio-btn:hover { background: var(--surface-alt); }
+.medio-btn.is-selected {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border-color: var(--accent);
+}
+
+/* ---------------- surfaces ---------------- */
+.card {
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: .9rem;
+}
+.card-selected {
+  background: var(--nav-active-bg);
+  border: 1px solid var(--accent);
+  border-radius: .9rem;
+}
+.list-head {
+  background: var(--surface-alt);
+  color: var(--text-muted);
+  font-weight: 600;
+}
+/* Encabezados de tabla siempre alineados a la izquierda (el <th> por defecto centra). */
+.list-head th { text-align: left; }
+.row-alt { background: var(--surface-alt); }
+.site-footer { background: var(--surface-alt); color: var(--text-muted); }
+
+/* ---------------- alerts / feedback ---------------- */
+.alert {
+  border-radius: .9rem;
+  padding: .9rem 1.1rem;
+}
+.alert-info { background: var(--accent); color: var(--accent-contrast); }
+.alert-danger {
+  background: color-mix(in srgb, var(--danger) 12%, var(--surface));
+  color: var(--danger);
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
+}
+.empty-state {
+  background: var(--surface-alt);
+  color: var(--text-muted);
+  border-radius: .9rem;
+  padding: 2rem;
+  text-align: center;
+}
+
+/* ---------------- links ---------------- */
+.link { color: var(--accent); text-decoration: none; font-weight: 600; }
+.link:hover { color: var(--accent-hover); text-decoration: underline; }
+
+/* ---------------- misc text ---------------- */
+.text-success { color: var(--success); }
+.field-error { color: var(--danger); font-size: .875rem; }
+.muted { color: var(--text-muted); }
+
+/* ---------------- theme switcher (bottom-left) ---------------- */
+.theme-switcher {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 8px 10px;
+  border-radius: 999px;
+  box-shadow: 0 8px 24px -12px rgba(0, 0, 0, 0.35);
+}
+.theme-switcher-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-right: 2px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.theme-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background: var(--sw);
+  cursor: pointer;
+  padding: 0;
+}
+.theme-swatch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.theme-swatch[aria-pressed="true"] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--surface);
+}
+
+/* =====================================================================
+   Clientes — estilo "Operativo denso" (Opción 2). Todo con tokens de la
+   paleta activa (funciona en las 4). Los colores de status son semánticos
+   y se adaptan al fondo con color-mix.
+   ===================================================================== */
+:root {
+  --st-slate: #6b7a8a;
+  --st-blue:  #2f7fd0;
+  --st-teal:  #17a08a;
+  --st-green: #2fa254;
+  --st-amber: #cf8a1a;
+  --st-red:   #d1503f;
+}
+
+/* barra de chips por status */
+.chips { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600;
+  padding: 6px 11px; border-radius: 8px; background: var(--surface);
+  border: 1px solid var(--border); color: var(--text); cursor: pointer; text-decoration: none;
+  white-space: nowrap;
+}
+.chip:hover { background: var(--surface-alt); }
+.chip .c { font-variant-numeric: tabular-nums; font-weight: 800; }
+.chip.active { border-color: var(--accent); background: var(--nav-active-bg); color: var(--accent); }
+.chip.fav.active { border-color: #e0a91b; background: color-mix(in srgb, #e0a91b 16%, var(--surface)); color: #a5790a; }
+
+/* punto + etiqueta de status */
+.dot-st { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; font-size: 12.5px; white-space: nowrap; }
+.dot-st .d { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.st-slate { background: var(--st-slate); } .st-blue { background: var(--st-blue); }
+.st-teal { background: var(--st-teal); } .st-green { background: var(--st-green); }
+.st-amber { background: var(--st-amber); } .st-red { background: var(--st-red); }
+
+/* "días desde última gestión" con urgencia */
+.dias { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 12.5px; white-space: nowrap; }
+.dias.ok { color: var(--st-green); }
+.dias.warn { color: var(--st-amber); }
+.dias.late { color: var(--st-red); }
+.dias.na { color: var(--text-muted); font-weight: 600; }
+
+/* tabla densa con header pegajoso y ordenable */
+.table-dense { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.table-dense thead th {
+  position: sticky; top: 0; z-index: 1; text-align: left; font-size: 11px; font-weight: 700;
+  color: var(--text-muted); background: var(--surface-alt); padding: 9px 12px; white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+}
+.table-dense thead th.sortable { cursor: pointer; user-select: none; }
+.table-dense thead th.sortable:hover { color: var(--text); }
+.table-dense thead th .ar { color: var(--accent); font-size: 10px; margin-left: 3px; }
+.table-dense tbody td { padding: 7px 12px; border-bottom: 1px solid var(--surface-alt); white-space: nowrap; }
+.table-dense tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--surface-alt) 55%, transparent); }
+.table-dense tbody tr:hover td { background: var(--nav-active-bg); }
+.table-dense .num { text-align: right; font-variant-numeric: tabular-nums; }
+.table-dense .op { font-weight: 700; }
+
+/* estrella de favorito */
+.fav-star {
+  background: none; border: 0; cursor: pointer; font-size: 16px; line-height: 1; padding: 2px;
+  color: var(--text-muted); filter: grayscale(1); opacity: .55; transition: all .12s ease;
+}
+.fav-star:hover { opacity: 1; filter: none; }
+.fav-star.is-fav { color: #e0a91b; filter: none; opacity: 1; }
+
+/* acciones compactas */
+.row-actions { display: inline-flex; gap: 2px; }
+.row-actions a, .row-actions button {
+  width: 28px; height: 28px; border-radius: 7px; border: 1px solid transparent; background: transparent;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 14px; cursor: pointer;
+  text-decoration: none; color: var(--text-muted);
+}
+.row-actions a:hover, .row-actions button:hover { background: var(--surface-alt-hover); color: var(--text); }
+
+/* paginación compacta */
+.pag { display: inline-flex; gap: 4px; }
+.pag a {
+  border: 1px solid var(--border); background: var(--surface); color: var(--text-muted);
+  border-radius: 7px; height: 32px; min-width: 34px; padding: 0 8px; font-weight: 600; font-size: 12.5px;
+  display: inline-flex; align-items: center; justify-content: center; text-decoration: none;
+}
+.pag a:hover { background: var(--surface-alt); }
+.pag a.on { background: var(--accent); border-color: var(--accent); color: var(--accent-contrast); }
+
+/* =====================================================================
+   Detalle de cliente — "ficha lateral fija" (Opción 2): izquierda deuda +
+   info, derecha gestiones/notas/pagos en pestañas.
+   ===================================================================== */
+.detail-grid { display: grid; grid-template-columns: 320px 1fr; gap: 20px; align-items: start; }
+@media (max-width: 860px) { .detail-grid { grid-template-columns: 1fr; } }
+
+.avatar-lg {
+  width: 56px; height: 56px; border-radius: 50%; margin: 0 auto 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 18px; background: var(--nav-active-bg); color: var(--accent);
+}
+.debt-highlight {
+  margin: 14px 0; padding: 12px; border-radius: 10px; text-align: center;
+  background: color-mix(in srgb, var(--danger) 10%, var(--surface));
+}
+.debt-highlight .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); }
+.debt-highlight .amt { font-size: 26px; font-weight: 800; color: var(--danger); font-variant-numeric: tabular-nums; }
+
+.kv-list .kv {
+  display: flex; justify-content: space-between; gap: 12px; padding: 7px 0;
+  border-bottom: 1px solid var(--surface-alt); font-size: 13px;
+}
+.kv-list .kv:last-child { border-bottom: 0; }
+.kv-list .kv .k { color: var(--text-muted); }
+.kv-list .kv .v { font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 14px; flex-wrap: wrap; }
+.tab-btn {
+  padding: 9px 13px; font-size: 13px; font-weight: 600; color: var(--text-muted);
+  border: 0; border-bottom: 2px solid transparent; cursor: pointer; background: none; font-family: inherit;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.is-active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-panel { display: none; }
+.tab-panel.is-active { display: block; }

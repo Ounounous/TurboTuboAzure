@@ -1,5 +1,5 @@
 from django import forms
-from .models import Action, Lead, Medio, Resultado
+from .models import Action, Lead, Medio, Resultado, Payment
 from demographics.models import Phone, IDDemographics, AvalDemographics
 import logging
 
@@ -41,6 +41,29 @@ class DemographicSelectionForm(forms.Form):
 
 
 
+class PaymentForm(forms.ModelForm):
+    class Meta:
+        model = Payment
+        fields = ['monto', 'fecha', 'tipo', 'comprobante']
+        widgets = {
+            'fecha': forms.DateInput(attrs={'type': 'date'}),
+            'monto': forms.NumberInput(attrs={'min': 0, 'placeholder': 'Monto en pesos'}),
+            'comprobante': forms.ClearableFileInput(attrs={'accept': '.png,.jpg,.jpeg,.pdf'}),
+        }
+        labels = {
+            'monto': 'Monto ($)',
+            'fecha': 'Fecha del pago',
+            'tipo': 'Tipo',
+            'comprobante': 'Comprobante (PNG/JPG/PDF)',
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['monto'].required = True
+        self.fields['fecha'].required = True
+        self.fields['comprobante'].required = False
+
+
 class ActionForm(forms.ModelForm):
     class Meta:
         model = Action
@@ -68,7 +91,9 @@ class ActionForm(forms.ModelForm):
         medios_qs = Medio.objects.none()
         resultados_qs = Resultado.objects.none()
         if cartera and canal:
-            medios_qs = Medio.objects.filter(cartera=cartera, canal=canal)
+            # Solo medios de gestión manual: la llamada directa, WhatsApp y correo saliente.
+            # Los medios masivos (IVR, SMS, discador, bot, entrantes) se cargan por Excel.
+            medios_qs = Medio.objects.filter(cartera=cartera, canal=canal, permite_manual=True)
         if cartera:
             # Medio y Resultado son independientes: el resultado se elige de la lista
             # completa de la cartera, sin filtrar por el medio elegido.

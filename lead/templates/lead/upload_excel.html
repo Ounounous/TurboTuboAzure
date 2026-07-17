@@ -1,12 +1,16 @@
 {% extends 'core/base.html' %}
 
-{% block title %}Upload Excel File{% endblock %}
+{% block title %}Agregar clientes desde Excel{% endblock %}
 
 {% block content %}
-  <h1>Upload Excel File</h1>
-  <form method="post" enctype="multipart/form-data">
-    {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit">Upload</button>
-  </form>
+<div class="py-6 px-6" style="max-width: 560px;">
+  <h1 class="text-xl font-bold mb-4">Agregar clientes desde Excel</h1>
+  <div class="card p-4">
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      {{ form.as_p }}
+      <button type="submit" class="btn btn-primary mt-2">Subir</button>
+    </form>
+  </div>
+</div>
 {% endblock %}

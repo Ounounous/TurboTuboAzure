@@ -3,33 +3,40 @@
 {% block title %}{{ cartera.nombre }}{% endblock %}
 
 {% block content %}
-<div class="py-6 px-6">
-  <h1 class="mb-4 text-xl">{{ cartera.nombre }}</h1>
+<div class="py-6 px-6" style="max-width: 720px;">
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+    <h1 class="text-xl font-bold">{{ cartera.nombre }}</h1>
+    <a href="{% url 'cartera:list' %}" class="btn btn-secondary">Volver a carteras</a>
+  </div>
 
-  <h2 class="mb-2 text-lg">Subcarteras</h2>
-
+  <h2 class="mb-2 text-lg font-bold">Subcarteras</h2>
   {% if subcarteras %}
-    <div class="mt-2 flex justify-between">
-      <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Nombre</p>
-      <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Por defecto</p>
-    </div>
-    {% for subcartera in subcarteras %}
-      <div class="flex justify-between">
-        <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ subcartera.nombre }}</p>
-        <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ subcartera.es_default|yesno:"Sí,No" }}</p>
+    <div class="card mb-6" style="border:1px solid var(--border); border-radius:10px;">
+      <div class="overflow-x-auto">
+        <table class="table-dense">
+          <thead><tr><th>Nombre</th><th>Por defecto</th></tr></thead>
+          <tbody>
+            {% for subcartera in subcarteras %}
+              <tr>
+                <td style="font-weight:600">{{ subcartera.nombre }}</td>
+                <td>{% if subcartera.es_default %}<span class="dot-st"><span class="d st-green"></span>Sí</span>{% else %}<span class="muted">No</span>{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
-    {% endfor %}
+    </div>
   {% else %}
-    <p>No existen subcarteras todavía</p>
+    <p class="empty-state mb-6">No existen subcarteras todavía.</p>
   {% endif %}
 
-  <h2 class="mt-6 mb-2 text-lg">Agregar Subcartera</h2>
-  <form method="post" action="{% url 'cartera:add_subcartera' cartera.pk %}">
-    {% csrf_token %}
-
-    {{ subcartera_form.as_p }}
-
-    <button class="py-4 px-8 bg-pink-600 text-white rounded-xl">Guardar</button>
-  </form>
+  <div class="card p-4">
+    <h2 class="mb-3 text-lg font-bold">Agregar subcartera</h2>
+    <form method="post" action="{% url 'cartera:add_subcartera' cartera.pk %}">
+      {% csrf_token %}
+      {{ subcartera_form.as_p }}
+      <button class="btn btn-primary mt-2">Guardar</button>
+    </form>
+  </div>
 </div>
 {% endblock %}

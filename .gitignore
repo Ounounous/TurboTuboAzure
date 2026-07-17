@@ -57,6 +57,7 @@ db.sqlite3-journal
 backups/
 sample_uploads/
 media/call_recordings/
+media/payment_receipts/
 
 # PEP 582; used by e.g. github.com/David-OConnor/pyflow
 __pypackages__/

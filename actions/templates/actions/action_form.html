@@ -1,50 +1,41 @@
 {% extends 'core/base.html' %}
 
-{% block title %}Add Action for {{ lead.name }}{% endblock %}
+{% block title %}Nueva gestión - {{ lead.name }}{% endblock %}
 
 {% block content %}
-<div class="py-6 px-6">
-    <h1 class="text-xl mb-4">Add Action for {{ lead.name }}</h1>
+<div class="py-6 px-6" style="max-width: 640px;">
+    <h1 class="text-xl font-bold mb-4">Nueva gestión - {{ lead.name }}</h1>
 
-    <!-- Search Bar -->
-    <form method="GET" action="{% url 'actions:multistep' %}">
-        <input type="text" name="query" placeholder="Enter lead query" required>
-        <button type="submit" class="py-2 px-4 bg-teal-500 text-white rounded-xl hover:bg-teal-600">Search Lead</button>
-    </form>
-
-    <!-- Multi-Step Form -->
+    <div class="card p-4">
     {% if step == 2 %}
     <form method="post" class="space-y-4">
         {% csrf_token %}
         {% for field in demographic_form %}
         <div class="flex flex-col mb-4" id="div_id_{{ field.name }}">
-            <label for="{{ field.id_for_label }}" class="mb-2 font-bold">{{ field.label }}</label>
+            <label for="{{ field.id_for_label }}" class="mb-1 font-semibold">{{ field.label }}</label>
             {{ field }}
-            {% for error in field.errors %}
-            <p class="text-red-500 text-sm">{{ error }}</p>
-            {% endfor %}
+            {% for error in field.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
         </div>
         {% endfor %}
-
-        <button type="submit" class="py-2 px-4 bg-teal-500 text-white rounded-xl hover:bg-teal-600">Continue</button>
+        <button type="submit" class="btn btn-primary">Continuar</button>
     </form>
     {% elif step == 3 %}
     <form method="post" class="space-y-4">
         {% csrf_token %}
         {% for field in action_form %}
         <div class="flex flex-col mb-4" id="div_id_{{ field.name }}">
-            <label for="{{ field.id_for_label }}" class="mb-2 font-bold">{{ field.label }}</label>
+            <label for="{{ field.id_for_label }}" class="mb-1 font-semibold">{{ field.label }}</label>
             {{ field }}
-            {% for error in field.errors %}
-            <p class="text-red-500 text-sm">{{ error }}</p>
-            {% endfor %}
+            {% for error in field.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
         </div>
         {% endfor %}
-
-        <button type="submit" class="py-2 px-4 bg-teal-500 text-white rounded-xl hover:bg-teal-600">Add Action</button>
-        <a href="{% url 'leads:detail' lead.id %}" class="py-2 px-4 bg-gray-500 text-white rounded-xl hover:bg-gray-600 ml-2">Cancel</a>
+        <div class="flex gap-3">
+          <button type="submit" class="btn btn-primary">Guardar gestión</button>
+          <a href="{% url 'leads:detail' lead.id %}" class="btn btn-secondary">Cancelar</a>
+        </div>
     </form>
     {% endif %}
+    </div>
 </div>
 
 <script type="text/javascript">

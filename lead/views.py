@@ -1,13 +1,13 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Count, F, Max, Q
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import redirect, get_object_or_404, render
-from django.urls import reverse_lazy
-from django.http import HttpResponse
+from django.urls import reverse, reverse_lazy
+from django.http import HttpResponse, JsonResponse
 from django.views.generic import ListView, DetailView, DeleteView, UpdateView, CreateView, View
-from django.utils.timezone import now
+from django.utils.timezone import now, localtime, localdate
 from .models import StatusChangeLog, Team
 import openpyxl
 from io import BytesIO
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 from openpyxl import load_workbook
 
 from .forms import AddCommentForm, AddFileForm, AddLeadForm, UploadExcelFileForm, AssignLeadsForm, UploadAssignmentFileForm
-from .models import Lead, LeadAssignment, User
+from .models import Lead, LeadAssignment, LeadNote, User
 from cartera.models import Cartera, Subcartera
 from demographics.models import IDDemographics, AvalDemographics, IDItem, Phone
 
@@ -28,6 +28,30 @@ from client.models import Client, Comment as ClientComment
 class LeadListView(LoginRequiredMixin, ListView):
     model = Lead
 
+    # Filtros por columna (además del buscador general por ID/RUT). Nombre del parámetro GET ->
+    # lookup en el queryset. Pensado para ser expandible: agregar una columna es una línea acá.
+    COLUMN_FILTERS = {
+        'op': 'op__icontains',
+        'name': 'name__icontains',
+        'rut': 'rut__icontains',
+        'status': 'status',
+        'ciclo': 'ciclo',
+        'ciclo_cartera': 'ciclo_cartera',
+        'activo': 'activo',
+        'tipo_cobranza': 'tipo_cobranza',
+        'tiene_aval': 'tiene_aval',
+        'cartera': 'subcartera__cartera__nombre__icontains',
+        'subcartera': 'subcartera__nombre__icontains',
+    }
+
+    # Columnas ordenables: clave del parámetro ?sort= -> campo del modelo.
+    SORT_FIELDS = {
+        'op': 'op', 'nombre': 'name', 'rut': 'rut',
+        'insoluto': 'saldo_insoluto', 'deuda': 'saldo_deuda', 'cuota': 'valor_cuota',
+        'atrasadas': 'cuotas_atrasadas', 'status': 'status',
+        'cartera': 'subcartera__cartera__nombre', 'dias': 'last_action_at',
+    }
+
     def get_limit(self):
         try:
             limit = int(self.request.GET.get('limit', 10))
@@ -35,15 +59,130 @@ class LeadListView(LoginRequiredMixin, ListView):
             limit = 10
         return limit if limit in (10, 50, 100) else 10
 
+    def _base_scope(self):
+        """Leads visibles para el usuario (asignados o creados por él)."""
+        return Lead.objects.filter(
+            Q(assigned_to__pk=self.request.user.pk) | Q(created_by=self.request.user)
+        )
+
     def get_queryset(self):
-        queryset = super(LeadListView, self).get_queryset()
-        return queryset.filter(Q(assigned_to__pk=self.request.user.pk) | Q(created_by=self.request.user))
+        queryset = self._base_scope().select_related('subcartera__cartera').annotate(
+            # Última gestión (Action) del lead — NO cuenta las notas (LeadNote es otro modelo).
+            last_action_at=Max('actions__created_at')
+        )
+
+        # Solo favoritos del usuario.
+        if self.request.GET.get('fav') == '1':
+            queryset = queryset.filter(favorited_by=self.request.user)
+
+        # Buscador general: ID (op), nombre y RUT en un solo campo.
+        q = self.request.GET.get('q', '').strip()
+        if q:
+            queryset = queryset.filter(
+                Q(op__icontains=q) | Q(name__icontains=q) | Q(rut__icontains=q)
+            )
+
+        # Filtros por columna (panel avanzado, expandible).
+        for param, lookup in self.COLUMN_FILTERS.items():
+            value = self.request.GET.get(param, '').strip()
+            if value:
+                queryset = queryset.filter(**{lookup: value})
+
+        return self._apply_sort(queryset)
+
+    def _apply_sort(self, queryset):
+        sort = self.request.GET.get('sort', 'nombre')
+        direction = self.request.GET.get('dir', 'asc')
+        if sort not in self.SORT_FIELDS:
+            sort = 'nombre'
+        if sort == 'dias':
+            # "días desde gestión" = inverso de last_action_at (más antiguo = más días).
+            # asc (menos días primero) => last_action_at desc; nunca gestionado (null) al final.
+            campo = F('last_action_at')
+            order = campo.desc(nulls_last=True) if direction == 'asc' else campo.asc(nulls_last=True)
+            return queryset.order_by(order, 'name')
+        field = self.SORT_FIELDS[sort]
+        return queryset.order_by(field if direction == 'asc' else '-' + field, 'name')
+
+    def _url_with(self, **changes):
+        """URL de la misma vista cambiando algunos parámetros (None = quitar)."""
+        params = self.request.GET.copy()
+        for key, value in changes.items():
+            if value is None:
+                params.pop(key, None)
+            else:
+                params[key] = value
+        encoded = params.urlencode()
+        return ('?' + encoded) if encoded else '?'
+
+    def _sort_links(self):
+        cur_sort = self.request.GET.get('sort', 'nombre')
+        cur_dir = self.request.GET.get('dir', 'asc')
+        links = {}
+        for key in self.SORT_FIELDS:
+            new_dir = 'desc' if (cur_sort == key and cur_dir == 'asc') else 'asc'
+            arrow = ('▲' if cur_dir == 'asc' else '▼') if cur_sort == key else ''
+            links[key] = {'url': self._url_with(sort=key, dir=new_dir), 'arrow': arrow}
+        return links
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         limit = self.get_limit()
-        context['leads'] = self.get_queryset()[:limit]
+        base_qs = self.get_queryset()
+        context['total_count'] = base_qs.count()
+
+        # ids favoritos del usuario (para pintar la estrella) sobre la página mostrada.
+        leads = list(base_qs[:limit])
+        fav_ids = set(
+            self._base_scope().filter(favorited_by=self.request.user, pk__in=[l.pk for l in leads])
+            .values_list('pk', flat=True)
+        )
+        today = localdate()
+        for lead in leads:
+            lead.is_fav = lead.pk in fav_ids
+            if lead.last_action_at:
+                lead.dias_ultima_gestion = (today - localtime(lead.last_action_at).date()).days
+            else:
+                lead.dias_ultima_gestion = None
+        context['leads'] = leads
         context['limit'] = limit
+
+        # Conteos por status (chips) sobre el scope del usuario, sin aplicar el filtro de status.
+        scope = self._base_scope()
+        status_counts = {row['status']: row['n'] for row in scope.values('status').annotate(n=Count('id'))}
+        selected_status = self.request.GET.get('status', '')
+        context['status_chips'] = [
+            {'value': val, 'label': label, 'count': status_counts.get(val, 0),
+             'color': Lead.STATUS_COLOR.get(val, 'slate'),
+             'url': self._url_with(status=val), 'active': selected_status == val}
+            for val, label in Lead.CHOICES_STATUS
+        ]
+        context['total_scope'] = scope.count()
+        context['fav_count'] = scope.filter(favorited_by=self.request.user).count()
+        context['url_todos'] = self._url_with(status=None, fav=None)
+        context['url_fav'] = self._url_with(fav='1', status=None)
+        context['url_clear_fav'] = self._url_with(fav=None)
+        context['sort_links'] = self._sort_links()
+        context['url_limit_10'] = self._url_with(limit=10)
+        context['url_limit_50'] = self._url_with(limit=50)
+        context['url_limit_100'] = self._url_with(limit=100)
+
+        # Estado de filtros/orden para la UI.
+        context['q'] = self.request.GET.get('q', '')
+        context['selected_status'] = selected_status
+        context['only_fav'] = self.request.GET.get('fav') == '1'
+        context['sort'] = self.request.GET.get('sort', 'nombre')
+        context['dir'] = self.request.GET.get('dir', 'asc')
+        active_filters = {p: self.request.GET.get(p, '') for p in self.COLUMN_FILTERS}
+        context['filters'] = active_filters
+        context['advanced_open'] = any(v for k, v in active_filters.items() if k != 'status')
+
+        context['status_choices'] = Lead.CHOICES_STATUS
+        context['ciclo_choices'] = Lead.CHOICES_CICLO
+        context['ciclo_cartera_choices'] = Lead.CHOICES_CICLO_CARTERA
+        context['activo_choices'] = Lead.CHOICES_ACTIVO
+        context['tipo_cobranza_choices'] = Lead.CHOICES_TIPO_COBRANZA
+        context['aval_choices'] = Lead.CHOICES_AVAL
         return context
 
 class LeadDetailView(LoginRequiredMixin, DetailView):
@@ -57,11 +196,6 @@ class LeadDetailView(LoginRequiredMixin, DetailView):
             pk=self.kwargs.get('pk')
         )
 
-    def get_object(self, queryset=None):
-        obj = super().get_object(queryset)
-        print(obj.__dict__)
-        return obj
-
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['demographics'] = IDDemographics.objects.filter(lead=self.object)
@@ -69,11 +203,24 @@ class LeadDetailView(LoginRequiredMixin, DetailView):
             id_demographics__in=context['demographics']).first()
         context['form'] = AddCommentForm()
         context['fileform'] = AddFileForm()
+        context['notes'] = self.object.notes.select_related('author')
         context['phones'] = self.object.phone_set.all()
-        print(f"Phones for Lead {self.object.pk}: {[phone.phone_number for phone in context['phones']]}")
-        for phone in context['phones']:
-            print(f"Phone: {phone.phone_number}, Type: {phone.phone_type}, Status: {phone.phone_number_status}")
-        print(self.object.__dict__)
+
+        # Días desde la última gestión (no cuenta notas), igual que en la lista de clientes.
+        last_action = self.object.actions.order_by('-created_at').first()
+        if last_action:
+            context['dias_ultima_gestion'] = (localdate() - localtime(last_action.created_at).date()).days
+        else:
+            context['dias_ultima_gestion'] = None
+
+        # Próximo compromiso de pago (el más cercano hacia adelante; si no hay futuro, el último).
+        today = localdate()
+        next_commitment = self.object.payment_commitments.filter(fecha_compromiso__gte=today).order_by('fecha_compromiso').first()
+        context['next_commitment'] = next_commitment or self.object.payment_commitments.order_by('-fecha_compromiso').first()
+
+        # Iniciales para el avatar de la ficha.
+        parts = self.object.name.split()
+        context['initials'] = ((parts[0][0] if parts else '?') + (parts[1][0] if len(parts) > 1 else '')).upper()
 
         return context
 class LeadDeleteView(LoginRequiredMixin, DeleteView):
@@ -120,28 +267,20 @@ class LeadUpdateView(LoginRequiredMixin, UpdateView):
         return response
 
 def status_changes_by_date(request, period='day'):
-    # Determine start date for filtering logs
-    if period == 'day':
-        start_date = now().date()
-    elif period == 'month':
-        start_date = now().replace(day=1).date()
+    # Fecha de inicio en la zona horaria local (evita perder cambios de las últimas horas
+    # por el desfase UTC: usamos localdate + el lookup __date que compara por día local).
+    today = localdate()
+    start_date = today.replace(day=1) if period == 'month' else today
 
-    user_type = request.user.userprofile.user_type
+    logs = StatusChangeLog.objects.filter(
+        timestamp__date__gte=start_date
+    ).select_related('lead', 'changed_by').order_by('-timestamp')
 
-    # Check the user type and filter logs accordingly
-    if user_type in ['admin', 'supervisor']:
-        # Admins and supervisors see all logs
-        logs = StatusChangeLog.objects.filter(
-            timestamp__gte=start_date
-        ).order_by('-timestamp')
-    else:
-        # Other users (collectors, etc.) only see their own logs
-        logs = StatusChangeLog.objects.filter(
-            timestamp__gte=start_date,
-            changed_by=request.user
-        ).order_by('-timestamp')
+    user_type = getattr(request.user.userprofile, 'user_type', '')
+    if user_type not in ('admin', 'owner', 'supervisor'):
+        logs = logs.filter(changed_by=request.user)
 
-    return render(request, 'lead/status_changes_list.html', {'logs': logs})
+    return render(request, 'lead/status_changes_list.html', {'logs': logs, 'period': period})
 
 class LeadCreateView(LoginRequiredMixin, CreateView):
     model = Lead
@@ -309,6 +448,65 @@ class ConvertToClientView(LoginRequiredMixin, View):
         messages.success(request, 'ID convertida')
 
         return redirect('leads:list')
+
+def _puede_ver_lead(user, lead):
+    """Un usuario puede ver/anotar un lead si es suyo (asignado/creado) o es supervisor+."""
+    profile = getattr(user, 'userprofile', None)
+    if profile and profile.user_type in ('admin', 'owner', 'supervisor'):
+        return True
+    return lead.assigned_to_id == user.pk or lead.created_by_id == user.pk
+
+
+class ToggleFavoriteView(LoginRequiredMixin, View):
+    """Marca/desmarca un lead como favorito del usuario (por AJAX, sin recargar)."""
+
+    def post(self, request, *args, **kwargs):
+        lead = get_object_or_404(Lead, pk=kwargs.get('pk'))
+        if not _puede_ver_lead(request.user, lead):
+            raise PermissionDenied
+        if lead.favorited_by.filter(pk=request.user.pk).exists():
+            lead.favorited_by.remove(request.user)
+            favorited = False
+        else:
+            lead.favorited_by.add(request.user)
+            favorited = True
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            return JsonResponse({'ok': True, 'favorited': favorited})
+        return redirect(request.POST.get('next') or reverse('leads:list'))
+
+
+class AddLeadNoteView(LoginRequiredMixin, View):
+    """Crea una nota interna en un lead. Las notas NO entran en los reportes de cartera."""
+
+    def post(self, request, *args, **kwargs):
+        lead = get_object_or_404(Lead, pk=kwargs.get('pk'))
+        if not _puede_ver_lead(request.user, lead):
+            raise PermissionDenied
+
+        is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest'
+        body = (request.POST.get('body') or '').strip()
+
+        if not body:
+            if is_ajax:
+                return JsonResponse({'ok': False, 'error': 'La nota no puede estar vacía.'}, status=400)
+            messages.error(request, 'La nota no puede estar vacía.')
+            return redirect(request.POST.get('next') or reverse('leads:detail', kwargs={'pk': lead.pk}))
+
+        note = LeadNote.objects.create(lead=lead, author=request.user, body=body)
+
+        if is_ajax:
+            return JsonResponse({
+                'ok': True,
+                'note': {
+                    'author': request.user.username,
+                    'created_at': localtime(note.created_at).strftime('%d-%m-%Y %H:%M'),
+                    'body': note.body,
+                },
+            })
+
+        messages.success(request, 'Nota agregada.')
+        return redirect(request.POST.get('next') or reverse('leads:detail', kwargs={'pk': lead.pk}))
+
 
 class AssignLeadsView(LoginRequiredMixin, View):
     template_name = "lead/leads_assign.html"

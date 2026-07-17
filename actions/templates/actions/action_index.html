@@ -1,189 +1,245 @@
 {% extends 'core/base.html' %}
 
-{% block content %}
-<div class="container mx-auto mt-8">
-    <h1 class="text-2xl font-bold mb-4">Gestiones</h1>
+{% block title %}Gestiones{% endblock %}
 
-    <!-- Search Form -->
-    <form method="GET" action="{% url 'actions:index' %}" class="mb-6">
-        <input type="text" name="query" value="{{ query }}" placeholder="Search by OP, RUT, or Aval RUT..." class="border p-2 rounded w-full">
-        <button type="submit" class="mt-2 py-2 px-4 bg-teal-400 rounded text-white">Search</button>
+{% block content %}
+<div class="py-6 px-6">
+  <h1 class="text-xl font-bold mb-4">Gestiones</h1>
+
+  <!-- KPIs -->
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+    <div class="card p-4">
+      <p class="muted text-sm mb-1">Gestiones hoy</p>
+      <p class="text-2xl font-bold">{{ gestiones_hoy_total }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="muted text-sm mb-1">Contactabilidad hoy</p>
+      <p class="text-2xl font-bold">{{ contactabilidad_hoy }}%</p>
+    </div>
+    <div class="card p-4">
+      <p class="muted text-sm mb-1">Sin gestionar +7 días</p>
+      <p class="text-2xl font-bold" style="color:var(--danger)">{{ sin_gestionar }}</p>
+    </div>
+  </div>
+
+  <!-- Gestiones por usuario / Resultados: Día · Semana · Mes juntos. Los números son links
+       que filtran el listado de gestiones de más abajo. -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+    <div class="card p-4">
+      <h2 class="text-lg font-bold mb-3">Gestiones por usuario</h2>
+      <div class="overflow-x-auto">
+        <table class="table-dense">
+          <thead><tr><th>Usuario</th><th class="num">Día</th><th class="num">Semana</th><th class="num">Mes</th><th class="num">Contact. (mes)</th></tr></thead>
+          <tbody>
+            {% for row in usuarios_tabla %}
+              <tr>
+                <td style="font-weight:600">{{ row.user }}</td>
+                <td class="num"><a href="?f_periodo=hoy&f_usuario={{ row.user|urlencode }}#listado" class="link">{{ row.hoy }}</a></td>
+                <td class="num"><a href="?f_periodo=semana&f_usuario={{ row.user|urlencode }}#listado" class="link">{{ row.semana }}</a></td>
+                <td class="num"><a href="?f_periodo=mes&f_usuario={{ row.user|urlencode }}#listado" class="link">{{ row.mes }}</a></td>
+                <td class="num">{{ row.contact }}%</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="5" class="muted">Sin gestiones registradas.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card p-4">
+      <h2 class="text-lg font-bold mb-3">Resultados</h2>
+      <div class="overflow-x-auto">
+        <table class="table-dense">
+          <thead><tr><th>Resultado</th><th class="num">Día</th><th class="num">Semana</th><th class="num">Mes</th></tr></thead>
+          <tbody>
+            {% for row in resultados_tabla %}
+              <tr>
+                <td style="font-weight:600">{{ row.resultado }}</td>
+                <td class="num"><a href="?f_periodo=hoy&f_resultado={{ row.resultado|urlencode }}#listado" class="link">{{ row.hoy }}</a></td>
+                <td class="num"><a href="?f_periodo=semana&f_resultado={{ row.resultado|urlencode }}#listado" class="link">{{ row.semana }}</a></td>
+                <td class="num"><a href="?f_periodo=mes&f_resultado={{ row.resultado|urlencode }}#listado" class="link">{{ row.mes }}</a></td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="4" class="muted">Sin gestiones registradas.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Compromisos y Pagos: mismos 3 períodos -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+    <div class="card p-4">
+      <h2 class="text-lg font-bold mb-3">Compromisos</h2>
+      <table class="table-dense">
+        <thead><tr><th></th><th class="num">Día</th><th class="num">Semana</th><th class="num">Mes</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Cantidad</td>
+            <td class="num"><a href="?f_periodo=hoy&f_solo_compromiso=1#listado" class="link">{{ compromisos_periodo.hoy.count }}</a></td>
+            <td class="num"><a href="?f_periodo=semana&f_solo_compromiso=1#listado" class="link">{{ compromisos_periodo.semana.count }}</a></td>
+            <td class="num"><a href="?f_periodo=mes&f_solo_compromiso=1#listado" class="link">{{ compromisos_periodo.mes.count }}</a></td>
+          </tr>
+          <tr>
+            <td>Monto</td>
+            <td class="num">${{ compromisos_periodo.hoy.total|floatformat:0 }}</td>
+            <td class="num">${{ compromisos_periodo.semana.total|floatformat:0 }}</td>
+            <td class="num">${{ compromisos_periodo.mes.total|floatformat:0 }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card p-4">
+      <h2 class="text-lg font-bold mb-3">Pagos</h2>
+      <table class="table-dense">
+        <thead><tr><th></th><th class="num">Día</th><th class="num">Semana</th><th class="num">Mes</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Cantidad</td>
+            <td class="num"><a href="?f_periodo=hoy#listado" class="link">{{ pagos_periodo.hoy.count }}</a></td>
+            <td class="num"><a href="?f_periodo=semana#listado" class="link">{{ pagos_periodo.semana.count }}</a></td>
+            <td class="num"><a href="?f_periodo=mes#listado" class="link">{{ pagos_periodo.mes.count }}</a></td>
+          </tr>
+          <tr>
+            <td>Monto</td>
+            <td class="num">${{ pagos_periodo.hoy.total|floatformat:0 }}</td>
+            <td class="num">${{ pagos_periodo.semana.total|floatformat:0 }}</td>
+            <td class="num">${{ pagos_periodo.mes.total|floatformat:0 }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Reportes y descargas -->
+  {% if request.user.userprofile.user_type in 'admin,owner,supervisor' %}
+  <div class="card p-4 mb-4">
+    <h2 class="text-lg font-bold mb-1">Carga masiva de gestiones</h2>
+    <p class="muted mb-3">Sube en Excel las gestiones de campañas masivas (IVR, SMS, discador, etc.).</p>
+    <a href="{% url 'actions:bulk_upload' %}" class="btn btn-primary">Ir a carga masiva</a>
+  </div>
+  {% endif %}
+
+  <div class="card p-4 mb-4">
+    <h2 class="text-lg font-bold mb-3">Descargar gestiones (Excel)</h2>
+    <form method="GET" action="{% url 'actions:download_actions' scope='team' %}">
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+        <div><label class="font-semibold block mb-1" for="start_date">Desde</label><input type="date" id="start_date" name="start_date" value="{{ request.GET.start_date }}" class="w-full"></div>
+        <div><label class="font-semibold block mb-1" for="end_date">Hasta</label><input type="date" id="end_date" name="end_date" value="{{ request.GET.end_date }}" class="w-full"></div>
+        <div><label class="font-semibold block mb-1" for="team_id">Equipo</label>
+          <select id="team_id" name="team_id" required class="w-full">
+            <option value="" disabled selected>--- Selecciona equipo ---</option>
+            {% for team in all_teams %}<option value="{{ team.id }}">{{ team.name }}</option>{% endfor %}
+          </select></div>
+        <div><label class="font-semibold block mb-1" for="cartera">Cartera</label>
+          <select id="cartera" name="cartera" class="w-full">
+            <option value="">--- Todas ---</option>
+            {% for cartera in all_carteras %}<option value="{{ cartera.id }}">{{ cartera.nombre }}</option>{% endfor %}
+          </select></div>
+      </div>
+      <div class="flex flex-wrap gap-3">
+        <button type="submit" class="btn btn-primary">Descargar gestiones del equipo</button>
+        <a href="{% url 'actions:download_actions' scope='user' %}" class="btn btn-secondary">Descargar mis gestiones</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+    <div class="card p-4">
+      <h3 class="font-bold mb-1">Reporte Tanner</h3>
+      <p class="muted mb-3" style="font-size:12.5px;">Formato oficial (.txt), un día.</p>
+      <form method="GET" action="{% url 'actions:tanner_report' %}" class="flex flex-wrap gap-3 items-end">
+        <div><label class="font-semibold block mb-1" for="fecha_tanner">Fecha</label><input type="date" id="fecha_tanner" name="fecha" required></div>
+        <button type="submit" class="btn btn-primary">Descargar .txt</button>
+      </form>
+    </div>
+    <div class="card p-4">
+      <h3 class="font-bold mb-1">Reporte Nuevo Capital</h3>
+      <p class="muted mb-3" style="font-size:12.5px;">Formato oficial (.xlsx), un día.</p>
+      <form method="GET" action="{% url 'actions:nuevocapital_report' %}" class="flex flex-wrap gap-3 items-end">
+        <div><label class="font-semibold block mb-1" for="fecha_nc">Fecha</label><input type="date" id="fecha_nc" name="fecha" required></div>
+        <button type="submit" class="btn btn-primary">Descargar .xlsx</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Listado de gestiones: filtrable, con acciones rápidas por cliente -->
+  <div id="listado">
+    <h2 class="text-lg font-bold mb-2">Listado de gestiones</h2>
+    <form method="get" class="mb-4">
+      <div class="flex flex-wrap gap-3 items-end">
+        <div>
+          <label class="font-semibold block mb-1" for="f_periodo">Período</label>
+          <select name="f_periodo" id="f_periodo">
+            <option value="hoy" {% if f_periodo == 'hoy' %}selected{% endif %}>Hoy</option>
+            <option value="semana" {% if f_periodo == 'semana' %}selected{% endif %}>Semana</option>
+            <option value="mes" {% if f_periodo == 'mes' %}selected{% endif %}>Mes</option>
+          </select>
+        </div>
+        <div>
+          <label class="font-semibold block mb-1" for="f_usuario">Usuario</label>
+          <select name="f_usuario" id="f_usuario">
+            <option value="">--- Todos ---</option>
+            {% for u in usuarios_choices %}<option value="{{ u }}" {% if f_usuario == u %}selected{% endif %}>{{ u }}</option>{% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="font-semibold block mb-1" for="f_resultado">Resultado</label>
+          <select name="f_resultado" id="f_resultado">
+            <option value="">--- Todos ---</option>
+            {% for r in resultados_choices %}<option value="{{ r }}" {% if f_resultado == r %}selected{% endif %}>{{ r }}</option>{% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="font-semibold block mb-1" for="f_cartera">Cartera</label>
+          <select name="f_cartera" id="f_cartera">
+            <option value="">--- Todas ---</option>
+            {% for cartera in all_carteras %}<option value="{{ cartera.id }}" {% if f_cartera == cartera.id|stringformat:"s" %}selected{% endif %}>{{ cartera.nombre }}</option>{% endfor %}
+          </select>
+        </div>
+        <label style="display:flex; align-items:center; gap:6px; font-size:13px; min-height:2.6rem;">
+          <input type="checkbox" name="f_solo_compromiso" value="1" {% if f_solo_compromiso %}checked{% endif %} style="width:auto;"> Solo con compromiso
+        </label>
+        <button type="submit" class="btn btn-primary">Filtrar</button>
+        <a href="{% url 'actions:index' %}#listado" class="btn btn-secondary">Limpiar</a>
+      </div>
     </form>
 
-    <!-- Display Lead Results -->
-    <h2 class="text-xl font-bold mb-2">Lead Results</h2>
-    {% if lead_results %}
-    <ul class="list-disc list-inside">
-        {% for lead in lead_results %}
-        <li>
-            OP: {{ lead.op }} - RUT: {{ lead.rut }} - Nombre: {{ lead.name }}
-            <a href="{% url 'leads:detail' lead.id %}" class="text-white bg-blue-500 px-4 py-2 rounded">Lead Details</a> |
-            <a href="{% url 'actions:multistep_step_with_lead' step=2 lead_id=lead.pk %}" class="text-white bg-teal-500 px-4 py-2 rounded" onclick="openGestionModal(this.href); return false;">Create Action</a>
-        </li>
-        {% endfor %}
-    </ul>
-    {% else %}
-    <p>No leads found.</p>
-    {% endif %}
-
-    <!-- Display Aval Results -->
-    <h2 class="text-xl font-bold mb-2 mt-6">Aval Results</h2>
-    {% if aval_results %}
-    <ul class="list-disc list-inside">
-        {% for aval in aval_results %}
-        <li>
-            Aval RUT: {{ aval.aval_rut }} - Name: {{ aval.aval_name }} - OP: {{ aval.op }}
-            {% if aval.id_demographics.lead_set.exists %}
-            {% for lead in aval.id_demographics.lead_set.all %}
-            <a href="{% url 'leads:detail' lead.id %}" class="text-white bg-blue-500 px-4 py-2 rounded">Lead Details</a> |
-            <a href="{% url 'actions:multistep_step_with_lead' step=2 lead_id=lead.pk %}" class="text-white bg-green-500 px-4 py-2 rounded" onclick="openGestionModal(this.href); return false;">Create Action</a>
-            {% endfor %}
-            {% else %}
-            <span class="text-gray-500">No corresponding lead found</span>
-            {% endif %}
-        </li>
-        {% endfor %}
-    </ul>
-    {% else %}
-    <p>No avals found.</p>
-    {% endif %}
-
-    <!-- Download Actions Section -->
-    <div class="mt-6">
-        <h2 class="text-lg mb-2 font-bold">Download Actions</h2>
-
-        <!-- Date Filter with Team Actions -->
-        <form method="GET" action="{% url 'actions:download_actions' scope='team' %}" class="mb-4 flex flex-col sm:flex-row items-start sm:items-center gap-4">
-            <!-- Date Range Filters -->
-            <div>
-                <label for="start_date" class="font-semibold">Start Date:</label>
-                <input
-                        type="date"
-                        id="start_date"
-                        name="start_date"
-                        class="border border-gray-300 rounded p-2"
-                        value="{{ request.GET.start_date }}">
-            </div>
-
-            <div>
-                <label for="end_date" class="font-semibold">End Date:</label>
-                <input
-                        type="date"
-                        id="end_date"
-                        name="end_date"
-                        class="border border-gray-300 rounded p-2"
-                        value="{{ request.GET.end_date }}">
-            </div>
-
-            <!-- Team Selection Dropdown -->
-            <div>
-                <label for="team_id" class="font-semibold">Choose Team:</label>
-                <select
-                    id="team_id"
-                    name="team_id"
-                    required
-                    class="border border-gray-300 rounded p-2">
-                    <option value="" disabled selected>--- Select Team ---</option>
-                    {% for team in all_teams %}
-                        <option value="{{ team.id }}">{{ team.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <!-- Cartera Filter: cada cartera puede sacar su propio reporte -->
-            <div>
-                <label for="cartera" class="font-semibold">Cartera:</label>
-                <select
-                    id="cartera"
-                    name="cartera"
-                    class="border border-gray-300 rounded p-2">
-                    <option value="">--- Todas ---</option>
-                    {% for cartera in all_carteras %}
-                        <option value="{{ cartera.id }}">{{ cartera.nombre }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <!-- Submit Button -->
-            <button
-                    type="submit"
-                    class="py-2 px-4 bg-blue-500 text-white rounded hover:bg-blue-600 mt-2 sm:mt-0">
-                Download Team Actions (Filtered)
-            </button>
-        </form>
-
-        <!-- Link for User Actions -->
-        <a href="{% url 'actions:download_actions' scope='user' %}"
-           class="py-2 px-4 bg-blue-500 text-white rounded-xl hover:bg-blue-600 mt-2 block sm:inline-block">
-            Download My Actions (Excel)
-        </a>
-
-        <!-- Reporte Tanner: formato oficial (.txt, pipe-delimited, un dia) -->
-        <h3 class="text-md mt-4 mb-2 font-bold">Reporte Tanner (formato oficial)</h3>
-        <form method="GET" action="{% url 'actions:tanner_report' %}" class="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-            <div>
-                <label for="fecha_tanner" class="font-semibold">Fecha:</label>
-                <input type="date" id="fecha_tanner" name="fecha" required class="border border-gray-300 rounded p-2">
-            </div>
-            <button type="submit" class="py-2 px-4 bg-blue-500 text-white rounded hover:bg-blue-600 mt-2 sm:mt-0">
-                Descargar reporte Tanner (.txt)
-            </button>
-        </form>
-
-        <!-- Reporte Nuevo Capital: formato oficial (.xlsx, un dia) -->
-        <h3 class="text-md mt-4 mb-2 font-bold">Reporte Nuevo Capital (formato oficial)</h3>
-        <form method="GET" action="{% url 'actions:nuevocapital_report' %}" class="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-            <div>
-                <label for="fecha_nc" class="font-semibold">Fecha:</label>
-                <input type="date" id="fecha_nc" name="fecha" required class="border border-gray-300 rounded p-2">
-            </div>
-            <button type="submit" class="py-2 px-4 bg-blue-500 text-white rounded hover:bg-blue-600 mt-2 sm:mt-0">
-                Descargar reporte Nuevo Capital (.xlsx)
-            </button>
-        </form>
-    </div>
-
-    <!-- Latest gestiones (bottom) -->
-    <div class="mt-10">
-        <div class="flex justify-between items-center mb-2">
-            <h2 class="text-xl font-bold">Últimas gestiones{% if request.user.userprofile.user_type in 'admin,owner,supervisor' %} del equipo{% else %} mías{% endif %}</h2>
-            <div class="space-x-2">
-                <span class="font-semibold">Mostrar:</span>
-                <a href="?limit=10{% if query %}&query={{ query }}{% endif %}" class="{% if limit == 10 %}font-bold underline{% endif %}">10</a>
-                <a href="?limit=50{% if query %}&query={{ query }}{% endif %}" class="{% if limit == 50 %}font-bold underline{% endif %}">50</a>
-                <a href="?limit=100{% if query %}&query={{ query }}{% endif %}" class="{% if limit == 100 %}font-bold underline{% endif %}">100</a>
-            </div>
-        </div>
-        {% if recent_actions %}
+    {% if listado %}
+      <div class="card" style="border:1px solid var(--border); border-radius:10px;">
         <div class="overflow-x-auto">
-            <table class="min-w-full">
-                <thead>
-                    <tr class="bg-gray-200">
-                        <th class="py-2 px-2 text-left">Lead</th>
-                        <th class="py-2 px-2 text-left">Medio</th>
-                        <th class="py-2 px-2 text-left">Resultado</th>
-                        <th class="py-2 px-2 text-left">Target</th>
-                        <th class="py-2 px-2 text-left">Usuario</th>
-                        <th class="py-2 px-2 text-left">Fecha</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for action in recent_actions %}
-                    <tr class="{% cycle '' 'bg-gray-100' %}">
-                        <td class="py-2 px-2"><a href="{% url 'leads:detail' action.lead.pk %}" class="text-blue-600">{{ action.lead.op }} - {{ action.lead.name }}</a></td>
-                        <td class="py-2 px-2">{{ action.medio.nombre }}</td>
-                        <td class="py-2 px-2">{{ action.resultado.nombre }}</td>
-                        <td class="py-2 px-2">{{ action.get_target_display|default:"-" }}</td>
-                        <td class="py-2 px-2">{{ action.user.username|default:"-" }}</td>
-                        <td class="py-2 px-2">{{ action.created_at|date:"d-M-Y H:i" }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+          <table class="table-dense">
+            <thead><tr><th></th><th>Cliente</th><th>Medio</th><th>Resultado</th><th>Usuario</th><th>Fecha</th><th>Acciones</th></tr></thead>
+            <tbody>
+              {% for action in listado %}
+                <tr>
+                  <td>
+                    <button type="button" class="fav-star {% if action.lead.is_fav %}is-fav{% endif %}" data-lead-id="{{ action.lead.pk }}" title="Favorito" aria-label="Marcar favorito">{% if action.lead.is_fav %}★{% else %}☆{% endif %}</button>
+                  </td>
+                  <td><a href="{% url 'leads:detail' action.lead.pk %}" class="link">{{ action.lead.op }}</a> · {{ action.lead.name }}</td>
+                  <td>{{ action.medio.nombre }}</td>
+                  <td>{{ action.resultado.nombre }}</td>
+                  <td>{{ action.user.username|default:"-" }}</td>
+                  <td style="font-variant-numeric:tabular-nums; color:var(--text-muted)">{{ action.created_at|date:"d-m-Y H:i" }}</td>
+                  <td>
+                    <span class="row-actions">
+                      <a href="{% url 'leads:detail' action.lead.pk %}" title="Ver detalles">👁️</a>
+                      <a href="{% url 'actions:multistep_step_with_lead' step=2 lead_id=action.lead.pk %}" title="Gestionar" onclick="openGestionModal(this.href); return false;">⚡</a>
+                      <button type="button" title="Agregar nota" onclick="openNoteModal({{ action.lead.pk }}, '{{ action.lead.op|escapejs }}')">📝</button>
+                    </span>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
         </div>
-        {% else %}
-        <p>No hay gestiones registradas todavía.</p>
-        {% endif %}
-    </div>
+      </div>
+    {% else %}
+      <p class="empty-state">No hay gestiones para estos filtros.</p>
+    {% endif %}
+  </div>
 </div>
 {% endblock %}

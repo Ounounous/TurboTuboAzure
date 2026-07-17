@@ -5,18 +5,26 @@
 <html>
     <head>
         <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">   
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <script>
+            (function () {
+                var saved = null;
+                try { saved = localStorage.getItem('tt-palette'); } catch (e) {}
+                document.documentElement.setAttribute('data-theme', saved || 'azul-claro');
+            })();
+        </script>
         <link rel="stylesheet" href="{% static 'main.min.css' %}">
+        <link rel="stylesheet" href="{% static 'theme.css' %}">
         <title>{% block title %}{% endblock %}</title>
     </head>
 
     <body>
         {% include 'core/partials/nav.html' %}
-               
+
         {% if messages %}
             <div class="py-6 px-6">
                 {% for message in messages %}
-                    <div class="py-4 px-4 bg-teal-300 text-white rounded-xl">
+                    <div class="alert alert-info">
                         {{message}}
                     </div>
                 {% endfor %}
@@ -28,12 +36,22 @@
 
         {% include 'core/partials/footer.html' %}
 
-        <dialog id="gestion-dialog" class="rounded-xl p-0 w-11/12 max-w-2xl">
-            <div class="flex justify-end p-2 bg-gray-100 rounded-t-xl">
+        <div class="theme-switcher" role="group" aria-label="Elegir paleta">
+            <span class="theme-switcher-label">Paleta</span>
+            <button type="button" class="theme-swatch" data-theme-choice="azul-claro" style="--sw:#1E6FBE" aria-label="Azul claro" title="Azul claro"></button>
+            <button type="button" class="theme-swatch" data-theme-choice="azul-oscuro" style="--sw:#0E2038" aria-label="Azul oscuro" title="Azul oscuro"></button>
+            <button type="button" class="theme-swatch" data-theme-choice="oliva-claro" style="--sw:#5C7A2E" aria-label="Verde oliva claro" title="Verde oliva claro"></button>
+            <button type="button" class="theme-swatch" data-theme-choice="oliva-oscuro" style="--sw:#262E1F" aria-label="Verde oliva oscuro" title="Verde oliva oscuro"></button>
+        </div>
+
+        <dialog id="gestion-dialog" class="rounded-xl p-0 w-11/12" style="max-width: 56.7rem;">
+            <div class="flex justify-end p-2 card rounded-t-xl">
                 <button type="button" onclick="closeGestionModal()" class="text-xl px-2" aria-label="Cerrar">✕</button>
             </div>
             <iframe id="gestion-iframe" src="about:blank" class="w-full border-0" style="height:75vh;"></iframe>
         </dialog>
+
+        {% include 'core/partials/_note_modal.html' %}
         <script>
             function openGestionModal(url) {
                 document.getElementById('gestion-iframe').src = url;
@@ -47,6 +65,54 @@
                 closeGestionModal();
                 window.location.reload();
             }
+
+            (function () {
+                var KEY = 'tt-palette';
+                var buttons = document.querySelectorAll('[data-theme-choice]');
+                function sync() {
+                    var current = document.documentElement.getAttribute('data-theme') || 'azul-claro';
+                    buttons.forEach(function (b) {
+                        b.setAttribute('aria-pressed', b.dataset.themeChoice === current ? 'true' : 'false');
+                    });
+                }
+                buttons.forEach(function (b) {
+                    b.addEventListener('click', function () {
+                        var choice = b.dataset.themeChoice;
+                        document.documentElement.setAttribute('data-theme', choice);
+                        try { localStorage.setItem(KEY, choice); } catch (e) {}
+                        sync();
+                    });
+                });
+                sync();
+            })();
+
+            (function () {
+                // Favoritos: delegado a document para que funcione en cualquier página que
+                // tenga botones .fav-star (Clientes, listado de Gestiones, etc.) — un solo
+                // lugar, así todas las vistas quedan sincronizadas entre sí.
+                function getCsrf() {
+                    var m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+                    return m ? m[1] : '';
+                }
+                document.addEventListener('click', function (e) {
+                    var btn = e.target.closest('.fav-star');
+                    if (!btn) return;
+                    var pk = btn.dataset.leadId;
+                    btn.disabled = true;
+                    fetch('/dashboard/leads/' + pk + '/toggle-favorite/', {
+                        method: 'POST',
+                        headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': getCsrf() },
+                    }).then(function (r) { return r.json(); }).then(function (data) {
+                        btn.disabled = false;
+                        if (data.ok) {
+                            document.querySelectorAll('.fav-star[data-lead-id="' + pk + '"]').forEach(function (b) {
+                                b.classList.toggle('is-fav', data.favorited);
+                                b.textContent = data.favorited ? '★' : '☆';
+                            });
+                        }
+                    }).catch(function () { btn.disabled = false; });
+                });
+            })();
         </script>
     </body>
 </html>

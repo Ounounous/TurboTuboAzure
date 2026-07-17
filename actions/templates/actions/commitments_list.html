@@ -6,69 +6,100 @@
 <div class="py-6 px-6">
   <h1 class="mb-4 text-xl">Compromisos de pago</h1>
 
-  <form method="get" class="mb-4 flex flex-wrap items-end gap-4">
-    <div>
-      <label class="font-semibold block mb-1" for="op">ID (OP):</label>
-      <input type="text" name="op" id="op" value="{{ selected_op }}" class="border p-2 rounded">
+  <!-- Filtros -->
+  <form method="get" class="mb-6">
+    <div class="flex flex-wrap gap-4 items-end">
+      <div>
+        <label class="font-semibold block mb-1" for="op">ID (OP)</label>
+        <input type="text" name="op" id="op" value="{{ selected_op }}">
+      </div>
+      <div>
+        <label class="font-semibold block mb-1" for="cartera">Cartera</label>
+        <select name="cartera" id="cartera">
+          <option value="">--- Todas ---</option>
+          {% for cartera in carteras %}
+            <option value="{{ cartera.id }}" {% if selected_cartera == cartera.id|stringformat:"s" %}selected{% endif %}>{{ cartera.nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="font-semibold block mb-1" for="fecha">Fecha compromiso</label>
+        <input type="date" name="fecha" id="fecha" value="{{ selected_fecha }}">
+      </div>
+      <button type="submit" class="btn btn-primary">Filtrar</button>
+      <a href="{% url 'actions:commitments_export' %}?op={{ selected_op }}&cartera={{ selected_cartera }}&fecha={{ selected_fecha }}" class="btn btn-secondary">Descargar Excel</a>
     </div>
-    <div>
-      <label class="font-semibold block mb-1" for="cartera">Cartera:</label>
-      <select name="cartera" id="cartera" class="border p-2 rounded">
-        <option value="">--- Todas ---</option>
-        {% for cartera in carteras %}
-          <option value="{{ cartera.id }}" {% if selected_cartera == cartera.id|stringformat:"s" %}selected{% endif %}>{{ cartera.nombre }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div>
-      <label class="font-semibold block mb-1" for="fecha">Fecha compromiso:</label>
-      <input type="date" name="fecha" id="fecha" value="{{ selected_fecha }}" class="border p-2 rounded">
-    </div>
-    <button type="submit" class="py-2 px-4 bg-teal-500 text-white rounded-xl">Filtrar</button>
-    <a href="{% url 'actions:commitments_export' %}?op={{ selected_op }}&cartera={{ selected_cartera }}&fecha={{ selected_fecha }}"
-       class="py-2 px-4 bg-green-600 text-white rounded-xl inline-block">Descargar Excel</a>
   </form>
 
-  <div class="mb-4 space-x-2">
-    <span class="font-semibold">Mostrar:</span>
-    <a href="?limit=10&op={{ selected_op }}&cartera={{ selected_cartera }}&fecha={{ selected_fecha }}" class="{% if limit == 10 %}font-bold underline{% endif %}">10</a>
-    <a href="?limit=50&op={{ selected_op }}&cartera={{ selected_cartera }}&fecha={{ selected_fecha }}" class="{% if limit == 50 %}font-bold underline{% endif %}">50</a>
-    <a href="?limit=100&op={{ selected_op }}&cartera={{ selected_cartera }}&fecha={{ selected_fecha }}" class="{% if limit == 100 %}font-bold underline{% endif %}">100</a>
+  <!-- Resumen: hoy / esta semana / este mes (por fecha de compromiso) -->
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+    <div class="card p-4">
+      <p class="muted text-sm mb-1">Compromisos de hoy</p>
+      <p class="text-2xl font-bold">${{ resumen_hoy.total|floatformat:0 }}</p>
+      <p class="muted text-sm">{{ resumen_hoy.count }} compromiso(s)</p>
+    </div>
+    <div class="card p-4">
+      <p class="muted text-sm mb-1">Esta semana</p>
+      <p class="text-2xl font-bold">${{ resumen_semana.total|floatformat:0 }}</p>
+      <p class="muted text-sm">{{ resumen_semana.count }} compromiso(s)</p>
+    </div>
+    <div class="card p-4">
+      <p class="muted text-sm mb-1">Este mes</p>
+      <p class="text-2xl font-bold">${{ resumen_mes.total|floatformat:0 }}</p>
+      <p class="muted text-sm">{{ resumen_mes.count }} compromiso(s)</p>
+    </div>
   </div>
 
-  {% if commitments %}
-    <div class="overflow-x-auto">
-      <table class="min-w-full">
-        <thead>
-          <tr class="bg-gray-200">
-            <th class="py-2 px-2 text-left">Cartera</th>
-            <th class="py-2 px-2 text-left">Subcartera</th>
-            <th class="py-2 px-2 text-left">ID</th>
-            <th class="py-2 px-2 text-left">Cliente</th>
-            <th class="py-2 px-2 text-left">Fecha compromiso</th>
-            <th class="py-2 px-2 text-left">Monto</th>
-            <th class="py-2 px-2 text-left">Comentario</th>
-            <th class="py-2 px-2 text-left">Ejecutivo</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for c in commitments %}
-            <tr class="{% cycle '' 'bg-gray-100' %}">
-              <td class="py-2 px-2">{{ c.subcartera.cartera.nombre }}</td>
-              <td class="py-2 px-2">{{ c.subcartera.nombre }}</td>
-              <td class="py-2 px-2"><a href="{% url 'leads:detail' c.lead.pk %}" class="text-blue-600">{{ c.lead.op }}</a></td>
-              <td class="py-2 px-2">{{ c.lead.name }}</td>
-              <td class="py-2 px-2">{{ c.fecha_compromiso|date:"d-m-Y" }}</td>
-              <td class="py-2 px-2">{% if c.monto %}${{ c.monto|floatformat:0 }}{% else %}-{% endif %}</td>
-              <td class="py-2 px-2">{{ c.comentario|default:"-"|truncatechars:60 }}</td>
-              <td class="py-2 px-2">{{ c.created_by.username|default:"-" }}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+  <!-- Total general (todas las carteras del filtro actual) -->
+  {% if grupos %}
+    <div class="card p-4 mb-6 flex flex-wrap items-center justify-between gap-3">
+      <span class="font-bold text-lg">Total (todas las carteras)</span>
+      <span class="text-lg">{{ gran_count }} compromiso(s) · <strong>${{ gran_total|floatformat:0 }}</strong></span>
     </div>
+
+    <!-- Una tabla por cartera, con su propia suma -->
+    {% for g in grupos %}
+      <div class="mb-8">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-2">
+          <h2 class="text-lg font-bold">{{ g.cartera }}</h2>
+          <span class="muted">{{ g.count }} compromiso(s) · <strong>${{ g.total|floatformat:0 }}</strong></span>
+        </div>
+        <div class="card" style="border:1px solid var(--border); border-radius:10px;">
+          <div class="overflow-x-auto">
+            <table class="table-dense">
+              <thead>
+                <tr>
+                  <th>Subcartera</th><th>ID</th><th>Cliente</th><th>Fecha compromiso</th>
+                  <th class="num">Monto</th><th>Comentario</th><th>Ejecutivo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for c in g.items %}
+                  <tr>
+                    <td>{{ c.subcartera.nombre }}</td>
+                    <td class="op"><a href="{% url 'leads:detail' c.lead.pk %}" class="link">{{ c.lead.op }}</a></td>
+                    <td style="font-weight:600">{{ c.lead.name }}</td>
+                    <td style="font-variant-numeric:tabular-nums">{{ c.fecha_compromiso|date:"d-m-Y" }}</td>
+                    <td class="num">{% if c.monto %}${{ c.monto|floatformat:0 }}{% else %}-{% endif %}</td>
+                    <td>{{ c.comentario|default:"-"|truncatechars:60 }}</td>
+                    <td>{{ c.created_by.username|default:"-" }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+              <tfoot>
+                <tr class="list-head">
+                  <td class="py-2 px-3 font-bold" colspan="4">Subtotal {{ g.cartera }}</td>
+                  <td class="py-2 px-3 font-bold num">${{ g.total|floatformat:0 }}</td>
+                  <td colspan="2"></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
   {% else %}
-    <p>No hay compromisos de pago para estos filtros.</p>
+    <p class="empty-state">No hay compromisos de pago para estos filtros.</p>
   {% endif %}
 </div>
 {% endblock %}

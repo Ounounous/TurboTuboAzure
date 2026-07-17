@@ -1,29 +1,24 @@
-<nav class="py-6 px-6 flex justify-between bg-teal-500">
-    <a href="/" class="text-white">Tubo</a>
+<nav class="topnav py-4 px-6 flex justify-between items-center">
+    <a href="/" class="nav-brand">TurboTubo</a>
 
-    <div class="space-x-4">
-        <a href="{% url 'about' %}" class="text-white">About</a>
+    <div class="flex items-center gap-1">
+        <a href="{% url 'about' %}" class="nav-link">About</a>
         {% if request.user.is_authenticated %}
-        
-            <!-- <a href="{% url 'team:detail' active_team.id %}" class="text-white">{{ active_team.name }}</a> -->
-            <!-- <a href="{% url 'dashboard:index' %}" class="py-4 px-6 bg-pink-400 rounded-xl text-white">Dashboard</a> -->
-            <a href="{% url 'leads:list' %}" class="py-4 px-6 bg-pink-700 rounded-xl text-white">Leads</a>
+            <a href="{% url 'leads:list' %}" class="nav-link">Clientes</a>
             {% if request.user.userprofile.user_type in 'admin,owner,supervisor' %}
-            <a href="{% url 'cartera:list' %}" class="py-4 px-6 bg-pink-700 rounded-xl text-white">Carteras</a>
+            <a href="{% url 'cartera:list' %}" class="nav-link">Carteras</a>
             {% endif %}
-            <a href="{% url 'actions:index' %}" class="py-4 px-6 bg-pink-700 rounded-xl text-white">Gestiones</a>
+            <a href="{% url 'actions:index' %}" class="nav-link">Gestiones</a>
+            <a href="{% url 'actions:payments_list' %}" class="nav-link">Pagos</a>
             {% if request.user.userprofile.user_type in 'admin,owner,supervisor' %}
-            <a href="{% url 'actions:recordings_list' %}" class="py-4 px-6 bg-pink-700 rounded-xl text-white">Grabaciones</a>
-            <a href="{% url 'actions:commitments_list' %}" class="py-4 px-6 bg-pink-700 rounded-xl text-white">Compromisos de pago</a>
+            <a href="{% url 'actions:recordings_list' %}" class="nav-link">Grabaciones</a>
+            <a href="{% url 'actions:commitments_list' %}" class="nav-link">Compromisos de pago</a>
             {% endif %}
-            <!-- <a href="{% url 'clients:list' %}" class="py-4 px-6 bg-blue-300 rounded-xl text-white">Clients</a>   -->
-            <a href="{% url 'demographics:index' %}" class="py-4 px-6 bg-blue-400 rounded-xl text-white">Subir Demografía</a>
-            <a href="{% url 'leads:status-changes' 'day' %}" class="py-4 px-6 bg-pink-700 rounded-xl text-white">Cambios de estado</a>
-            <a href="{% url 'userprofile:myaccount' %}" class="py-4 px-6 bg-teal-800 rounded-xl text-white">Mi cuenta</a>
-           
+            <a href="{% url 'demographics:index' %}" class="nav-link">Subir Demografía</a>
+            <a href="{% url 'leads:status-changes' 'day' %}" class="nav-link">Cambios de estado</a>
+            <a href="{% url 'userprofile:myaccount' %}" class="nav-link">Mi cuenta</a>
         {% else %}
-            <a href="{% url 'login' %}" class="py-4 px-6 bg-pink-600 rounded-xl text-white">Log in</a>
-            <!-- <a href="{% url 'userprofile:signup' %}" class="py-4 px-6 bg-pink-400 rounded-xl text-white">Sign up</a> -->
+            <a href="{% url 'login' %}" class="btn btn-primary">Log in</a>
         {% endif %}
     </div>
 </nav>

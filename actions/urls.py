@@ -21,4 +21,8 @@ urlpatterns = [
     path('reporte-nuevocapital/', views.NuevoCapitalReportView.as_view(), name='nuevocapital_report'),
     path('compromisos/', views.PaymentCommitmentListView.as_view(), name='commitments_list'),
     path('compromisos/exportar/', views.PaymentCommitmentExportExcelView.as_view(), name='commitments_export'),
+    path('carga-masiva/', views.BulkActionUploadView.as_view(), name='bulk_upload'),
+    path('carga-masiva/plantilla/', views.BulkActionTemplateView.as_view(), name='bulk_template'),
+    path('pagos/', views.PaymentListView.as_view(), name='payments_list'),
+    path('pagos/nuevo/<int:lead_id>/', views.PaymentCreateView.as_view(), name='payment_create'),
 ]

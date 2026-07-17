@@ -1,11 +1,12 @@
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import Action, Medio, Resultado, PendingPbxCall, CallRecording, PaymentCommitment
+from .models import Action, Medio, Resultado, PendingPbxCall, CallRecording, PaymentCommitment, Payment
 
 
 class MedioAdmin(admin.ModelAdmin):
-    list_display = ('nombre', 'cartera', 'canal', 'codigo', 'es_llamada', 'es_inbound')
-    list_filter = ('cartera', 'canal', 'es_llamada', 'es_inbound')
+    list_display = ('nombre', 'cartera', 'canal', 'codigo', 'es_llamada', 'es_inbound', 'permite_manual')
+    list_filter = ('cartera', 'canal', 'es_llamada', 'es_inbound', 'permite_manual')
+    list_editable = ('permite_manual',)
 
 
 class ResultadoAdmin(admin.ModelAdmin):
@@ -104,9 +105,35 @@ class PaymentCommitmentAdmin(admin.ModelAdmin):
         return obj.lead.op
 
 
+class PaymentAdmin(admin.ModelAdmin):
+    list_display = ('cartera', 'subcartera', 'op', 'monto', 'fecha', 'tipo', 'comprobante_link', 'created_by', 'created_at')
+    list_filter = ('subcartera__cartera', 'tipo', 'fecha', 'created_by')
+    search_fields = ('lead__op',)
+    list_select_related = ('lead', 'subcartera', 'subcartera__cartera', 'created_by')
+
+    @admin.display(description='Cartera', ordering='subcartera__cartera__nombre')
+    def cartera(self, obj):
+        return obj.subcartera.cartera.nombre if obj.subcartera else '-'
+
+    @admin.display(description='Subcartera', ordering='subcartera__nombre')
+    def subcartera(self, obj):
+        return obj.subcartera.nombre if obj.subcartera else '-'
+
+    @admin.display(description='ID', ordering='lead__op')
+    def op(self, obj):
+        return obj.lead.op
+
+    @admin.display(description='Comprobante')
+    def comprobante_link(self, obj):
+        if not obj.comprobante:
+            return '-'
+        return format_html('<a href="{}" target="_blank">Ver comprobante</a>', obj.comprobante.url)
+
+
 admin.site.register(Action, ActionAdmin)
 admin.site.register(Medio, MedioAdmin)
 admin.site.register(Resultado, ResultadoAdmin)
 admin.site.register(PendingPbxCall, PendingPbxCallAdmin)
 admin.site.register(CallRecording, CallRecordingAdmin)
 admin.site.register(PaymentCommitment, PaymentCommitmentAdmin)
+admin.site.register(Payment, PaymentAdmin)

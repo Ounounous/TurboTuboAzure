@@ -1,78 +1,143 @@
 {% extends 'core/base.html' %}
 
-{% block title %}Leads{% endblock %}
+{% block title %}Clientes{% endblock %}
 
 {% block content %}
   <div class="py-6 px-6">
-    <h1 class="mb-4 text-xl">Clientes</h1>
-
-    <div class="flex justify-between mb-4">
-      <div>
-        <a href="{% url 'leads:add_lead' %}" class="inline-block py-4 px-6 bg-teal-400 rounded-xl text-white">Agregar Cliente</a>
-        <a href="{% url 'leads:upload-excel' %}" class="inline-block py-4 px-6 bg-teal-400 rounded-xl text-white">Agregar Clientes desde Excel</a>
-        <a href="{% url 'leads:leads_assign' %}" class="inline-block py-4 px-6 bg-teal-400 rounded-xl text-white">Ir a asignaciones</a>
-      </div>
-      <div>
-        <a href="{% url 'leads:download-excel' %}" class="inline-block py-4 px-6 bg-teal-400 rounded-xl text-white">Descargar Cartera</a>
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+      <h1 class="text-xl font-bold">Clientes</h1>
+      <div class="flex flex-wrap gap-3">
+        <a href="{% url 'leads:add_lead' %}" class="btn btn-secondary">Agregar Cliente</a>
+        <a href="{% url 'leads:upload-excel' %}" class="btn btn-secondary">Desde Excel</a>
+        <a href="{% url 'leads:leads_assign' %}" class="btn btn-secondary">Asignaciones</a>
+        <a href="{% url 'leads:download-excel' %}" class="btn btn-primary">Descargar Cartera</a>
       </div>
     </div>
 
-    <div class="mb-4 space-x-2">
-      <span class="font-semibold">Mostrar:</span>
-      <a href="?limit=10" class="{% if limit == 10 %}font-bold underline{% endif %}">10</a>
-      <a href="?limit=50" class="{% if limit == 50 %}font-bold underline{% endif %}">50</a>
-      <a href="?limit=100" class="{% if limit == 100 %}font-bold underline{% endif %}">100</a>
+    <!-- Chips por status + favoritos (filtran al tocar) -->
+    <div class="chips">
+      <a href="{{ url_todos }}" class="chip {% if not selected_status and not only_fav %}active{% endif %}">Todos <span class="c">{{ total_scope }}</span></a>
+      {% for chip in status_chips %}
+        <a href="{{ chip.url }}" class="chip {% if chip.active %}active{% endif %}">
+          <span class="dot-st"><span class="d st-{{ chip.color }}"></span></span>{{ chip.label }} <span class="c">{{ chip.count }}</span>
+        </a>
+      {% endfor %}
+      <a href="{% if only_fav %}{{ url_clear_fav }}{% else %}{{ url_fav }}{% endif %}" class="chip fav {% if only_fav %}active{% endif %}">★ Favoritos <span class="c">{{ fav_count }}</span></a>
     </div>
+
+    <!-- Buscador + filtros avanzados -->
+    <form method="get" class="mb-4">
+      <input type="hidden" name="limit" value="{{ limit }}">
+      {% if selected_status %}<input type="hidden" name="status" value="{{ selected_status }}">{% endif %}
+      {% if only_fav %}<input type="hidden" name="fav" value="1">{% endif %}
+      <div class="flex flex-wrap gap-3 items-center">
+        <input type="text" name="q" value="{{ q }}" placeholder="Buscar por ID, RUT o nombre…" class="flex-1" style="min-width: 240px;">
+        <button type="submit" class="btn btn-primary">Buscar</button>
+        {% if q or advanced_open %}<a href="{% url 'leads:list' %}" class="btn btn-secondary">Limpiar</a>{% endif %}
+      </div>
+
+      <details class="mt-3" {% if advanced_open %}open{% endif %}>
+        <summary class="cursor-pointer font-semibold">Filtros avanzados por columna</summary>
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 mt-3">
+          <div><label class="block mb-1" for="f_op">ID (OP)</label><input type="text" name="op" id="f_op" value="{{ filters.op }}" class="w-full"></div>
+          <div><label class="block mb-1" for="f_rut">RUT</label><input type="text" name="rut" id="f_rut" value="{{ filters.rut }}" class="w-full"></div>
+          <div><label class="block mb-1" for="f_name">Nombre</label><input type="text" name="name" id="f_name" value="{{ filters.name }}" class="w-full"></div>
+          <div><label class="block mb-1" for="f_ciclo">Ciclo</label>
+            <select name="ciclo" id="f_ciclo" class="w-full"><option value="">--- Todos ---</option>
+              {% for val, label in ciclo_choices %}<option value="{{ val }}" {% if filters.ciclo == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select></div>
+          <div><label class="block mb-1" for="f_ciclo_cartera">Ciclo Cartera</label>
+            <select name="ciclo_cartera" id="f_ciclo_cartera" class="w-full"><option value="">--- Todos ---</option>
+              {% for val, label in ciclo_cartera_choices %}<option value="{{ val }}" {% if filters.ciclo_cartera == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select></div>
+          <div><label class="block mb-1" for="f_activo">Activo</label>
+            <select name="activo" id="f_activo" class="w-full"><option value="">--- Todos ---</option>
+              {% for val, label in activo_choices %}<option value="{{ val }}" {% if filters.activo == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select></div>
+          <div><label class="block mb-1" for="f_tipo_cobranza">Tipo Cobranza</label>
+            <select name="tipo_cobranza" id="f_tipo_cobranza" class="w-full"><option value="">--- Todos ---</option>
+              {% for val, label in tipo_cobranza_choices %}<option value="{{ val }}" {% if filters.tipo_cobranza == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select></div>
+          <div><label class="block mb-1" for="f_aval">Tiene Aval</label>
+            <select name="tiene_aval" id="f_aval" class="w-full"><option value="">--- Todos ---</option>
+              {% for val, label in aval_choices %}<option value="{{ val }}" {% if filters.tiene_aval == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select></div>
+          <div><label class="block mb-1" for="f_cartera">Cartera</label><input type="text" name="cartera" id="f_cartera" value="{{ filters.cartera }}" class="w-full"></div>
+          <div><label class="block mb-1" for="f_subcartera">Subcartera</label><input type="text" name="subcartera" id="f_subcartera" value="{{ filters.subcartera }}" class="w-full"></div>
+        </div>
+      </details>
+    </form>
+
+    <div class="mb-2 muted" style="font-size: 12.5px;">{{ total_count }} cliente(s){% if total_count > limit %} · mostrando {{ limit }}{% endif %}</div>
 
     {% if leads %}
-      <div class="mt-6 flex justify-between">
-        <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Op</p>
-        <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Name</p>
-        <p class="py-4 px-2 bg-gray-200 font-semibold w-full">RUT</p>
-        <p class="py-4 px-2 bg-gray-200 font-semibold w-full">DV</p>
-        <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Saldo Insoluto</p>
-        <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Saldo Deuda</p>
-        <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Valor Cuota</p>
-        <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Cuotas Atrasadas</p>
-        <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Cartera</p>
-        <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Subcartera</p>
-        <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Tipo Cobranza</p>
-        <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Status</p>
-        <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Ciclo Cartera</p>
-        <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Ciclo</p>
-        <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Activo</p>
-        <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Tiene Aval</p>
-        <p class="py-4 px-2 bg-gray-200 font-semibold w-full">Acciones</p>
+      <div class="card" style="border:1px solid var(--border); border-radius:10px;">
+        <div class="overflow-x-auto">
+          <table class="table-dense">
+            <thead>
+              <tr>
+                <th></th>
+                <th class="sortable"><a href="{{ sort_links.op.url }}" style="color:inherit;text-decoration:none;">Op <span class="ar">{{ sort_links.op.arrow }}</span></a></th>
+                <th class="sortable"><a href="{{ sort_links.nombre.url }}" style="color:inherit;text-decoration:none;">Nombre <span class="ar">{{ sort_links.nombre.arrow }}</span></a></th>
+                <th class="sortable"><a href="{{ sort_links.rut.url }}" style="color:inherit;text-decoration:none;">RUT <span class="ar">{{ sort_links.rut.arrow }}</span></a></th>
+                <th class="sortable num"><a href="{{ sort_links.insoluto.url }}" style="color:inherit;text-decoration:none;">S. insoluto <span class="ar">{{ sort_links.insoluto.arrow }}</span></a></th>
+                <th class="sortable num"><a href="{{ sort_links.deuda.url }}" style="color:inherit;text-decoration:none;">S. deuda <span class="ar">{{ sort_links.deuda.arrow }}</span></a></th>
+                <th class="sortable num"><a href="{{ sort_links.cuota.url }}" style="color:inherit;text-decoration:none;">Cuota <span class="ar">{{ sort_links.cuota.arrow }}</span></a></th>
+                <th class="sortable num"><a href="{{ sort_links.atrasadas.url }}" style="color:inherit;text-decoration:none;">Atr. <span class="ar">{{ sort_links.atrasadas.arrow }}</span></a></th>
+                <th class="sortable"><a href="{{ sort_links.cartera.url }}" style="color:inherit;text-decoration:none;">Cartera <span class="ar">{{ sort_links.cartera.arrow }}</span></a></th>
+                <th>Subcartera</th>
+                <th class="sortable"><a href="{{ sort_links.status.url }}" style="color:inherit;text-decoration:none;">Status <span class="ar">{{ sort_links.status.arrow }}</span></a></th>
+                <th class="sortable"><a href="{{ sort_links.dias.url }}" style="color:inherit;text-decoration:none;">Últ. gestión <span class="ar">{{ sort_links.dias.arrow }}</span></a></th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for lead in leads %}
+                <tr>
+                  <td>
+                    <button type="button" class="fav-star {% if lead.is_fav %}is-fav{% endif %}" data-lead-id="{{ lead.pk }}" title="Favorito" aria-label="Marcar favorito">{% if lead.is_fav %}★{% else %}☆{% endif %}</button>
+                  </td>
+                  <td class="op"><a href="{% url 'leads:detail' lead.pk %}" class="link">{{ lead.op }}</a></td>
+                  <td style="font-weight:600">{{ lead.name }}</td>
+                  <td style="font-variant-numeric:tabular-nums; color:var(--text-muted)">{{ lead.rut }}-{{ lead.dv }}</td>
+                  <td class="num">${{ lead.saldo_insoluto|floatformat:0 }}</td>
+                  <td class="num">${{ lead.saldo_deuda|floatformat:0 }}</td>
+                  <td class="num">${{ lead.valor_cuota|floatformat:0 }}</td>
+                  <td class="num">{{ lead.cuotas_atrasadas }}</td>
+                  <td>{{ lead.subcartera.cartera.nombre }}</td>
+                  <td>{{ lead.subcartera.nombre }}</td>
+                  <td><span class="dot-st"><span class="d st-{{ lead.status_color }}"></span>{{ lead.get_status_display }}</span></td>
+                  <td>
+                    {% if lead.dias_ultima_gestion is None %}
+                      <span class="dias na">N/A</span>
+                    {% else %}
+                      <span class="dias {% if lead.dias_ultima_gestion <= 3 %}ok{% elif lead.dias_ultima_gestion < 10 %}warn{% else %}late{% endif %}">{{ lead.dias_ultima_gestion }} d</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <span class="row-actions">
+                      <a href="{% url 'leads:detail' lead.pk %}" title="Ver detalles">👁️</a>
+                      <a href="{% url 'actions:multistep_step_with_lead' step=2 lead_id=lead.pk %}" title="Gestionar" onclick="openGestionModal(this.href); return false;">⚡</a>
+                      <button type="button" title="Agregar nota" onclick="openNoteModal({{ lead.pk }}, '{{ lead.op|escapejs }}')">📝</button>
+                    </span>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {% for lead in leads %}
-        <div class="flex justify-between">
-          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.op }}</p>
-          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.name }}</p>
-          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.rut }}</p>
-          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.dv }}</p>
-          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.saldo_insoluto }}</p>
-          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.saldo_deuda }}</p>
-          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.valor_cuota }}</p>
-          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.cuotas_atrasadas }}</p>
-          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.subcartera.cartera.nombre }}</p>
-          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.subcartera.nombre }}</p>
-          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.tipo_cobranza }}</p>
-          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.get_status_display }}</p>
-          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.ciclo_cartera }}</p>
-          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.ciclo }}</p>
-          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.activo }}</p>
-          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %}">{{ lead.tiene_aval }}</p>
-          <p class="py-2 px-2 w-full {% cycle '' 'bg-gray-100' %} space-x-2">
-            <a href="{% url 'leads:detail' lead.pk %}" title="Ver Detalles" class="inline-block text-xl">👁️</a>
-            <a href="{% url 'actions:multistep_step_with_lead' step=2 lead_id=lead.pk %}" title="Crear Acción" class="inline-block text-xl" onclick="openGestionModal(this.href); return false;">⚡</a>
-          </p>
-        </div>
-      {% empty %}
-        <p>No existen clientes asignados</p>
-      {% endfor %}
+      <div class="flex flex-wrap items-center justify-center gap-3 mt-4">
+        <span class="font-semibold">Mostrar:</span>
+        <span class="pag">
+          <a href="{{ url_limit_10 }}" class="{% if limit == 10 %}on{% endif %}">10</a>
+          <a href="{{ url_limit_50 }}" class="{% if limit == 50 %}on{% endif %}">50</a>
+          <a href="{{ url_limit_100 }}" class="{% if limit == 100 %}on{% endif %}">100</a>
+        </span>
+      </div>
     {% else %}
-      <p>No existen clientes asignados</p>
+      <p class="empty-state">No hay clientes para estos filtros.</p>
     {% endif %}
   </div>
 {% endblock %}

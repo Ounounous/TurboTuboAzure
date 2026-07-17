@@ -1,12 +1,41 @@
 {% extends 'core/base.html' %}
 
-{% block title %}Status Changes{% endblock %}
+{% block title %}Cambios de estado{% endblock %}
 
 {% block content %}
-<h2>Status Changes</h2>
-<ul>
-    {% for log in logs %}
-    <li>{{ log.timestamp }}: {{ log.lead }} status changed to {{ log.new_status }} by {{ log.changed_by }}</li>
-    {% endfor %}
-</ul>
+<div class="py-6 px-6">
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+    <h1 class="text-xl font-bold">Cambios de estado</h1>
+    <div class="chips" style="margin:0">
+      <a href="{% url 'leads:status-changes' 'day' %}" class="chip {% if period == 'day' %}active{% endif %}">Hoy</a>
+      <a href="{% url 'leads:status-changes' 'month' %}" class="chip {% if period == 'month' %}active{% endif %}">Este mes</a>
+    </div>
+  </div>
+
+  {% if logs %}
+    <div class="card" style="border:1px solid var(--border); border-radius:10px;">
+      <div class="overflow-x-auto">
+        <table class="table-dense">
+          <thead>
+            <tr>
+              <th>Fecha y hora</th><th>Cliente</th><th>Nuevo estado</th><th>Cambiado por</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for log in logs %}
+              <tr>
+                <td style="font-variant-numeric:tabular-nums; color:var(--text-muted)">{{ log.timestamp|date:"d-m-Y H:i" }}</td>
+                <td><a href="{% url 'leads:detail' log.lead.pk %}" class="link">{{ log.lead.op }}</a> <span class="muted">{{ log.lead.name }}</span></td>
+                <td style="font-weight:600">{{ log.new_status|capfirst }}</td>
+                <td>{{ log.changed_by.username }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% else %}
+    <p class="empty-state">No hay cambios de estado en este período.</p>
+  {% endif %}
+</div>
 {% endblock %}
