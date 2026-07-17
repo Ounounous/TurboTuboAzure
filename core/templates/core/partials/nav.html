@@ -16,6 +16,9 @@
             {% endif %}
             <a href="{% url 'demographics:index' %}" class="nav-link">Subir Demografía</a>
             <a href="{% url 'leads:status-changes' 'day' %}" class="nav-link">Cambios de estado</a>
+            {% if request.user.userprofile.user_type in 'admin,owner,supervisor' %}
+            <a href="{% url 'judicial:index' %}" class="nav-link">API e info judicial</a>
+            {% endif %}
             <a href="{% url 'userprofile:myaccount' %}" class="nav-link">Mi cuenta</a>
         {% else %}
             <a href="{% url 'login' %}" class="btn btn-primary">Log in</a>

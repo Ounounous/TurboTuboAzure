@@ -23,6 +23,7 @@ from cartera.models import Cartera, Subcartera
 from demographics.models import IDDemographics, AvalDemographics, IDItem, Phone
 
 from client.models import Client, Comment as ClientComment
+from judicial.models import JudicialSettings
 
 
 class LeadListView(LoginRequiredMixin, ListView):
@@ -221,6 +222,13 @@ class LeadDetailView(LoginRequiredMixin, DetailView):
         # Iniciales para el avatar de la ficha.
         parts = self.object.name.split()
         context['initials'] = ((parts[0][0] if parts else '?') + (parts[1][0] if len(parts) > 1 else '')).upper()
+
+        # Estado judicial: dato sensible, oculto salvo que un supervisor lo haya activado en
+        # "API e info judicial" → Configuración. Nunca aparece en la tabla de Clientes.
+        user_type = getattr(self.request.user.userprofile, 'user_type', '')
+        context['is_supervisor'] = user_type in ('admin', 'owner', 'supervisor')
+        context['mostrar_info_judicial'] = JudicialSettings.get_solo().mostrar_info_judicial
+        context['estado_judicial_choices'] = Lead.CHOICES_ESTADO_JUDICIAL
 
         return context
 class LeadDeleteView(LoginRequiredMixin, DeleteView):

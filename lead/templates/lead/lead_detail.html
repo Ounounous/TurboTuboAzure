@@ -42,6 +42,23 @@
           {% if next_commitment %}
             <div class="kv"><span class="k">Próx. compromiso</span><span class="v">{{ next_commitment.fecha_compromiso|date:"d-m-Y" }}{% if next_commitment.monto %} · ${{ next_commitment.monto|floatformat:0 }}{% endif %}</span></div>
           {% endif %}
+          {% if mostrar_info_judicial %}
+            <div class="kv">
+              <span class="k">Estado judicial</span>
+              {% if is_supervisor %}
+                <form method="post" action="{% url 'judicial:update_estado' lead.pk %}" class="v">
+                  {% csrf_token %}
+                  <select name="estado_judicial" onchange="this.form.submit()">
+                    {% for val, label in estado_judicial_choices %}
+                      <option value="{{ val }}" {% if lead.estado_judicial == val %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                </form>
+              {% else %}
+                <span class="v">{{ lead.get_estado_judicial_display }}</span>
+              {% endif %}
+            </div>
+          {% endif %}
         </div>
       </div>
 

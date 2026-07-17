@@ -66,6 +66,7 @@ INSTALLED_APPS = [
     'dashboard',
     'demographics',
     'django_celery_beat',
+    'judicial',
     'lead',
     'team',
     'userprofile',

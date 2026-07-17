@@ -1,0 +1,78 @@
+{% extends 'core/base.html' %}
+
+{% block title %}API e info judicial{% endblock %}
+
+{% block content %}
+<div class="py-6 px-6">
+  <h1 class="mb-1 text-xl">API e info judicial</h1>
+  <p class="muted mb-4" style="font-size: 12.5px;">
+    Gestión del estado judicial de los clientes. Los endpoints de API (llaves y tokens, al estilo Verkada) se habilitan en una siguiente etapa — por ahora esta sección cubre la configuración y la carga de datos.
+  </p>
+
+  <div class="tabs">
+    <button type="button" class="tab-btn is-active" data-tab="config">Configuración</button>
+    <button type="button" class="tab-btn" data-tab="carga">Carga masiva</button>
+  </div>
+
+  <div class="tab-panel is-active card p-4 mt-3" data-tab="config">
+    <h2 class="text-lg font-bold mb-2">Mostrar información judicial</h2>
+    <p class="mb-3" style="font-size: 13px;">
+      Controla si el estado judicial aparece en la ficha del cliente (nunca se muestra en la tabla de Clientes, esté encendido o apagado).
+    </p>
+    <div class="flex flex-wrap items-center gap-3 mb-4">
+      <span class="dot-st">
+        <span class="d {% if config.mostrar_info_judicial %}st-green{% else %}st-slate{% endif %}"></span>
+        {% if config.mostrar_info_judicial %}Activada{% else %}Desactivada{% endif %}
+      </span>
+      {% if config.updated_by %}
+        <span class="muted" style="font-size:12px;">Últ. cambio: {{ config.updated_at|date:"d-m-Y H:i" }} · {{ config.updated_by.username }}</span>
+      {% endif %}
+    </div>
+    <form method="post" action="{% url 'judicial:toggle' %}">
+      {% csrf_token %}
+      {% if config.mostrar_info_judicial %}
+        <button type="submit" class="btn btn-secondary">Ocultar información judicial</button>
+      {% else %}
+        <button type="submit" class="btn btn-primary">Mostrar información judicial</button>
+      {% endif %}
+    </form>
+
+    <hr class="my-4">
+
+    <h3 class="font-bold mb-2" style="font-size: 13px;">Valores posibles de estado judicial</h3>
+    <div class="flex flex-wrap gap-2">
+      {% for val, label in estado_judicial_choices %}
+        <span class="chip">{{ label }}</span>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="tab-panel card p-4 mt-3" data-tab="carga">
+    <h2 class="text-lg font-bold mb-2">Carga masiva de estado judicial (Excel)</h2>
+    <p class="mb-2" style="font-size: 13px;">
+      Sube un Excel con columnas <strong>CARTERA, SUBCARTERA, ID, ESTADO_JUDICIAL</strong>. El valor de estado judicial debe ser uno de los listados en la pestaña Configuración (ej. "Notificado", "Embargado").
+    </p>
+    <p class="muted mb-3" style="font-size: 12px;">Solo supervisores pueden cargar este archivo; el estado judicial nunca aparece en la tabla de Clientes.</p>
+    <form method="post" action="{% url 'judicial:bulk_upload' %}" enctype="multipart/form-data">
+      {% csrf_token %}
+      <input type="file" name="excel_file" required>
+      <button type="submit" class="btn btn-primary mt-2">Subir Excel</button>
+    </form>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var tabs = document.querySelectorAll('.tab-btn');
+    var panels = document.querySelectorAll('.tab-panel');
+    tabs.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        tabs.forEach(function (b) { b.classList.remove('is-active'); });
+        panels.forEach(function (p) { p.classList.remove('is-active'); });
+        btn.classList.add('is-active');
+        document.querySelector('.tab-panel[data-tab="' + btn.dataset.tab + '"]').classList.add('is-active');
+      });
+    });
+  })();
+</script>
+{% endblock %}

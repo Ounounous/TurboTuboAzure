@@ -86,11 +86,37 @@ class Lead(models.Model):
 
     SI = 'si'
     NO = 'no'
-   
+
 
     CHOICES_AVAL = (
         (SI, 'Si'),
         (NO, 'No'),
+    )
+
+    # Estado judicial: dato sensible, cargado solo por supervisores (a mano, por Excel o por la
+    # API interna) — nunca se muestra en la tabla de Clientes ni se autocompleta.
+    EJ_SIN_INFORMACION = 'sin_informacion'
+    EJ_SIN_ACCION_JUDICIAL = 'sin_accion_judicial'
+    EJ_INGRESO_DEMANDA = 'ingreso_demanda'
+    EJ_BUSQUEDAS_NEGATIVAS = 'busquedas_negativas'
+    EJ_BUSQUEDAS_POSITIVAS = 'busquedas_positivas'
+    EJ_NOTIFICADO = 'notificado'
+    EJ_EMBARGADO = 'embargado'
+    EJ_OFICIO = 'oficio'
+    EJ_INCAUTADO = 'incautado'
+    EJ_REMATADO = 'rematado'
+
+    CHOICES_ESTADO_JUDICIAL = (
+        (EJ_SIN_INFORMACION, 'Sin información'),
+        (EJ_SIN_ACCION_JUDICIAL, 'Sin acción judicial'),
+        (EJ_INGRESO_DEMANDA, 'Ingreso demanda'),
+        (EJ_BUSQUEDAS_NEGATIVAS, 'Búsquedas negativas'),
+        (EJ_BUSQUEDAS_POSITIVAS, 'Búsquedas positivas'),
+        (EJ_NOTIFICADO, 'Notificado'),
+        (EJ_EMBARGADO, 'Embargado'),
+        (EJ_OFICIO, 'Oficio'),
+        (EJ_INCAUTADO, 'Incautado'),
+        (EJ_REMATADO, 'Rematado'),
     )
 
     team = models.ForeignKey(Team, related_name='leads', on_delete=models.CASCADE)
@@ -109,6 +135,7 @@ class Lead(models.Model):
     ciclo = models.CharField(max_length=255, choices=CHOICES_CICLO, default=NO_DEFINIDO)
     activo = models.CharField(max_length=255, choices=CHOICES_ACTIVO, default=ACTIVO)
     tiene_aval = models.CharField(max_length=2, choices=CHOICES_AVAL, default=NO)
+    estado_judicial = models.CharField(max_length=25, choices=CHOICES_ESTADO_JUDICIAL, default=EJ_SIN_INFORMACION)
     fecha_compromiso_pago = models.DateField(null=True, blank=True)
     converted_to_client = models.BooleanField(default=False)
     created_by = models.ForeignKey(User, related_name='leads', on_delete=models.CASCADE)
