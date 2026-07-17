@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+from django.core.exceptions import ImproperlyConfigured
 
 # Trigger GitHub Actions
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -24,13 +25,26 @@ load_dotenv(BASE_DIR / '.env')
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-ck8eajs$_ad62mmlo5(vsu(_l0t34*a=a&@tg(p4#!3c0$pbe_'
-
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# Por defecto False (seguro); en local se activa explicitamente con DEBUG=True en .env
+DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = []
+# SECURITY WARNING: keep the secret key used in production secret!
+# En producción DEBE venir de una variable de entorno. Si falta y DEBUG=True (dev local)
+# se usa un valor fijo solo para no romper el flujo de desarrollo; si falta y DEBUG=False
+# (producción), preferimos que el deploy falle fuerte a que corra con una key insegura.
+SECRET_KEY = os.environ.get('SECRET_KEY')
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = 'django-insecure-ck8eajs$_ad62mmlo5(vsu(_l0t34*a=a&@tg(p4#!3c0$pbe_'
+    else:
+        raise ImproperlyConfigured(
+            'SECRET_KEY debe estar definido en el entorno cuando DEBUG=False (producción).'
+        )
+
+ALLOWED_HOSTS = [h.strip() for h in os.environ.get('ALLOWED_HOSTS', '').split(',') if h.strip()]
+if DEBUG and not ALLOWED_HOSTS:
+    ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 
 LOGIN_REDIRECT_URL = '/dashboard/'
 LOGIN_URL = 'login'
@@ -95,6 +109,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'team.context_processors.active_team',
+                'core.context_processors.asset_version',
             ],
         },
     },
