@@ -13,21 +13,39 @@ class Lead(models.Model):
         (EXTRAJUDICIAL, 'Extra judicial')
     )
 
+    RECIEN_ASIGNADO = 'recien asignado'
     INUBICABLE = 'inubicable'
     NO_CONTACTADO = 'no contactado'
     CONTACTADO = 'contactado'
     COMPROMISO = 'compromiso'
+    COMPROMISO_ROTO = 'compromiso roto'
     PAGANDO = 'pagando'
     AL_DIA = 'al dia'
 
     CHOICES_STATUS = (
+        (RECIEN_ASIGNADO, 'Recién asignado'),
         (INUBICABLE, 'Inubicable'),
         (NO_CONTACTADO, 'No contactado'),
         (CONTACTADO, 'Contactado'),
-        (COMPROMISO, 'Compromiso'),
+        (COMPROMISO, 'Compromiso de pago'),
+        (COMPROMISO_ROTO, 'Compromiso roto'),
         (PAGANDO, 'Pagando'),
         (AL_DIA, 'Al dia'),
     )
+
+    # Ranking para status_historico ("el mejor status que el lead alcanzo alguna vez"): mas alto
+    # = mejor. Compromiso roto queda al nivel de Contactado (una promesa incumplida no es un
+    # logro), no entre Compromiso y Pagando.
+    STATUS_RANK = {
+        RECIEN_ASIGNADO: 0,
+        INUBICABLE: 0,
+        NO_CONTACTADO: 1,
+        CONTACTADO: 2,
+        COMPROMISO_ROTO: 2,
+        COMPROMISO: 3,
+        PAGANDO: 4,
+        AL_DIA: 5,
+    }
 
     VIGENTE = 'vigente'
     CASTIGO = 'castigo'
@@ -104,7 +122,11 @@ class Lead(models.Model):
     cuotas_atrasadas = models.IntegerField()
     subcartera = models.ForeignKey('cartera.Subcartera', related_name='leads', on_delete=models.PROTECT)
     tipo_cobranza = models.CharField(max_length=15, choices=CHOICES_TIPO_COBRANZA, default=EXTRAJUDICIAL)
-    status = models.CharField(max_length=15, choices=CHOICES_STATUS, default=NO_CONTACTADO)
+    status = models.CharField(max_length=20, choices=CHOICES_STATUS, default=RECIEN_ASIGNADO)
+    # Mejor status que el lead alcanzo alguna vez (no baja aunque "status" si, ej. tras el
+    # reseteo mensual o un compromiso roto). Se actualiza junto con "status" en apply_status()
+    # (actions/status_logic.py), nunca a mano.
+    status_historico = models.CharField(max_length=20, choices=CHOICES_STATUS, default=RECIEN_ASIGNADO)
     ciclo_cartera = models.CharField(max_length=255, choices=CHOICES_CICLO_CARTERA, default=VIGENTE)
     ciclo = models.CharField(max_length=255, choices=CHOICES_CICLO, default=NO_DEFINIDO)
     activo = models.CharField(max_length=255, choices=CHOICES_ACTIVO, default=ACTIVO)
@@ -119,10 +141,12 @@ class Lead(models.Model):
 
     # Color semántico del status para la UI (separado del color de marca).
     STATUS_COLOR = {
+        RECIEN_ASIGNADO: 'blue',
         INUBICABLE: 'amber',
         NO_CONTACTADO: 'slate',
         CONTACTADO: 'blue',
         COMPROMISO: 'teal',
+        COMPROMISO_ROTO: 'red',
         PAGANDO: 'green',
         AL_DIA: 'green',
     }
@@ -139,12 +163,15 @@ class Lead(models.Model):
 
 class StatusChangeLog(models.Model):
     lead = models.ForeignKey('Lead', on_delete=models.CASCADE)
-    changed_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    # Null = cambio automatico sin un usuario detras (reseteo mensual, compromiso roto detectado
+    # por la tarea diaria). Antes era obligatorio porque solo el editor manual escribia aca.
+    changed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
     new_status = models.CharField(max_length=100)
     timestamp = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"Lead {self.lead.id} status changed to {self.new_status} by {self.changed_by.username}"
+        quien = self.changed_by.username if self.changed_by else 'sistema'
+        return f"Lead {self.lead.id} status changed to {self.new_status} by {quien}"
 
 class LeadFile(models.Model):
     team = models.ForeignKey(Team, related_name='lead_files', on_delete=models.CASCADE)

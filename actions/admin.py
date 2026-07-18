@@ -12,12 +12,12 @@ class MedioAdmin(admin.ModelAdmin):
 class ResultadoAdmin(admin.ModelAdmin):
     list_display = (
         'cartera', 'codigo', 'nombre', 'tipo_contacto', 'contactabilidad',
-        'crea_compromiso', 'requiere_fecha_pago', 'descarga_grabacion', 'actualizado_por',
+        'crea_compromiso', 'requiere_fecha_pago', 'efecto_pago', 'descarga_grabacion', 'actualizado_por',
     )
-    list_filter = ('cartera', 'tipo_contacto', 'contactabilidad', 'descarga_grabacion')
+    list_filter = ('cartera', 'tipo_contacto', 'contactabilidad', 'efecto_pago', 'descarga_grabacion')
     search_fields = ('nombre', 'codigo', 'cartera__nombre')
     list_select_related = ('cartera', 'actualizado_por')
-    list_editable = ('descarga_grabacion',)
+    list_editable = ('descarga_grabacion', 'efecto_pago')
     readonly_fields = ('actualizado_por',)
 
     def save_model(self, request, obj, form, change):

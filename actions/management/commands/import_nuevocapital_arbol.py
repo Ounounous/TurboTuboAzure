@@ -93,6 +93,9 @@ class Command(BaseCommand):
             con_contacto = info['con_contacto']
             crea_compromiso = 'COMPROMISO DE PAGO' in nombre.upper()
             requiere_fecha = crea_compromiso or 'PAGO' in nombre.upper()
+            # Nuevo Capital no reporta pagos por gestion; "paga tercero (o aval)" es la unica
+            # excepcion acordada para llegar a Pagando sin pasar por el formulario de Pagos.
+            efecto_pago = Resultado.EFECTO_PAGANDO if 'PAGA TERCERO' in nombre.upper() else ''
 
             resultado, created = Resultado.objects.get_or_create(
                 cartera=cartera, nombre=nombre, tipo_contacto=tipo_contacto,
@@ -100,6 +103,7 @@ class Command(BaseCommand):
             resultado.contactabilidad = Resultado.CON_CONTACTO if con_contacto else Resultado.SIN_CONTACTO
             resultado.crea_compromiso = crea_compromiso
             resultado.requiere_fecha_pago = requiere_fecha
+            resultado.efecto_pago = efecto_pago
             if created:
                 resultado.descarga_grabacion = info['es_llamada'] and con_contacto
                 resultados_creados += 1

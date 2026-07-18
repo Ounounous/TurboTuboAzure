@@ -94,6 +94,15 @@ class Command(BaseCommand):
         resultados_creados, resultados_actualizados = 0, 0
         for nombre, agg in resultados_agg.items():
             requiere_fecha_pago = agg['crea_compromiso'] or 'PAGO' in nombre.upper()
+            # startswith (no "in"): "COMPROMISO DE PAGO" tambien contiene "PAGO" pero es un
+            # compromiso, no un pago real -- se distingue por crea_compromiso, no por esto.
+            nombre_upper = nombre.upper()
+            if nombre_upper.startswith('PAGO') and 'AL DIA' in nombre_upper:
+                efecto_pago = Resultado.EFECTO_AL_DIA
+            elif nombre_upper.startswith('PAGO'):
+                efecto_pago = Resultado.EFECTO_PAGANDO
+            else:
+                efecto_pago = ''
 
             resultado, resultado_created = Resultado.objects.get_or_create(
                 cartera=cartera, nombre=nombre,
@@ -102,6 +111,7 @@ class Command(BaseCommand):
             resultado.es_default = agg['es_default']
             resultado.crea_compromiso = agg['crea_compromiso']
             resultado.requiere_fecha_pago = requiere_fecha_pago
+            resultado.efecto_pago = efecto_pago
             if resultado_created:
                 # Solo se fija un valor inicial al crearlo: un supervisor puede curar esto
                 # manualmente despues (que resultados de llamada guardan grabacion), y no

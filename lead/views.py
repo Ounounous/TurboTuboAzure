@@ -233,36 +233,22 @@ class LeadDeleteView(LoginRequiredMixin, DeleteView):
     def get(self, request, *args, **kwargs):
         return self.post(request, *args, **kwargs)
 
-class LeadUpdateView(LoginRequiredMixin, UpdateView):
-    model = Lead
-    fields = ('status',)  # Only allow editing of the 'status' field
-    success_url = reverse_lazy('leads:list')
+class MarcarAlDiaView(LoginRequiredMixin, View):
+    """
+    Unica forma manual de tocar el status de un lead: un supervisor confirma que la cuenta
+    esta al dia. El resto del status se calcula solo a partir de gestiones y pagos
+    (ver actions/status_logic.py) -- no es editable por colectores.
+    """
+    def post(self, request, pk, *args, **kwargs):
+        user_type = getattr(request.user.userprofile, 'user_type', '')
+        if user_type not in ('admin', 'owner', 'supervisor'):
+            raise PermissionDenied
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['title'] = 'Edit Status'  # Update the title for clarity
-        return context
-
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        user_profile = self.request.user.userprofile
-
-        # Check if the user is an admin or a supervisor
-        if user_profile.user_type in ['admin', 'supervisor']:
-            return queryset  # Allow access to all leads for admins and supervisors
-
-        # For other users (e.g., collectors), filter by the assigned lead
-        return queryset.filter(assigned_to=self.request.user, pk=self.kwargs.get('pk'))
-
-    def form_valid(self, form):
-        response = super().form_valid(form)
-        # Log the status change
-        StatusChangeLog.objects.create(
-            lead=self.object,
-            changed_by=self.request.user,
-            new_status=self.object.status
-        )
-        return response
+        lead = get_object_or_404(Lead, pk=pk)
+        from actions.status_logic import apply_status
+        apply_status(lead, Lead.AL_DIA, changed_by=request.user)
+        messages.success(request, f'{lead.op} marcado como al día.')
+        return redirect('leads:detail', pk=lead.pk)
 
 def status_changes_by_date(request, period='day'):
     # Fecha de inicio en la zona horaria local (evita perder cambios de las últimas horas
@@ -335,7 +321,8 @@ class UploadExcelFileView(LoginRequiredMixin, View):
                     cuotas_atrasadas=row[7],
                     subcartera=subcartera,
                     tipo_cobranza=row[8],
-                    status=row[9],
+                    # status ya no se importa: parte en "recien asignado" (default del modelo)
+                    # y de ahi en adelante se calcula solo (ver actions/status_logic.py).
                     ciclo_cartera=row[10],
                     ciclo=row[11],
                     activo=row[12],

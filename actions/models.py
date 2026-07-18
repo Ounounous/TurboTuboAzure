@@ -83,6 +83,15 @@ class Resultado(models.Model):
         (SIN_CONTACTO, _('Sin contacto')),
     ]
 
+    EFECTO_PAGANDO = 'pagando'
+    EFECTO_AL_DIA = 'al_dia'
+
+    CHOICES_EFECTO_PAGO = [
+        ('', _('No aplica')),
+        (EFECTO_PAGANDO, _('Pagando')),
+        (EFECTO_AL_DIA, _('Al día')),
+    ]
+
     # Resultado pertenece directo a la Cartera, no a un Medio: en la practica (confirmado con
     # Tanner) el resultado de una gestion es independiente de por que medio se logro -- "Promesa
     # de pago" puede darse por llamada manual, discador, whatsapp o bot por igual. Medio y
@@ -103,6 +112,10 @@ class Resultado(models.Model):
         default=False,
         help_text=_('Si está activo, la gestión exige una fecha de compromiso/pago asociada.')
     )
+    # Efecto de este resultado sobre el status del lead, mas alla de contacto/compromiso: por
+    # ahora solo Galgo tiene resultados de pago real dentro del arbol de gestion (PAGO / AL DIA,
+    # PAGO / CONTENIDO); Tanner y Nuevo Capital no reportan pagos por gestion (ver Payment.save()).
+    efecto_pago = models.CharField(max_length=10, choices=CHOICES_EFECTO_PAGO, blank=True)
     descarga_grabacion = models.BooleanField(
         default=False,
         help_text=_(
@@ -193,6 +206,10 @@ class Action(models.Model):
                     'created_by': self.user,
                 },
             )
+        # El status del lead se calcula solo, a partir del resultado de la gestion.
+        if self.lead_id and self.resultado_id:
+            from .status_logic import apply_status, compute_status
+            apply_status(self.lead, compute_status(self.resultado, self.fecha_compromiso), changed_by=self.user)
 
     def __str__(self):
         return f"{self.medio.nombre} for {self.lead.op} on {self.created_at}"
@@ -322,6 +339,12 @@ class Payment(models.Model):
         if self.lead_id and not self.subcartera_id:
             self.subcartera = self.lead.subcartera
         super().save(*args, **kwargs)
+        # Un pago real es la unica via a "pagando" en carteras sin gestion de pago (Tanner,
+        # Nuevo Capital). "Al dia" no es automatico por pago: solo por el resultado Galgo
+        # "PAGO / AL DIA" (via compute_status) o por el override manual de supervisor.
+        if self.lead_id:
+            from .status_logic import apply_status
+            apply_status(self.lead, Lead.PAGANDO, changed_by=self.created_by)
 
     @property
     def op(self):

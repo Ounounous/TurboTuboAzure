@@ -133,3 +133,45 @@ def purge_expired_recordings():
     expired.delete()
     logger.info(f"purge_expired_recordings: {count} grabacion(es) vencida(s) eliminada(s)")
     return count
+
+
+@shared_task
+def reset_status_mensual():
+    """
+    Corre el dia 1 de cada mes: el status actual de todo lead vuelve a "no contactado" (el
+    historico -- el mejor status que alguna vez tuvo -- no se toca). "Inubicable" queda afuera
+    a proposito: todavia no hay logica que lo detecte (pendiente de status de demografia), asi
+    que resetearlo a "no contactado" borraria una senal que hoy nadie mas produce.
+    """
+    from lead.models import Lead
+    from .status_logic import apply_status
+
+    leads = Lead.objects.exclude(status__in=[Lead.INUBICABLE, Lead.NO_CONTACTADO])
+    count = 0
+    for lead in leads:
+        apply_status(lead, Lead.NO_CONTACTADO, changed_by=None)
+        count += 1
+    logger.info(f"reset_status_mensual: {count} lead(s) reseteado(s) a no contactado")
+    return count
+
+
+@shared_task
+def check_compromisos_rotos():
+    """
+    Corre a diario: un lead en status "compromiso" cuyo ultimo PaymentCommitment vencio hace 1
+    dia o mas pasa a "compromiso roto". No hace falta revisar pagos ni compromisos nuevos aparte
+    -- si hubiera pasado algo de eso, Payment.save()/Action.save() ya habrian movido el status
+    fuera de "compromiso" antes de que esta tarea corra.
+    """
+    from lead.models import Lead
+    from .status_logic import apply_status
+
+    hoy = timezone.now().date()
+    count = 0
+    for lead in Lead.objects.filter(status=Lead.COMPROMISO).prefetch_related('payment_commitments'):
+        commitment = lead.payment_commitments.first()  # ya ordenado -fecha_compromiso, -created_at
+        if commitment and (hoy - commitment.fecha_compromiso).days >= 1:
+            apply_status(lead, Lead.COMPROMISO_ROTO, changed_by=None)
+            count += 1
+    logger.info(f"check_compromisos_rotos: {count} lead(s) pasado(s) a compromiso roto")
+    return count

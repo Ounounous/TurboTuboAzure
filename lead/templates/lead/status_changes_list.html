@@ -27,7 +27,7 @@
                 <td style="font-variant-numeric:tabular-nums; color:var(--text-muted)">{{ log.timestamp|date:"d-m-Y H:i" }}</td>
                 <td><a href="{% url 'leads:detail' log.lead.pk %}" class="link">{{ log.lead.op }}</a> <span class="muted">{{ log.lead.name }}</span></td>
                 <td style="font-weight:600">{{ log.new_status|capfirst }}</td>
-                <td>{{ log.changed_by.username }}</td>
+                <td>{{ log.changed_by.username|default:"Sistema" }}</td>
               </tr>
             {% endfor %}
           </tbody>

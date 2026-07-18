@@ -30,7 +30,9 @@ MEDIOS = [
 # (codigo, tipo_contacto, respuesta, requiere_fecha_pago)
 RESULTADOS = [
     ('100', 'DIRECTO', 'PROMESA DE PAGO', True),
-    ('101', 'DIRECTO', 'INTENCION DE PAGO', True),
+    # "Intencion de pago" no es un compromiso firme (no lleva fecha pactada real) -- queda en
+    # Contactado, no crea PaymentCommitment. Antes exigia fecha por error.
+    ('101', 'DIRECTO', 'INTENCION DE PAGO', False),
     ('102', 'DIRECTO', 'YA PAGO', False),
     ('103', 'DIRECTO', 'PAGADO', False),
     ('104', 'DIRECTO', 'EN PROCESO DE DACION', False),
@@ -54,8 +56,8 @@ RESULTADOS = [
     ('122', 'DIRECTO', 'CONTINGENCIA', False),
     ('123', 'DIRECTO', 'RESPUESTA AGRESIVA', False),
     ('124', 'DIRECTO', 'OTROS', False),
-    ('125', 'DIRECTO', 'INTENCION DE DACIÓN', True),
-    ('126', 'DIRECTO', 'INTENCION DE RENEGOCIACIÓN', True),
+    ('125', 'DIRECTO', 'INTENCION DE DACIÓN', False),
+    ('126', 'DIRECTO', 'INTENCION DE RENEGOCIACIÓN', False),
     ('127', 'DIRECTO', 'CITACIÓN ENTREGADA A TITULAR', False),
     ('128', 'DIRECTO', 'AUTORIZA LLAMADO POSTERIOR', False),
     ('129', 'DIRECTO', 'PAC INTERESADO', False),
@@ -84,7 +86,7 @@ RESULTADOS = [
     ('152', 'DIRECTO', 'VEHICULO NO COMERCIAL', False),
     ('153', 'DIRECTO', 'VENDIDO', False),
     ('200', 'DIRECTO AVAL', 'PROMESA DE PAGO', True),
-    ('201', 'DIRECTO AVAL', 'INTENCION DE PAGO', True),
+    ('201', 'DIRECTO AVAL', 'INTENCION DE PAGO', False),
     ('202', 'DIRECTO AVAL', 'YA PAGO', False),
     ('203', 'DIRECTO AVAL', 'PAGADO', False),
     ('204', 'DIRECTO AVAL', 'EN PROCESO DE DACION', False),
@@ -147,6 +149,11 @@ RESULTADOS = [
 # Estos tipo_contacto implican que efectivamente se hablo con una persona.
 TIPOS_CONTACTO_CON_CONTACTO = {'DIRECTO', 'DIRECTO AVAL', 'INDIRECTO'}
 
+# Codigos cuyo resultado marca el status del lead como "Pagando" -- un tercero/aval pagando no
+# es una gestion de pago real (Tanner no reporta pagos por gestion), pero es la unica excepcion
+# acordada para llegar a Pagando sin pasar por el formulario de Pagos.
+CODIGOS_EFECTO_PAGANDO = {'112', '301'}  # PAGA TERCERO O AVAL (DIRECTO), PAGA TERCERO (INDIRECTO)
+
 
 class Command(BaseCommand):
     help = "Carga el arbol de gestiones de Tanner (medios y resultados transcritos del instructivo oficial)."
@@ -181,6 +188,7 @@ class Command(BaseCommand):
             resultado.contactabilidad = Resultado.CON_CONTACTO if con_contacto else Resultado.SIN_CONTACTO
             resultado.crea_compromiso = requiere_fecha_pago
             resultado.requiere_fecha_pago = requiere_fecha_pago
+            resultado.efecto_pago = Resultado.EFECTO_PAGANDO if codigo in CODIGOS_EFECTO_PAGANDO else ''
             if created:
                 # Tanner no distingue por medio en su paleta -- cualquier resultado "DIRECTO"
                 # puede darse por llamada manual/discador/IVR, que si tienen grabacion.
