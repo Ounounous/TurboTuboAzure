@@ -4,7 +4,15 @@
 <div class="mx-auto mt-4 px-6 pb-6">
   <h1 class="text-2xl font-bold mb-4">Nueva gestión{% if lead %} - {{ lead.op }} {{ lead.name }}{% endif %}</h1>
 
-  {% if step == 1 %}
+  {% if no_gestionable %}
+  <div class="alert alert-danger mb-4">
+    <strong>No se puede gestionar este cliente.</strong><br>
+    {{ no_gestionable }}<br>
+    <span class="text-sm">Puedes agregar una nota, pero no ingresar una gestión.</span>
+  </div>
+  <a href="{% url 'actions:cancel' lead.id %}" class="btn btn-secondary">Cerrar</a>
+
+  {% elif step == 1 %}
   <form method="post">
     {% csrf_token %}
     {{ form.as_p }}
@@ -55,21 +63,36 @@
       {% elif canal == 'telefono' %}
         <div class="flex gap-3" id="medio-buttons">
           {% for medio in action_form.fields.medio.queryset %}
-            <button type="button"
-                    class="medio-btn"
-                    data-medio-id="{{ medio.id }}"
-                    data-nombre="{{ medio.nombre }}"
-                    {% if 'whatsapp' in medio.nombre|lower %}
-                      data-native-url="https://wa.me/{{ phone_digits }}"
-                    {% else %}
-                      data-native-url="tel:{{ phone_digits }}"
-                      {% if has_pbx %}data-pbx-call="1"{% endif %}
-                    {% endif %}>
-              {% if 'whatsapp' in medio.nombre|lower %}💬 WhatsApp{% else %}☎️ Llamar{% endif %}
-            </button>
+            {% if 'whatsapp' in medio.nombre|lower and selected_phone and not selected_phone.whatsapp_activo %}
+              <button type="button"
+                      class="medio-btn"
+                      data-medio-id="{{ medio.id }}"
+                      data-nombre="{{ medio.nombre }}"
+                      data-no-whatsapp="1"
+                      title="Número sin WhatsApp activo">
+                💬 WhatsApp ⚠️
+              </button>
+            {% else %}
+              <button type="button"
+                      class="medio-btn"
+                      data-medio-id="{{ medio.id }}"
+                      data-nombre="{{ medio.nombre }}"
+                      {% if 'whatsapp' in medio.nombre|lower %}
+                        data-native-url="https://wa.me/{{ phone_digits }}"
+                      {% else %}
+                        data-native-url="tel:{{ phone_digits }}"
+                        {% if has_pbx %}data-pbx-call="1"{% endif %}
+                      {% endif %}>
+                {% if 'whatsapp' in medio.nombre|lower %}💬 WhatsApp{% else %}☎️ Llamar{% endif %}
+              </button>
+            {% endif %}
           {% endfor %}
         </div>
+        {% if selected_phone and not selected_phone.whatsapp_activo %}
+          <p class="alert alert-danger mt-1" style="font-size:12px; padding:6px 10px;">Número sin WhatsApp activo.</p>
+        {% endif %}
         {% if has_pbx %}<p class="text-sm mt-1" style="color:var(--text-muted)">☎️ marcará por la central telefónica (pbxip.cl) a tu anexo, luego te conecta con el cliente.</p>{% endif %}
+        <p class="text-sm mt-2 mb-1" style="color:var(--text-muted)">O elige el medio directamente (sin llamar):</p>
       {% else %}
         <div class="flex gap-3 items-center" id="medio-buttons">
           {% for medio in action_form.fields.medio.queryset %}
@@ -84,7 +107,7 @@
         </div>
       {% endif %}
 
-      <select name="medio" id="id_medio" class="hidden">
+      <select name="medio" id="id_medio" class="border p-2 rounded w-full{% if canal != 'telefono' %} hidden{% endif %}">
         <option value="">--- Elige un medio ---</option>
         {% for medio in action_form.fields.medio.queryset %}
           <option value="{{ medio.id }}" {% if action_form.medio.value|stringformat:"s" == medio.id|stringformat:"s" %}selected{% endif %}>{{ medio.nombre }}</option>
@@ -183,6 +206,11 @@
 
       medioButtons.forEach(function (btn) {
         btn.addEventListener('click', function () {
+          // Número sin WhatsApp: no se abre el popup, solo avisa.
+          if (btn.dataset.noWhatsapp) {
+            alert('Número sin WhatsApp activo.');
+            return;
+          }
           selectMedio(btn);
           if (btn.dataset.pbxCall) {
             originatePbxCall(btn);
@@ -193,6 +221,14 @@
       });
 
       resultadoSelect.addEventListener('change', updateFechaVisibility);
+
+      // Elegir el medio directo del desplegable resalta el botón que corresponda, pero NO
+      // dispara la llamada/whatsapp (a diferencia de clickear el botón).
+      medioSelect.addEventListener('change', function () {
+        medioButtons.forEach(function (b) {
+          b.classList.toggle('is-selected', b.dataset.medioId === medioSelect.value);
+        });
+      });
 
       // Si solo hay un medio disponible (típico para email), se preselecciona solo.
       if (medioButtons.length === 1) {

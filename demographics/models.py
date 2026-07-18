@@ -1,6 +1,20 @@
 from django.db import models
 from lead.models import Lead
 
+# Estado de un dato de contacto (telefono o correo). Mismos valores que usa Phone, con etiquetas
+# en español para las pantallas de "Estado de demografía".
+CONTACT_ACTIVE = 'active'
+CONTACT_NON_EXISTENT = 'non-existent'
+CONTACT_OUT_OF_SERVICE = 'out of service'
+CONTACT_BLACKLISTED = 'blacklisted'
+
+CHOICES_CONTACT_STATUS = (
+    (CONTACT_ACTIVE, 'Activo'),
+    (CONTACT_NON_EXISTENT, 'No existe'),
+    (CONTACT_OUT_OF_SERVICE, 'Fuera de servicio'),
+    (CONTACT_BLACKLISTED, 'Blacklist'),
+)
+
 
 class IDItem(models.Model):
     #tipo de bien
@@ -65,6 +79,10 @@ class Phone(models.Model):
     phone_number = models.CharField(max_length=20)
     phone_type = models.CharField(max_length=255, choices=CHOICES_PHONE_TYPE, default=PRINCIPAL)
     phone_number_status = models.CharField(max_length=255, choices=CHOICES_PHONE_NUMBER_STATUS, default=ACTIVE)
+    # Disponibilidad de WhatsApp del numero, independiente de su estado: un numero puede seguir
+    # sirviendo para llamar (status=active) pero no tener WhatsApp. Lo apaga el resultado
+    # "SIN WHATSAPP" / "ENVIO WHATSAPP NO ENTREGADO" o un supervisor a mano.
+    whatsapp_activo = models.BooleanField(default=True)
 
     @property
     def op(self):
@@ -74,6 +92,11 @@ class Phone(models.Model):
     def cartera(self):
         return self.lead.subcartera.cartera.nombre
 
+    @property
+    def es_gestionable(self):
+        """Un numero blacklisted no se ofrece ni se puede gestionar."""
+        return self.phone_number_status != self.BLACKLISTED
+
     def __str__(self):
         return f"{self.phone_number}"
     
@@ -81,6 +104,7 @@ class IDDemographics(models.Model):
     lead = models.ForeignKey(Lead, on_delete=models.CASCADE, null=True, blank=True)
     principal_phones = models.ManyToManyField(Phone, related_name='id_demographics_principal_phone', limit_choices_to={'phone_type': Phone.PRINCIPAL}, blank=True)
     principal_email = models.EmailField(max_length=255, blank=True)
+    principal_email_status = models.CharField(max_length=20, choices=CHOICES_CONTACT_STATUS, default=CONTACT_ACTIVE)
     principal_address = models.TextField(blank=True)
 
     @property
@@ -101,6 +125,7 @@ class AvalDemographics(models.Model):
     aval_rut = models.CharField(max_length=15)
     aval_dv = models.CharField(max_length=1, null=True, blank=True)
     aval_email = models.EmailField(max_length=255, null=True, blank=True)
+    aval_email_status = models.CharField(max_length=20, choices=CHOICES_CONTACT_STATUS, default=CONTACT_ACTIVE)
     aval_address = models.TextField(null=True, blank=True)
 
     @property

@@ -29,3 +29,77 @@ def apply_status(lead, new_status, changed_by=None):
         lead.status_historico = new_status
     lead.save(update_fields=['status', 'status_historico'])
     StatusChangeLog.objects.create(lead=lead, changed_by=changed_by, new_status=new_status)
+
+    # "Al dia" = pago toda la deuda -> el lead pasa a terminado (ciclo de vida). Cubre tanto el
+    # "marcar al dia" manual del supervisor como el resultado Galgo PAGO / AL DIA.
+    if new_status == Lead.AL_DIA and lead.activo != Lead.TERMINADO:
+        from lead.lifecycle import terminar
+        terminar(lead, changed_by=changed_by)
+
+
+def _tiene_contacto_activo(lead):
+    """True si al lead le queda algun telefono o correo en estado 'activo'."""
+    from demographics.models import Phone, IDDemographics, AvalDemographics, CONTACT_ACTIVE
+
+    if Phone.objects.filter(lead=lead, phone_number_status=CONTACT_ACTIVE).exists():
+        return True
+    if IDDemographics.objects.filter(lead=lead, principal_email_status=CONTACT_ACTIVE).exclude(principal_email='').exists():
+        return True
+    if AvalDemographics.objects.filter(
+        id_demographics__lead=lead, aval_email_status=CONTACT_ACTIVE,
+    ).exclude(aval_email='').exclude(aval_email__isnull=True).exists():
+        return True
+    return False
+
+
+def recompute_inubicable(lead, changed_by=None):
+    """
+    Marca/desmarca 'inubicable' segun si al lead le queda algun dato de contacto activo. Solo
+    actua cuando el lead sigue en 'no contactado'/'recien asignado' (no pisa un lead que ya fue
+    contactado o que avanzo mas). Inubicable = no contactado + sin datos que sirvan.
+    """
+    tiene = _tiene_contacto_activo(lead)
+    if not tiene and lead.status in (Lead.RECIEN_ASIGNADO, Lead.NO_CONTACTADO):
+        apply_status(lead, Lead.INUBICABLE, changed_by)
+    elif tiene and lead.status == Lead.INUBICABLE:
+        apply_status(lead, Lead.NO_CONTACTADO, changed_by)
+
+
+def aplicar_efecto_demografico(action):
+    """
+    Aplica el efecto del resultado de una gestion sobre el dato de contacto usado (el telefono o
+    el correo): lo marca no existe / fuera de servicio / blacklist, y/o le apaga WhatsApp. Luego
+    recalcula si el lead quedo inubicable.
+    """
+    from demographics.models import IDDemographics, AvalDemographics
+
+    resultado = action.resultado
+    if not resultado:
+        return
+
+    efecto = resultado.efecto_demografia
+    apaga_wa = resultado.desactiva_whatsapp
+    nuevo_status = resultado.efecto_demografia_status()  # '' o el valor de phone_number_status
+
+    if action.phone_id:
+        phone = action.phone
+        campos = []
+        if nuevo_status:
+            phone.phone_number_status = nuevo_status
+            campos.append('phone_number_status')
+        if apaga_wa:
+            phone.whatsapp_activo = False
+            campos.append('whatsapp_activo')
+        if campos:
+            phone.save(update_fields=campos)
+    elif action.email and nuevo_status:
+        # El correo vive como texto en la demografia; se marca la fila que coincide.
+        IDDemographics.objects.filter(lead=action.lead, principal_email=action.email).update(
+            principal_email_status=nuevo_status
+        )
+        AvalDemographics.objects.filter(
+            id_demographics__lead=action.lead, aval_email=action.email
+        ).update(aval_email_status=nuevo_status)
+
+    if efecto or apaga_wa:
+        recompute_inubicable(action.lead, changed_by=action.user)

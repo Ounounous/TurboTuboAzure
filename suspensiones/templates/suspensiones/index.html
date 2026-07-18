@@ -1,0 +1,89 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Suspensiones{% endblock %}
+
+{% block content %}
+<div class="py-6 px-6">
+  <h1 class="text-xl mb-1">Suspensiones</h1>
+  <p class="muted mb-4" style="font-size:12.5px;">
+    Ciclo de vida del cliente. <strong>Suspendido</strong> y <strong>terminado</strong> no admiten gestiones (solo notas).
+    <strong>Terminado</strong> lo genera automáticamente el status "al día". <strong>Desasignado</strong> saca al cliente de su ejecutivo (reasignarlo lo reactiva).
+  </p>
+
+  <!-- Tarjetas por estado: clic filtra la tabla -->
+  <div class="launcher-grid mb-6">
+    {% for t in tarjetas %}
+      <a href="?estado={{ t.valor }}" class="launcher-card {% if t.active %}active{% endif %}">
+        <div class="lc-nm">{{ t.label }}</div>
+        <div class="lc-amt">{{ t.count }}</div>
+        <div class="lc-ct">cliente(s)</div>
+      </a>
+    {% endfor %}
+  </div>
+
+  <h2 class="text-lg font-bold mb-2">{{ estado_label }}</h2>
+  {% if leads %}
+    <div class="card mb-6" style="border:1px solid var(--border); border-radius:10px;">
+      <div class="overflow-x-auto">
+        <table class="table-dense">
+          <thead>
+            <tr>
+              <th>ID</th><th>Cliente</th><th>Cartera</th><th>Asignado a</th>
+              <th>Fecha</th>{% if estado == 'suspendido' %}<th>Motivo</th>{% endif %}<th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for lead in leads %}
+              <tr>
+                <td class="op"><a href="{% url 'leads:detail' lead.pk %}" class="link">{{ lead.op }}</a></td>
+                <td style="font-weight:600">{{ lead.name }}</td>
+                <td>{{ lead.subcartera.cartera.nombre }} <span class="muted">/ {{ lead.subcartera.nombre }}</span></td>
+                <td>{{ lead.assigned_to.username|default:"—" }}</td>
+                <td style="font-variant-numeric:tabular-nums">
+                  {% if estado == 'suspendido' %}{{ lead.suspendido_at|date:"d-m-Y"|default:"—" }}
+                  {% elif estado == 'desasignado' %}{{ lead.desasignado_at|date:"d-m-Y"|default:"—" }}
+                  {% elif estado == 'terminado' %}{{ lead.terminado_at|date:"d-m-Y"|default:"—" }}
+                  {% else %}—{% endif %}
+                </td>
+                {% if estado == 'suspendido' %}<td>{{ lead.motivo_suspension|default:"—"|truncatechars:50 }}</td>{% endif %}
+                <td>
+                  {% if es_activo %}
+                    <form method="post" action="{% url 'suspensiones:lead_accion' lead.pk %}" style="display:inline-flex; gap:4px; align-items:center;">
+                      {% csrf_token %}
+                      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                      <input type="text" name="motivo" placeholder="motivo" style="width:110px; font-size:11.5px;">
+                      <button type="submit" name="accion" value="suspender" class="btn btn-secondary" style="font-size:11.5px; padding:3px 8px;">Suspender</button>
+                      <button type="submit" name="accion" value="desasignar" class="btn btn-secondary" style="font-size:11.5px; padding:3px 8px;">Desasignar</button>
+                    </form>
+                  {% else %}
+                    <form method="post" action="{% url 'suspensiones:lead_accion' lead.pk %}" style="display:inline;">
+                      {% csrf_token %}
+                      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                      <button type="submit" name="accion" value="reactivar" class="btn btn-secondary" style="font-size:11.5px; padding:3px 8px;">Reactivar</button>
+                    </form>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% else %}
+    <p class="empty-state mb-6">No hay clientes en estado "{{ estado_label }}".</p>
+  {% endif %}
+
+  <hr class="my-6">
+
+  <h2 class="text-lg font-bold mb-2">Carga masiva (Excel)</h2>
+  <p class="mb-2" style="font-size:13px;">
+    Sube un Excel con columnas <strong>CARTERA, SUBCARTERA, ID, ACCION, MOTIVO</strong>. La acción debe ser
+    <strong>suspender</strong>, <strong>desasignar</strong> o <strong>reactivar</strong> (motivo opcional, solo para suspender).
+  </p>
+  <form method="post" action="{% url 'suspensiones:bulk_upload' %}" enctype="multipart/form-data">
+    {% csrf_token %}
+    <input type="file" name="excel_file" required>
+    <button type="submit" class="btn btn-primary mt-2">Subir Excel</button>
+  </form>
+</div>
+{% endblock %}

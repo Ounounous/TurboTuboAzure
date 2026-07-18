@@ -91,16 +91,26 @@ class Lead(models.Model):
         (NO_DEFINIDO, 'No definido'),
     )
 
+    # "activo" es el ciclo de vida del lead (distinto del status de cobranza): dice si hay que
+    # gestionarlo y, cuando ya no, por que. Se maneja desde el menu Suspensiones y por la
+    # transicion automatica al dia -> terminado (ver lead/lifecycle.py y actions/status_logic.py).
     ACTIVO = 'activo'
     SUSPENDIDO = 'suspendido'
     TERMINADO = 'terminado'
-   
+    DESASIGNADO = 'desasignado'
 
     CHOICES_ACTIVO = (
         (ACTIVO, 'Activo'),
         (SUSPENDIDO, 'Suspendido'),
         (TERMINADO, 'Terminado'),
+        (DESASIGNADO, 'Desasignado'),
     )
+
+    # Estados en los que NO se puede ingresar una gestion (Action) ni originar llamada/whatsapp/
+    # mail: suspendido (orden judicial o del cliente) y terminado (ya pago toda la deuda). Las
+    # notas siguen permitidas siempre. Desasignado no bloquea: al no tener asignado, simplemente
+    # nadie lo gestiona hasta reasignarlo (y reasignar lo vuelve a activo).
+    ACTIVO_NO_GESTIONABLE = (SUSPENDIDO, TERMINADO)
 
     SI = 'si'
     NO = 'no'
@@ -130,6 +140,13 @@ class Lead(models.Model):
     ciclo_cartera = models.CharField(max_length=255, choices=CHOICES_CICLO_CARTERA, default=VIGENTE)
     ciclo = models.CharField(max_length=255, choices=CHOICES_CICLO, default=NO_DEFINIDO)
     activo = models.CharField(max_length=255, choices=CHOICES_ACTIVO, default=ACTIVO)
+    # Momento en que el lead entro a cada estado no-activo. Se llenan solos en la transicion
+    # (lead/lifecycle.py) y son la base del calculo de purga de datos (fase 2): terminado se
+    # purga a los N dias del fin del mes en que se declaro; desasignado a los M dias.
+    terminado_at = models.DateField(null=True, blank=True)
+    desasignado_at = models.DateField(null=True, blank=True)
+    suspendido_at = models.DateField(null=True, blank=True)
+    motivo_suspension = models.CharField(max_length=255, blank=True)
     tiene_aval = models.CharField(max_length=2, choices=CHOICES_AVAL, default=NO)
     fecha_compromiso_pago = models.DateField(null=True, blank=True)
     created_by = models.ForeignKey(User, related_name='leads', on_delete=models.CASCADE)
@@ -160,6 +177,21 @@ class Lead(models.Model):
     @property
     def status_color(self):
         return self.STATUS_COLOR.get(self.status, 'slate')
+
+    @property
+    def es_gestionable(self):
+        """False si no se le puede ingresar una gestion (suspendido o terminado)."""
+        return self.activo not in self.ACTIVO_NO_GESTIONABLE
+
+    @property
+    def motivo_no_gestionable(self):
+        """Texto a mostrar cuando se intenta gestionar un lead no gestionable."""
+        if self.activo == self.SUSPENDIDO:
+            base = 'Cliente suspendido'
+            return f'{base}: {self.motivo_suspension}' if self.motivo_suspension else base
+        if self.activo == self.TERMINADO:
+            return 'Cliente terminado (deuda pagada)'
+        return ''
 
 class StatusChangeLog(models.Model):
     lead = models.ForeignKey('Lead', on_delete=models.CASCADE)

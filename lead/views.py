@@ -220,6 +220,10 @@ class LeadDetailView(LoginRequiredMixin, DetailView):
         parts = self.object.name.split()
         context['initials'] = ((parts[0][0] if parts else '?') + (parts[1][0] if len(parts) > 1 else '')).upper()
 
+        # Acciones de supervisor (marcar al día, suspender/desasignar/reactivar).
+        user_type = getattr(self.request.user.userprofile, 'user_type', '')
+        context['is_supervisor'] = user_type in ('admin', 'owner', 'supervisor')
+
         return context
 class LeadDeleteView(LoginRequiredMixin, DeleteView):
     model = Lead
@@ -484,6 +488,11 @@ class AssignLeadsView(LoginRequiredMixin, View):
 
             for lead in leads:
                 lead.assigned_to = collector
+                # Reasignar saca al lead del limbo "desasignado" (no toca suspendido/terminado,
+                # que son bloqueos deliberados).
+                if lead.activo == Lead.DESASIGNADO:
+                    lead.activo = Lead.ACTIVO
+                    lead.desasignado_at = None
                 lead.save()
                 LeadAssignment.objects.create(
                     lead=lead,
@@ -520,6 +529,9 @@ class AssignLeadsView(LoginRequiredMixin, View):
                     collector = User.objects.get(username__iexact=collector_username, userprofile__active_team=team)
                     lead.subcartera = subcartera
                     lead.assigned_to = collector
+                    if lead.activo == Lead.DESASIGNADO:
+                        lead.activo = Lead.ACTIVO
+                        lead.desasignado_at = None
                     lead.save()
                     LeadAssignment.objects.create(
                         lead=lead,

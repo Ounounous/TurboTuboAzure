@@ -215,7 +215,11 @@ class ActionCreateView(LoginRequiredMixin, CreateView):
         return reverse('leads:detail', kwargs={'pk': self.kwargs['lead_id']})
 
     def form_valid(self, form):
-        form.instance.lead = self.get_lead()
+        lead = self.get_lead()
+        if not lead.es_gestionable:
+            messages.error(self.request, lead.motivo_no_gestionable)
+            return redirect('leads:detail', pk=lead.pk)
+        form.instance.lead = lead
         logger.debug("Form is valid. Saving the action.")
         return super().form_valid(form)
 
@@ -231,6 +235,12 @@ class ActionDetailView(LoginRequiredMixin, DetailView):
     context_object_name = 'action'
 
 class MultiStepActionView(View):
+    def _blocked_response(self, request, lead, step):
+        """Un lead suspendido/terminado no admite gestiones (si notas). Muestra el motivo."""
+        return render(request, 'actions/multistep_form.html', {
+            'lead': lead, 'step': step, 'no_gestionable': lead.motivo_no_gestionable,
+        })
+
     def get(self, request, step=1, lead_id=None):
         if lead_id:
             lead = get_object_or_404(Lead, id=lead_id)
@@ -246,6 +256,8 @@ class MultiStepActionView(View):
             })
         elif step == 2 and lead_id:
             lead = get_object_or_404(Lead, id=lead_id)
+            if not lead.es_gestionable:
+                return self._blocked_response(request, lead, step)
             form = DemographicSelectionForm(lead=lead)
             return render(request, 'actions/multistep_form.html', {
                 'lead': lead, 'demographic_form': form, 'step': step,
@@ -253,6 +265,8 @@ class MultiStepActionView(View):
             })
         elif step == 3 and lead_id:
             lead = get_object_or_404(Lead, id=lead_id)
+            if not lead.es_gestionable:
+                return self._blocked_response(request, lead, step)
             selected_phone_id = request.session.get('selected_phone')
             selected_email = request.session.get('selected_email')
             canal = Medio.CANAL_TELEFONO if selected_phone_id else Medio.CANAL_EMAIL
@@ -274,6 +288,8 @@ class MultiStepActionView(View):
     def post(self, request, step):
         lead_id = request.session.get('selected_lead_id')
         lead = get_object_or_404(Lead, id=lead_id)
+        if not lead.es_gestionable:
+            return self._blocked_response(request, lead, step)
         if step == 2:
             form = DemographicSelectionForm(request.POST, lead=lead)
             if form.is_valid():
@@ -364,6 +380,11 @@ class OriginatePbxCallView(LoginRequiredMixin, View):
         lead_id = request.POST.get('lead_id')
         phone_id = request.POST.get('phone_id')
         lead = get_object_or_404(Lead, pk=lead_id)
+        if not lead.es_gestionable:
+            return JsonResponse(
+                {'ok': False, 'reason': 'no_gestionable', 'detail': lead.motivo_no_gestionable},
+                status=403,
+            )
         phone = get_object_or_404(Phone, pk=phone_id, lead=lead)
         destination = re.sub(r'\D', '', phone.phone_number)
 

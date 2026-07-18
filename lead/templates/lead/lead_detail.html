@@ -18,6 +18,14 @@
         {% if lead.status_historico != lead.status %}
           <div class="muted" style="font-size:11.5px; margin-top:4px;">Mejor status: {{ lead.get_status_historico_display }}</div>
         {% endif %}
+        {% if lead.activo != 'activo' %}
+          <div style="margin-top:6px;">
+            <span class="chip" style="font-size:11px;">Ciclo de vida: {{ lead.get_activo_display }}</span>
+          </div>
+        {% endif %}
+        {% if not lead.es_gestionable %}
+          <div class="alert alert-danger mt-2" style="font-size:11.5px; padding:6px 10px;">{{ lead.motivo_no_gestionable }} — solo se pueden agregar notas.</div>
+        {% endif %}
         {% if is_supervisor and lead.status != 'al dia' %}
           <form method="post" action="{% url 'leads:marcar_al_dia' lead.pk %}" style="margin-top:8px;">
             {% csrf_token %}
@@ -31,9 +39,31 @@
         </div>
 
         <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
-          <a href="{% url 'actions:multistep_step_with_lead' step=2 lead_id=lead.pk %}" class="btn btn-primary" onclick="openGestionModal(this.href); return false;">⚡ Gestionar</a>
+          {% if lead.es_gestionable %}
+            <a href="{% url 'actions:multistep_step_with_lead' step=2 lead_id=lead.pk %}" class="btn btn-primary" onclick="openGestionModal(this.href); return false;">⚡ Gestionar</a>
+          {% endif %}
           <a href="{% url 'actions:payment_create' lead.pk %}" class="btn btn-secondary" onclick="openGestionModal(this.href); return false;">💵 Pago</a>
         </div>
+
+        {% if is_supervisor %}
+          <div style="display:flex; gap:6px; justify-content:center; flex-wrap:wrap; margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+            {% if lead.activo == 'activo' %}
+              <form method="post" action="{% url 'suspensiones:lead_accion' lead.pk %}" style="display:flex; gap:4px; align-items:center; flex-wrap:wrap; justify-content:center;">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <input type="text" name="motivo" placeholder="motivo suspensión" style="width:150px; font-size:11.5px;">
+                <button type="submit" name="accion" value="suspender" class="btn btn-secondary" style="font-size:11px; padding:3px 8px;">Suspender</button>
+                <button type="submit" name="accion" value="desasignar" class="btn btn-secondary" style="font-size:11px; padding:3px 8px;">Desasignar</button>
+              </form>
+            {% else %}
+              <form method="post" action="{% url 'suspensiones:lead_accion' lead.pk %}" style="display:inline;">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button type="submit" name="accion" value="reactivar" class="btn btn-secondary" style="font-size:11px; padding:3px 8px;">Reactivar (volver a activo)</button>
+              </form>
+            {% endif %}
+          </div>
+        {% endif %}
       </div>
 
       <div class="card p-4">

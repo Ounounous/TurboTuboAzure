@@ -1,0 +1,8 @@
+{% comment %}Sub-navegación de Demografía. `active` = subir | telefonos | correos.{% endcomment %}
+<div class="chips mb-4">
+  <a href="{% url 'demographics:index' %}" class="chip {% if active == 'subir' %}active{% endif %}">⬆️ Subir datos</a>
+  {% if request.user.userprofile.user_type in 'admin,owner,supervisor' %}
+    <a href="{% url 'demographics:phone_status' %}" class="chip {% if active == 'telefonos' %}active{% endif %}">📞 Estado de teléfonos</a>
+    <a href="{% url 'demographics:email_status' %}" class="chip {% if active == 'correos' %}active{% endif %}">✉️ Estado de correos</a>
+  {% endif %}
+</div>

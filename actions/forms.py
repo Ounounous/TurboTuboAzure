@@ -20,21 +20,24 @@ class DemographicSelectionForm(forms.Form):
         super().__init__(*args, **kwargs)
 
         if lead:
-            # Filter phones related to the lead
-            self.fields['phone'].queryset = Phone.objects.filter(lead=lead)
+            # Telefonos del lead, EXCLUYENDO los blacklisted (no se pueden gestionar). Los
+            # "no existe" / "fuera de servicio" si se ofrecen (aun se puede intentar).
+            self.fields['phone'].queryset = Phone.objects.filter(lead=lead).exclude(
+                phone_number_status=Phone.BLACKLISTED
+            )
             self.fields['phone'].label_from_instance = lambda \
                 obj: f'{obj.phone_number} ({obj.get_phone_type_display()})'
 
-            # Email choice field setup
+            # Correos: mismo criterio, se ofrecen salvo los blacklisted.
             id_demographics = IDDemographics.objects.filter(lead=lead).first()
             aval_demographics = AvalDemographics.objects.filter(id_demographics=id_demographics)
 
             email_choices = []
-            if id_demographics and id_demographics.principal_email:
+            if id_demographics and id_demographics.principal_email and id_demographics.principal_email_status != 'blacklisted':
                 email_choices.append(
                     (id_demographics.principal_email, f'{id_demographics.principal_email} (principal)'))
             for aval in aval_demographics:
-                if aval.aval_email:
+                if aval.aval_email and aval.aval_email_status != 'blacklisted':
                     email_choices.append((aval.aval_email, f'{aval.aval_email} (aval)'))
 
             self.fields['email'].choices = email_choices

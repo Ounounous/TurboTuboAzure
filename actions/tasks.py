@@ -146,7 +146,11 @@ def reset_status_mensual():
     from lead.models import Lead
     from .status_logic import apply_status
 
-    leads = Lead.objects.exclude(status__in=[Lead.INUBICABLE, Lead.NO_CONTACTADO])
+    # Solo leads gestionables (activo): los suspendidos/terminados/desasignados no vuelven al
+    # ciclo de cobranza, su status queda congelado.
+    leads = Lead.objects.filter(activo=Lead.ACTIVO).exclude(
+        status__in=[Lead.INUBICABLE, Lead.NO_CONTACTADO]
+    )
     count = 0
     for lead in leads:
         apply_status(lead, Lead.NO_CONTACTADO, changed_by=None)
@@ -168,7 +172,7 @@ def check_compromisos_rotos():
 
     hoy = timezone.now().date()
     count = 0
-    for lead in Lead.objects.filter(status=Lead.COMPROMISO).prefetch_related('payment_commitments'):
+    for lead in Lead.objects.filter(status=Lead.COMPROMISO, activo=Lead.ACTIVO).prefetch_related('payment_commitments'):
         commitment = lead.payment_commitments.first()  # ya ordenado -fecha_compromiso, -created_at
         if commitment and (hoy - commitment.fecha_compromiso).days >= 1:
             apply_status(lead, Lead.COMPROMISO_ROTO, changed_by=None)

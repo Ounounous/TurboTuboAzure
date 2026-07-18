@@ -92,6 +92,25 @@ class Resultado(models.Model):
         (EFECTO_AL_DIA, _('Al día')),
     ]
 
+    # Efecto del resultado sobre el estado del dato de contacto usado (telefono o correo).
+    DEMO_NO_EXISTE = 'no_existe'
+    DEMO_FUERA_SERVICIO = 'fuera_servicio'
+    DEMO_BLACKLIST = 'blacklist'
+
+    CHOICES_EFECTO_DEMOGRAFIA = [
+        ('', _('No aplica')),
+        (DEMO_NO_EXISTE, _('Marca "No existe"')),
+        (DEMO_FUERA_SERVICIO, _('Marca "Fuera de servicio"')),
+        (DEMO_BLACKLIST, _('Blacklist')),
+    ]
+
+    # efecto_demografia -> valor de estado del dato (Phone.phone_number_status / email_status).
+    DEMO_A_STATUS = {
+        DEMO_NO_EXISTE: 'non-existent',
+        DEMO_FUERA_SERVICIO: 'out of service',
+        DEMO_BLACKLIST: 'blacklisted',
+    }
+
     # Resultado pertenece directo a la Cartera, no a un Medio: en la practica (confirmado con
     # Tanner) el resultado de una gestion es independiente de por que medio se logro -- "Promesa
     # de pago" puede darse por llamada manual, discador, whatsapp o bot por igual. Medio y
@@ -116,6 +135,11 @@ class Resultado(models.Model):
     # ahora solo Galgo tiene resultados de pago real dentro del arbol de gestion (PAGO / AL DIA,
     # PAGO / CONTENIDO); Tanner y Nuevo Capital no reportan pagos por gestion (ver Payment.save()).
     efecto_pago = models.CharField(max_length=10, choices=CHOICES_EFECTO_PAGO, blank=True)
+    # Efecto sobre el dato de contacto usado en la gestion (telefono/correo): marcarlo no existe,
+    # fuera de servicio o blacklist. Se aplica en Action.save() (ver actions/status_logic.py).
+    efecto_demografia = models.CharField(max_length=15, choices=CHOICES_EFECTO_DEMOGRAFIA, blank=True)
+    # Si el resultado apaga WhatsApp del numero usado (ej. "SIN WHATSAPP") sin cambiar su estado.
+    desactiva_whatsapp = models.BooleanField(default=False)
     descarga_grabacion = models.BooleanField(
         default=False,
         help_text=_(
@@ -139,6 +163,10 @@ class Resultado(models.Model):
 
     def __str__(self):
         return f"{self.cartera.nombre} / {self.nombre}"
+
+    def efecto_demografia_status(self):
+        """Valor de estado del dato (Phone.phone_number_status / email_status) o '' si no aplica."""
+        return self.DEMO_A_STATUS.get(self.efecto_demografia, '')
 
 
 class Action(models.Model):
@@ -208,8 +236,11 @@ class Action(models.Model):
             )
         # El status del lead se calcula solo, a partir del resultado de la gestion.
         if self.lead_id and self.resultado_id:
-            from .status_logic import apply_status, compute_status
+            from .status_logic import apply_status, aplicar_efecto_demografico, compute_status
             apply_status(self.lead, compute_status(self.resultado, self.fecha_compromiso), changed_by=self.user)
+            # El resultado puede marcar el dato usado (no existe / blacklist / apaga whatsapp) y,
+            # si el lead se queda sin datos activos, dejarlo inubicable.
+            aplicar_efecto_demografico(self)
 
     def __str__(self):
         return f"{self.medio.nombre} for {self.lead.op} on {self.created_at}"
