@@ -110,7 +110,6 @@ class Lead(models.Model):
     activo = models.CharField(max_length=255, choices=CHOICES_ACTIVO, default=ACTIVO)
     tiene_aval = models.CharField(max_length=2, choices=CHOICES_AVAL, default=NO)
     fecha_compromiso_pago = models.DateField(null=True, blank=True)
-    converted_to_client = models.BooleanField(default=False)
     created_by = models.ForeignKey(User, related_name='leads', on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
     modified_at = models.DateTimeField(auto_now=True)

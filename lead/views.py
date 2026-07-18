@@ -22,8 +22,6 @@ from .models import Lead, LeadAssignment, LeadNote, User
 from cartera.models import Cartera, Subcartera
 from demographics.models import IDDemographics, AvalDemographics, IDItem, Phone
 
-from client.models import Client, Comment as ClientComment
-
 
 class LeadListView(LoginRequiredMixin, ListView):
     model = Lead
@@ -413,41 +411,6 @@ class AddCommentView(LoginRequiredMixin, View):
 
 
         return redirect('leads:detail', pk=pk)
-
-class ConvertToClientView(LoginRequiredMixin, View):
-    def get(self, request, *arg, **kwargs):
-        pk = self.kwargs.get('pk')
-        lead = get_object_or_404(Lead, created_by=request.user, pk=pk)
-        team = self.request.user.userprofile.active_team
-
-        client = Client.objects.create(
-            name=lead.name,
-            email=lead.email,
-            description=lead.description,
-            created_by=request.user,
-            team=team,   
-        )
-
-        lead.converted_to_client = True
-        lead.save()
-
-        # convert lead comment to client comments #
-
-        comments = lead.comments.all()
-
-        for comment in comments:
-            ClientComment.objects.create(
-                client = client,
-                content = comment.content, 
-                created_by = comment.created_by,
-                team = team
-            )
-
-        # show message and redirect #
-
-        messages.success(request, 'ID convertida')
-
-        return redirect('leads:list')
 
 def _puede_ver_lead(user, lead):
     """Un usuario puede ver/anotar un lead si es suyo (asignado/creado) o es supervisor+."""

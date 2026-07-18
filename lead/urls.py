@@ -10,7 +10,6 @@ urlpatterns = [
     path('<int:pk>/', views.LeadDetailView.as_view(), name='detail'),
     path('<int:pk>/delete/', views.LeadDeleteView.as_view(), name='delete'),
     path('<int:pk>/edit/', views.LeadUpdateView.as_view(), name='edit'),
-    path('<int:pk>/convert/', views.ConvertToClientView.as_view(), name='convert'),
     path('<int:pk>/add-comment/', views.AddCommentView.as_view(), name='add_comment'),
     path('<int:pk>/add-note/', views.AddLeadNoteView.as_view(), name='add_note'),
     path('<int:pk>/toggle-favorite/', views.ToggleFavoriteView.as_view(), name='toggle_favorite'),
