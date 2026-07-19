@@ -12,6 +12,7 @@ from django.views import View
 from django.contrib.auth.mixins import LoginRequiredMixin
 from openpyxl import Workbook, load_workbook
 from lead.models import Lead
+from lead.permissions import scope_por_lead
 from .models import (
     IDItem, Phone, IDDemographics, AvalDemographics,
     CHOICES_CONTACT_STATUS, CONTACT_BLACKLISTED, CONTACT_NON_EXISTENT, CONTACT_OUT_OF_SERVICE,
@@ -47,6 +48,15 @@ class SupervisorRequiredMixin(LoginRequiredMixin):
         if not userprofile or userprofile.user_type not in SUPERVISOR_TYPES:
             raise PermissionDenied
         return super().dispatch(request, *args, **kwargs)
+
+
+def _recompute_inubicable_bulk(lead_pks, user):
+    """Recalcula inubicable de los leads cuya demografia se acaba de cargar/cambiar."""
+    if not lead_pks:
+        return
+    from actions.status_logic import recompute_inubicable
+    for lead in Lead.objects.filter(pk__in=lead_pks):
+        recompute_inubicable(lead, changed_by=user)
 
 TEMPLATE_SPECS = {
     'phone': {
@@ -158,6 +168,7 @@ class UploadPhoneView(LoginRequiredMixin, View):
         sheet = wb.active
 
         found, not_found = 0, []
+        leads_tocados = set()
         for row_number, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
             cartera, subcartera, op, phone_number, phone_type, phone_status = row[:6]
             lead = find_lead(cartera, subcartera, op)
@@ -167,10 +178,12 @@ class UploadPhoneView(LoginRequiredMixin, View):
                 # Normaliza el estado (acepta español/inglés); si no viene o es inválido, queda activo.
                 phone.phone_number_status = _norm_status(phone_status) or Phone.ACTIVE
                 phone.save()
+                leads_tocados.add(lead.pk)
                 found += 1
             else:
                 not_found.append(f"Fila {row_number}: no se encontró el lead OP={op} en Cartera={cartera}, Subcartera={subcartera}")
 
+        _recompute_inubicable_bulk(leads_tocados, request.user)
         if found:
             messages.success(request, f"{found} teléfono(s) cargado(s) correctamente")
         for error in not_found:
@@ -194,6 +207,7 @@ class UploadIDDemographicsView(LoginRequiredMixin, View):
         email_col = next((i for i, h in enumerate(header) if h in EMAIL_COLUMN_ALIASES), 3)
 
         found, errors = 0, []
+        leads_tocados = set()
         for row_number, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
             if len(row) < 3:
                 continue
@@ -212,10 +226,12 @@ class UploadIDDemographicsView(LoginRequiredMixin, View):
                 id_demographics, created = IDDemographics.objects.get_or_create(lead=lead)
                 id_demographics.principal_email = principal_email
                 id_demographics.save()
+                leads_tocados.add(lead.pk)
                 found += 1
             else:
                 errors.append(f"Fila {row_number}: no se encontró el lead OP={op} en Cartera={cartera}, Subcartera={subcartera}")
 
+        _recompute_inubicable_bulk(leads_tocados, request.user)
         if found:
             messages.success(request, f"{found} email(s) cargado(s) correctamente")
         if errors:
@@ -260,6 +276,7 @@ class UploadAvalDemographicsView(LoginRequiredMixin, View):
         sheet = wb.active
 
         found, errors = 0, []
+        leads_tocados = set()
 
         for row_number, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
             try:
@@ -304,6 +321,7 @@ class UploadAvalDemographicsView(LoginRequiredMixin, View):
                         aval_demographics.aval_email = aval_email
                         aval_demographics.aval_address = aval_address
                         aval_demographics.save()
+                        leads_tocados.add(lead.pk)
                         found += 1
                     else:
                         errors.append(f"Fila {row_number}: el lead OP={op} no tiene demografía principal cargada todavía (sube primero el archivo de email/dirección)")
@@ -312,6 +330,7 @@ class UploadAvalDemographicsView(LoginRequiredMixin, View):
             else:
                 errors.append(f"Fila {row_number}: no se encontró el lead OP={op} en Cartera={cartera}, Subcartera={subcartera}")
 
+        _recompute_inubicable_bulk(leads_tocados, request.user)
         if found:
             messages.success(request, f"{found} aval(es) cargado(s) correctamente")
         if errors:
@@ -330,7 +349,8 @@ class PhoneStatusView(SupervisorRequiredMixin, View):
 
     def get(self, request, *args, **kwargs):
         q = request.GET.get('q', '').strip()
-        phones = Phone.objects.select_related('lead__subcartera__cartera')
+        # Alcance por cartera: un supervisor solo ve/edita los datos de sus carteras.
+        phones = scope_por_lead(Phone.objects.select_related('lead__subcartera__cartera'), request.user)
         if q:
             phones = phones.filter(
                 Q(phone_number__icontains=q) | Q(lead__op__icontains=q) | Q(lead__name__icontains=q)
@@ -409,10 +429,14 @@ class EmailStatusView(SupervisorRequiredMixin, View):
 
     def _emails(self, q):
         items = []
-        idd = IDDemographics.objects.select_related('lead__subcartera__cartera').exclude(principal_email='')
-        avals = AvalDemographics.objects.select_related('id_demographics__lead__subcartera__cartera').exclude(
-            aval_email=''
-        ).exclude(aval_email__isnull=True)
+        # Alcance por cartera (supervisor: solo sus carteras).
+        idd = scope_por_lead(
+            IDDemographics.objects.select_related('lead__subcartera__cartera'), self.request.user
+        ).exclude(principal_email='')
+        avals = scope_por_lead(
+            AvalDemographics.objects.select_related('id_demographics__lead__subcartera__cartera'),
+            self.request.user, lead_field='id_demographics__lead',
+        ).exclude(aval_email='').exclude(aval_email__isnull=True)
         if q:
             idd = idd.filter(Q(principal_email__icontains=q) | Q(lead__op__icontains=q) | Q(lead__name__icontains=q))
             avals = avals.filter(

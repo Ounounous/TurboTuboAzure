@@ -18,6 +18,7 @@ from openpyxl import load_workbook
 from .models import Action, Medio, Resultado, PendingPbxCall, CallRecording, PaymentCommitment, Payment
 from .pbx_client import PbxClient, PbxError
 from lead.models import Lead
+from lead.permissions import carteras_visibles, es_supervisor, leads_visibles, scope_por_lead
 from team.models import Team
 from cartera.models import Cartera
 from demographics.models import Phone
@@ -57,19 +58,18 @@ class ActionIndexView(LoginRequiredMixin, View):
     """
 
     def get(self, request, *args, **kwargs):
-        all_carteras = Cartera.objects.all()
+        all_carteras = carteras_visibles(request.user)
 
-        user_profile = getattr(request.user, 'userprofile', None)
-        es_super = bool(user_profile and user_profile.user_type in ('admin', 'owner', 'supervisor'))
-
-        if es_super and user_profile.active_team:
-            base_actions = Action.objects.filter(team=user_profile.active_team)
-            leads_scope = Lead.objects.filter(team=user_profile.active_team)
-            pc_scope = PaymentCommitment.objects.filter(lead__team=user_profile.active_team)
-            pay_scope = Payment.objects.filter(lead__team=user_profile.active_team)
+        if es_supervisor(request.user):
+            # Supervisor/owner/admin: todo lo de sus carteras (admin/owner: todas).
+            base_actions = scope_por_lead(Action.objects.all(), request.user)
+            leads_scope = leads_visibles(request.user)
+            pc_scope = scope_por_lead(PaymentCommitment.objects.all(), request.user)
+            pay_scope = scope_por_lead(Payment.objects.all(), request.user)
         else:
+            # Cobrador: su propio trabajo.
             base_actions = Action.objects.filter(user=request.user)
-            leads_scope = Lead.objects.filter(Q(assigned_to=request.user) | Q(created_by=request.user))
+            leads_scope = leads_visibles(request.user)
             pc_scope = PaymentCommitment.objects.filter(created_by=request.user)
             pay_scope = Payment.objects.filter(created_by=request.user)
 
@@ -551,7 +551,10 @@ class RecordingListView(SupervisorRequiredMixin, ListView):
         return limit if limit in (10, 50, 100) else 50
 
     def get_queryset(self):
-        qs = CallRecording.objects.select_related('lead__subcartera__cartera', 'user').order_by('-created_at')
+        # Alcance por cartera: un supervisor solo ve las grabaciones de sus carteras.
+        qs = scope_por_lead(
+            CallRecording.objects.select_related('lead__subcartera__cartera', 'user'), self.request.user
+        ).order_by('-created_at')
 
         op = self.request.GET.get('op')
         if op:
@@ -572,7 +575,7 @@ class RecordingListView(SupervisorRequiredMixin, ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['limit'] = self.get_limit()
-        context['carteras'] = Cartera.objects.all()
+        context['carteras'] = carteras_visibles(self.request.user)
         context['selected_op'] = self.request.GET.get('op', '')
         context['selected_cartera'] = self.request.GET.get('cartera', '')
         context['selected_fecha'] = self.request.GET.get('fecha', '')
@@ -664,7 +667,7 @@ def _format_tanner_phone(raw_number):
     return digits
 
 
-class TannerReportView(LoginRequiredMixin, View):
+class TannerReportView(SupervisorRequiredMixin, View):
     """
     Genera el archivo de gestiones para Tanner tal como lo exige su instructivo:
     14 columnas separadas por '|', sin encabezado, un solo dia por archivo, formato
@@ -685,11 +688,11 @@ class TannerReportView(LoginRequiredMixin, View):
         start = datetime.datetime.combine(fecha, datetime.time.min, tzinfo=report_tz)
         end = datetime.datetime.combine(fecha, datetime.time.max, tzinfo=report_tz)
 
-        actions = Action.objects.filter(
+        actions = scope_por_lead(Action.objects.filter(
             subcartera__cartera__nombre__iexact='Tanner',
             created_at__gte=start,
             created_at__lte=end,
-        ).select_related('lead', 'medio', 'resultado', 'user__userprofile', 'phone')
+        ).select_related('lead', 'medio', 'resultado', 'user__userprofile', 'phone'), request.user)
 
         if not actions.exists():
             return JsonResponse({'error': 'No hay gestiones de Tanner para esa fecha.'}, status=404)
@@ -748,16 +751,20 @@ def _resumen(qs, campo_monto='monto'):
     return {'count': agg['n'] or 0, 'total': agg['total'] or 0}
 
 
-class PaymentCommitmentListView(SupervisorRequiredMixin, View):
+class PaymentCommitmentListView(LoginRequiredMixin, View):
     template_name = 'actions/commitments_list.html'
 
     def get(self, request, *args, **kwargs):
         selected_op = request.GET.get('op', '').strip()
         selected_cartera = request.GET.get('cartera', '').strip()
         selected_fecha = request.GET.get('fecha', '').strip()
+        es_super = _es_supervisor(request.user)
+
+        # Alcance por rol: cobrador -> sus clientes; supervisor -> sus carteras; admin/owner -> todo.
+        base_all = scope_por_lead(PaymentCommitment.objects.all(), request.user)
 
         # Filtros que NO son de cartera (op/fecha) — se aplican tanto a las tarjetas como a la tabla.
-        base_filtered = PaymentCommitment.objects.select_related('lead', 'subcartera__cartera', 'created_by')
+        base_filtered = base_all.select_related('lead', 'subcartera__cartera', 'created_by')
         if selected_op:
             base_filtered = base_filtered.filter(lead__op__icontains=selected_op)
         if selected_fecha:
@@ -765,10 +772,10 @@ class PaymentCommitmentListView(SupervisorRequiredMixin, View):
             if parsed:
                 base_filtered = base_filtered.filter(fecha_compromiso=parsed)
 
-        # Tarjetas: una por cartera (con los filtros de op/fecha ya aplicados, pero SIN el de
-        # cartera, para que las tarjetas muestren el total real de cada una y sirvan de filtro).
+        # Tarjetas: una por cartera (solo las que tienen compromisos dentro del alcance del usuario).
         carteras_launcher = []
-        for cartera in Cartera.objects.all():
+        cartera_ids = base_all.values_list('subcartera__cartera_id', flat=True).distinct()
+        for cartera in Cartera.objects.filter(id__in=cartera_ids):
             resumen = _resumen(base_filtered.filter(subcartera__cartera=cartera))
             carteras_launcher.append({
                 'id': cartera.id, 'nombre': cartera.nombre,
@@ -783,20 +790,20 @@ class PaymentCommitmentListView(SupervisorRequiredMixin, View):
             tabla_qs = tabla_qs.filter(subcartera__cartera_id=selected_cartera)
         tabla_compromisos = list(tabla_qs.order_by('-fecha_compromiso', '-created_at')[:300])
 
-        # Resumen por fecha de compromiso (hoy / esta semana / este mes), sobre todos los compromisos.
+        # Resumen por fecha de compromiso (hoy / esta semana / este mes), dentro del alcance.
         today = timezone.localdate()
         week_start, week_end, month_start, next_month = _rango_semana_mes(today)
-        base = PaymentCommitment.objects.all()
         context = {
             'carteras_launcher': carteras_launcher,
             'gran_total': gran_total,
             'tabla_compromisos': tabla_compromisos,
-            'resumen_hoy': _resumen(base.filter(fecha_compromiso=today)),
-            'resumen_semana': _resumen(base.filter(fecha_compromiso__gte=week_start, fecha_compromiso__lte=week_end)),
-            'resumen_mes': _resumen(base.filter(fecha_compromiso__gte=month_start, fecha_compromiso__lt=next_month)),
+            'resumen_hoy': _resumen(base_all.filter(fecha_compromiso=today)),
+            'resumen_semana': _resumen(base_all.filter(fecha_compromiso__gte=week_start, fecha_compromiso__lte=week_end)),
+            'resumen_mes': _resumen(base_all.filter(fecha_compromiso__gte=month_start, fecha_compromiso__lt=next_month)),
             'selected_op': selected_op,
             'selected_cartera': selected_cartera,
             'selected_fecha': selected_fecha,
+            'es_supervisor': es_super,
         }
         return render(request, self.template_name, context)
 
@@ -1142,18 +1149,16 @@ class PaymentListView(LoginRequiredMixin, View):
         es_super = _es_supervisor(request.user)
         selected_cartera = request.GET.get('cartera', '').strip()
 
-        payments = Payment.objects.select_related('lead', 'subcartera__cartera', 'created_by')
-        if not es_super:
-            payments = payments.filter(Q(lead__assigned_to=request.user) | Q(lead__created_by=request.user))
-        payments = payments.order_by('-fecha', '-created_at')
+        # Alcance por rol: cobrador -> sus clientes; supervisor -> sus carteras; admin/owner -> todo.
+        payments = scope_por_lead(
+            Payment.objects.select_related('lead', 'subcartera__cartera', 'created_by'), request.user
+        ).order_by('-fecha', '-created_at')
 
         # Buscador de cliente para registrar un pago.
         q = request.GET.get('q', '').strip()
         lead_results = []
         if q:
-            leads = Lead.objects.select_related('subcartera__cartera')
-            if not es_super:
-                leads = leads.filter(Q(assigned_to=request.user) | Q(created_by=request.user))
+            leads = leads_visibles(request.user, base=Lead.objects.select_related('subcartera__cartera'))
             lead_results = list(
                 leads.filter(Q(op__icontains=q) | Q(rut__icontains=q) | Q(name__icontains=q))[:20]
             )
@@ -1201,7 +1206,7 @@ def _ejecutivo_nombre(user):
     return (full or user.username).upper()
 
 
-class NuevoCapitalReportView(LoginRequiredMixin, View):
+class NuevoCapitalReportView(SupervisorRequiredMixin, View):
     """
     Genera el reporte de gestiones de Nuevo Capital (.xlsx, 16 columnas) para un dia.
     Formato de las columnas segun su instructivo (Reporte Salida NC):
@@ -1228,11 +1233,11 @@ class NuevoCapitalReportView(LoginRequiredMixin, View):
         start = datetime.datetime.combine(fecha, datetime.time.min, tzinfo=report_tz)
         end = datetime.datetime.combine(fecha, datetime.time.max, tzinfo=report_tz)
 
-        actions = Action.objects.filter(
+        actions = scope_por_lead(Action.objects.filter(
             subcartera__cartera__nombre__iexact='Nuevo Capital',
             created_at__gte=start,
             created_at__lte=end,
-        ).select_related('lead', 'medio', 'resultado', 'user', 'phone')
+        ).select_related('lead', 'medio', 'resultado', 'user', 'phone'), request.user)
 
         if not actions.exists():
             return JsonResponse({'error': 'No hay gestiones de Nuevo Capital para esa fecha.'}, status=404)

@@ -5,10 +5,12 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.views.generic import ListView, DetailView, CreateView
 
+from lead.permissions import carteras_visibles
 from .forms import CarteraForm, SubcarteraForm
 from .models import Cartera, Subcartera
 
-CAN_MANAGE_CARTERAS = ('admin', 'owner', 'supervisor')
+# Crear/editar carteras y subcarteras: solo admin/owner (el supervisor las gestiona, no las crea).
+CAN_MANAGE_CARTERAS = ('admin', 'owner')
 
 
 class CarteraManageRequiredMixin(LoginRequiredMixin):
@@ -22,10 +24,17 @@ class CarteraListView(LoginRequiredMixin, ListView):
     model = Cartera
     context_object_name = 'carteras'
 
+    def get_queryset(self):
+        # Un supervisor solo ve sus carteras; admin/owner todas.
+        return carteras_visibles(self.request.user)
+
 
 class CarteraDetailView(LoginRequiredMixin, DetailView):
     model = Cartera
     context_object_name = 'cartera'
+
+    def get_queryset(self):
+        return carteras_visibles(self.request.user)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

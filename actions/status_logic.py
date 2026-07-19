@@ -38,18 +38,19 @@ def apply_status(lead, new_status, changed_by=None):
 
 
 def _tiene_contacto_activo(lead):
-    """True si al lead le queda algun telefono o correo en estado 'activo'."""
+    """True si al lead le queda algun telefono o correo en estado 'activo'. Una sola query
+    (tres EXISTS correlacionados en un unico round-trip, en vez de 3 consultas separadas)."""
+    from django.db.models import Exists, OuterRef, Q
     from demographics.models import Phone, IDDemographics, AvalDemographics, CONTACT_ACTIVE
 
-    if Phone.objects.filter(lead=lead, phone_number_status=CONTACT_ACTIVE).exists():
-        return True
-    if IDDemographics.objects.filter(lead=lead, principal_email_status=CONTACT_ACTIVE).exclude(principal_email='').exists():
-        return True
-    if AvalDemographics.objects.filter(
-        id_demographics__lead=lead, aval_email_status=CONTACT_ACTIVE,
-    ).exclude(aval_email='').exclude(aval_email__isnull=True).exists():
-        return True
-    return False
+    return Lead.objects.filter(pk=lead.pk).annotate(
+        _tel=Exists(Phone.objects.filter(lead=OuterRef('pk'), phone_number_status=CONTACT_ACTIVE)),
+        _mail=Exists(IDDemographics.objects.filter(
+            lead=OuterRef('pk'), principal_email_status=CONTACT_ACTIVE).exclude(principal_email='')),
+        _aval=Exists(AvalDemographics.objects.filter(
+            id_demographics__lead=OuterRef('pk'), aval_email_status=CONTACT_ACTIVE,
+        ).exclude(aval_email='').exclude(aval_email__isnull=True)),
+    ).filter(Q(_tel=True) | Q(_mail=True) | Q(_aval=True)).exists()
 
 
 def recompute_inubicable(lead, changed_by=None):

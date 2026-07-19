@@ -19,6 +19,7 @@ import re
 from django.core.management.base import BaseCommand, CommandError
 from openpyxl import load_workbook
 
+from actions.demografia_rules import desactiva_whatsapp, efecto_demografia
 from actions.models import Medio, Resultado
 from cartera.models import Cartera
 
@@ -104,6 +105,8 @@ class Command(BaseCommand):
             resultado.crea_compromiso = crea_compromiso
             resultado.requiere_fecha_pago = requiere_fecha
             resultado.efecto_pago = efecto_pago
+            resultado.efecto_demografia = efecto_demografia(nombre)
+            resultado.desactiva_whatsapp = desactiva_whatsapp(nombre)
             if created:
                 resultado.descarga_grabacion = info['es_llamada'] and con_contacto
                 resultados_creados += 1

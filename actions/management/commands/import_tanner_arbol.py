@@ -12,6 +12,7 @@ para parsear automaticamente). Este comando no necesita argumentos de archivo.
 """
 from django.core.management.base import BaseCommand, CommandError
 
+from actions.demografia_rules import desactiva_whatsapp, efecto_demografia
 from actions.models import Medio, Resultado
 from cartera.models import Cartera
 
@@ -189,6 +190,8 @@ class Command(BaseCommand):
             resultado.crea_compromiso = requiere_fecha_pago
             resultado.requiere_fecha_pago = requiere_fecha_pago
             resultado.efecto_pago = Resultado.EFECTO_PAGANDO if codigo in CODIGOS_EFECTO_PAGANDO else ''
+            resultado.efecto_demografia = efecto_demografia(respuesta)
+            resultado.desactiva_whatsapp = desactiva_whatsapp(respuesta)
             if created:
                 # Tanner no distingue por medio en su paleta -- cualquier resultado "DIRECTO"
                 # puede darse por llamada manual/discador/IVR, que si tienen grabacion.

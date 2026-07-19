@@ -23,6 +23,24 @@ from cartera.models import Cartera, Subcartera
 from demographics.models import IDDemographics, AvalDemographics, IDItem, Phone
 
 
+class _SupervisorGate(LoginRequiredMixin):
+    """Solo admin/owner/supervisor. Subir/descargar cartera no es para cobradores."""
+    def dispatch(self, request, *args, **kwargs):
+        from .permissions import es_supervisor
+        if not es_supervisor(request.user):
+            raise PermissionDenied
+        return super().dispatch(request, *args, **kwargs)
+
+
+class _AdminOwnerGate(LoginRequiredMixin):
+    """Solo admin/owner (ej. eliminar clientes)."""
+    def dispatch(self, request, *args, **kwargs):
+        from .permissions import es_admin_owner
+        if not es_admin_owner(request.user):
+            raise PermissionDenied
+        return super().dispatch(request, *args, **kwargs)
+
+
 class LeadListView(LoginRequiredMixin, ListView):
     model = Lead
 
@@ -58,10 +76,10 @@ class LeadListView(LoginRequiredMixin, ListView):
         return limit if limit in (10, 50, 100) else 10
 
     def _base_scope(self):
-        """Leads visibles para el usuario (asignados o creados por él)."""
-        return Lead.objects.filter(
-            Q(assigned_to__pk=self.request.user.pk) | Q(created_by=self.request.user)
-        )
+        """Leads visibles para el usuario segun su rol (ver lead/permissions.py):
+        cobrador = sus asignados/creados; supervisor = sus carteras; admin/owner = todo."""
+        from .permissions import leads_visibles
+        return leads_visibles(self.request.user)
 
     def get_queryset(self):
         queryset = self._base_scope().select_related('subcartera__cartera').annotate(
@@ -181,18 +199,17 @@ class LeadListView(LoginRequiredMixin, ListView):
         context['activo_choices'] = Lead.CHOICES_ACTIVO
         context['tipo_cobranza_choices'] = Lead.CHOICES_TIPO_COBRANZA
         context['aval_choices'] = Lead.CHOICES_AVAL
+        from .permissions import es_supervisor
+        context['is_supervisor'] = es_supervisor(self.request.user)
         return context
 
 class LeadDetailView(LoginRequiredMixin, DetailView):
     model = Lead
 
     def get_queryset(self):
-        queryset = super().get_queryset()
-        # Include leads created by or assigned to the current user
-        return queryset.filter(
-            Q(created_by=self.request.user) | Q(assigned_to=self.request.user),
-            pk=self.kwargs.get('pk')
-        )
+        # Alcance por rol (cobrador: suyos; supervisor: sus carteras; admin/owner: todo).
+        from .permissions import leads_visibles
+        return leads_visibles(self.request.user, base=super().get_queryset())
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -225,15 +242,10 @@ class LeadDetailView(LoginRequiredMixin, DetailView):
         context['is_supervisor'] = user_type in ('admin', 'owner', 'supervisor')
 
         return context
-class LeadDeleteView(LoginRequiredMixin, DeleteView):
+class LeadDeleteView(_AdminOwnerGate, DeleteView):
     model = Lead
     success_url = reverse_lazy('leads:list')
-   
-    def get_queryset(self):
-        queryset = super(LeadDeleteView, self).get_queryset()
 
-        return queryset.filter(created_by=self.request.user, pk=self.kwargs.get('pk'))
-    
     def get(self, request, *args, **kwargs):
         return self.post(request, *args, **kwargs)
 
@@ -270,7 +282,7 @@ def status_changes_by_date(request, period='day'):
 
     return render(request, 'lead/status_changes_list.html', {'logs': logs, 'period': period})
 
-class LeadCreateView(LoginRequiredMixin, CreateView):
+class LeadCreateView(_SupervisorGate, CreateView):
     model = Lead
     form_class = AddLeadForm
     success_url = reverse_lazy('leads:list')
@@ -296,7 +308,7 @@ class LeadCreateView(LoginRequiredMixin, CreateView):
 
 
 
-class UploadExcelFileView(LoginRequiredMixin, View):
+class UploadExcelFileView(_SupervisorGate, View):
     def get(self, request, *args, **kwargs):
         form = UploadExcelFileForm()
         return render(request, 'lead/upload_excel.html', {'form': form})
@@ -341,8 +353,9 @@ class UploadExcelFileView(LoginRequiredMixin, View):
 
         return redirect('leads:list')
 
-class DownloadExcelView(View):
+class DownloadExcelView(_SupervisorGate, View):
     def get(self, request, *args, **kwargs):
+        from .permissions import leads_visibles
         # Create your Excel file here
         workbook = openpyxl.Workbook()
         sheet = workbook.active
@@ -352,8 +365,8 @@ class DownloadExcelView(View):
         headers = ['Op','Name', 'RUT', 'DV', 'Saldo Insoluto', 'Saldo Deuda', 'Valor Cuota', 'Cuotas Atrasadas', 'Cartera', 'Subcartera', 'Tipo Cobranza', 'Status', 'Ciclo Cartera', 'Ciclo', 'Activo', 'Tiene Aval']
         sheet.append(headers)
 
-        # Add data
-        for lead in Lead.objects.select_related('subcartera__cartera').all():
+        # Add data (solo las carteras del usuario; admin/owner: todo)
+        for lead in leads_visibles(request.user, base=Lead.objects.select_related('subcartera__cartera')):
             sheet.append([
                 lead.op, lead.name, lead.rut, lead.dv, lead.saldo_insoluto, lead.saldo_deuda, lead.valor_cuota, lead.cuotas_atrasadas, lead.subcartera.cartera.nombre, lead.subcartera.nombre, lead.tipo_cobranza, lead.get_status_display(), lead.ciclo_cartera, lead.ciclo, lead.activo, lead.tiene_aval
             ])
@@ -466,7 +479,8 @@ class AssignLeadsView(LoginRequiredMixin, View):
     template_name = "lead/leads_assign.html"
 
     def get(self, request, *args, **kwargs):
-        if not hasattr(request.user, 'userprofile') or request.user.userprofile.user_type != 'supervisor':
+        from .permissions import es_supervisor
+        if not es_supervisor(request.user):
             raise PermissionDenied
 
         team = request.user.userprofile.active_team
@@ -475,7 +489,8 @@ class AssignLeadsView(LoginRequiredMixin, View):
         return render(request, self.template_name, {'form': form, 'upload_form': upload_form})
 
     def post(self, request, *args, **kwargs):
-        if not hasattr(request.user, 'userprofile') or request.user.userprofile.user_type != 'supervisor':
+        from .permissions import es_supervisor
+        if not es_supervisor(request.user):
             raise PermissionDenied
 
         team = request.user.userprofile.active_team

@@ -19,7 +19,9 @@
         <input type="date" name="fecha" id="fecha" value="{{ selected_fecha }}">
       </div>
       <button type="submit" class="btn btn-primary">Filtrar</button>
+      {% if es_supervisor %}
       <a href="{% url 'actions:commitments_export' %}?op={{ selected_op }}&cartera={{ selected_cartera }}&fecha={{ selected_fecha }}" class="btn btn-secondary">Descargar Excel</a>
+      {% endif %}
     </div>
   </form>
 

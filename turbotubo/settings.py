@@ -95,6 +95,11 @@ CELERY_RESULT_BACKEND = CELERY_BROKER_URL
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 CELERY_TIMEZONE = 'America/Santiago'
 
+# Cuantos dias se conserva el detalle de StatusChangeLog antes de purgarlo (tarea
+# purge_status_change_log). El "mejor status" NO vive aca (es un campo del lead), asi que
+# purgar el log no pierde informacion de negocio. Politica definida: 3 meses.
+STATUSLOG_RETENTION_DAYS = int(os.environ.get('STATUSLOG_RETENTION_DAYS', '90'))
+
 ROOT_URLCONF = 'turbotubo.urls'
 
 TEMPLATES = [
@@ -129,6 +134,16 @@ DATABASES = {
         'PASSWORD': os.environ.get('DB_PASSWORD', 'turbotubo'),
         'HOST': os.environ.get('DB_HOST', 'localhost'),
         'PORT': os.environ.get('DB_PORT', '5432'),
+        # Resiliencia de conexion:
+        # - CONN_MAX_AGE: reutiliza conexiones (mas rapido que abrir una por request).
+        # - CONN_HEALTH_CHECKS: Django detecta una conexion muerta y la recrea en vez de fallar
+        #   (clave si la BD se reinicia/duerme, como pasa con el contenedor local).
+        # - connect_timeout: no colgarse indefinidamente si la BD no responde -- falla rapido.
+        'CONN_MAX_AGE': int(os.environ.get('DB_CONN_MAX_AGE', '60')),
+        'CONN_HEALTH_CHECKS': True,
+        'OPTIONS': {
+            'connect_timeout': int(os.environ.get('DB_CONNECT_TIMEOUT', '5')),
+        },
     }
 }
 

@@ -47,14 +47,17 @@ class SuspensionesHomeView(SupervisorRequiredMixin, View):
         if estado not in dict(Lead.CHOICES_ACTIVO):
             estado = Lead.SUSPENDIDO
 
-        counts = {row['activo']: row['n'] for row in Lead.objects.values('activo').annotate(n=Count('id'))}
+        # Alcance por rol: un supervisor solo ve los leads de sus carteras.
+        from lead.permissions import leads_visibles
+        visibles = leads_visibles(request.user)
+        counts = {row['activo']: row['n'] for row in visibles.values('activo').annotate(n=Count('id'))}
         tarjetas = [
             {'valor': val, 'label': label, 'count': counts.get(val, 0), 'active': estado == val}
             for val, label in Lead.CHOICES_ACTIVO
         ]
 
         leads = (
-            Lead.objects.filter(activo=estado)
+            visibles.filter(activo=estado)
             .select_related('subcartera__cartera', 'assigned_to')
             .order_by('-suspendido_at', '-desasignado_at', '-terminado_at', 'name')[:300]
         )

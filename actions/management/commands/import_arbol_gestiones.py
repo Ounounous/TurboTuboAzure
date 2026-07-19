@@ -1,6 +1,7 @@
 from django.core.management.base import BaseCommand, CommandError
 from openpyxl import load_workbook
 
+from actions.demografia_rules import desactiva_whatsapp, efecto_demografia
 from actions.models import Medio, Resultado
 from cartera.models import Cartera
 
@@ -112,6 +113,8 @@ class Command(BaseCommand):
             resultado.crea_compromiso = agg['crea_compromiso']
             resultado.requiere_fecha_pago = requiere_fecha_pago
             resultado.efecto_pago = efecto_pago
+            resultado.efecto_demografia = efecto_demografia(nombre)
+            resultado.desactiva_whatsapp = desactiva_whatsapp(nombre)
             if resultado_created:
                 # Solo se fija un valor inicial al crearlo: un supervisor puede curar esto
                 # manualmente despues (que resultados de llamada guardan grabacion), y no

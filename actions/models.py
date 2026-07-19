@@ -1,7 +1,7 @@
 from datetime import timedelta
 
 from django.core.validators import FileExtensionValidator
-from django.db import models
+from django.db import models, transaction
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -201,46 +201,51 @@ class Action(models.Model):
     convert_debt_free = models.BooleanField(_('Convert Debt Free'), default=False)
 
     def save(self, *args, **kwargs):
-        if self.lead:
-            self.op = self.lead.op
-            self.subcartera = self.lead.subcartera
-            self.team = self.lead.team
-        # Automatically set target if phone or email is selected and target is not set
-        if not self.target:
-            if self.phone:
-                self.target = 'principal' if self.phone.phone_type == Phone.PRINCIPAL else 'aval'
-            elif self.email:
-                id_demographics = IDDemographics.objects.filter(lead=self.lead).first()
-                if id_demographics and self.email == id_demographics.principal_email:
-                    self.target = 'principal'
-                elif AvalDemographics.objects.filter(id_demographics__lead=self.lead, aval_email=self.email).exists():
-                    self.target = 'aval'
-        if self.resultado_id:
-            self.create_payment_commitment = self.resultado.crea_compromiso
-        super().save(*args, **kwargs)
-        if self.fecha_compromiso and self.lead_id:
-            Lead.objects.filter(pk=self.lead_id).update(fecha_compromiso_pago=self.fecha_compromiso)
-        # Si la gestion generó un compromiso de pago (resultado con crea_compromiso y una fecha),
-        # se materializa como un PaymentCommitment consultable aparte.
-        if self.create_payment_commitment and self.fecha_compromiso:
-            PaymentCommitment.objects.update_or_create(
-                action=self,
-                defaults={
-                    'lead': self.lead,
-                    'subcartera': self.subcartera,
-                    'fecha_compromiso': self.fecha_compromiso,
-                    'monto': self.monto_compromiso,
-                    'comentario': self.comment,
-                    'created_by': self.user,
-                },
-            )
-        # El status del lead se calcula solo, a partir del resultado de la gestion.
-        if self.lead_id and self.resultado_id:
-            from .status_logic import apply_status, aplicar_efecto_demografico, compute_status
-            apply_status(self.lead, compute_status(self.resultado, self.fecha_compromiso), changed_by=self.user)
-            # El resultado puede marcar el dato usado (no existe / blacklist / apaga whatsapp) y,
-            # si el lead se queda sin datos activos, dejarlo inubicable.
-            aplicar_efecto_demografico(self)
+        # Todo en una transaccion: la gestion y sus efectos derivados (compromiso, status,
+        # efecto demografico) son un solo hecho atomico. Si algo falla, no queda estado parcial
+        # (Action sin status, status sin efecto demografico, etc.); la tarea de reconciliacion
+        # (actions/tasks.reconciliar_estados) ademas sana cualquier deriva que igual se cuele.
+        with transaction.atomic():
+            if self.lead:
+                self.op = self.lead.op
+                self.subcartera = self.lead.subcartera
+                self.team = self.lead.team
+            # Automatically set target if phone or email is selected and target is not set
+            if not self.target:
+                if self.phone:
+                    self.target = 'principal' if self.phone.phone_type == Phone.PRINCIPAL else 'aval'
+                elif self.email:
+                    id_demographics = IDDemographics.objects.filter(lead=self.lead).first()
+                    if id_demographics and self.email == id_demographics.principal_email:
+                        self.target = 'principal'
+                    elif AvalDemographics.objects.filter(id_demographics__lead=self.lead, aval_email=self.email).exists():
+                        self.target = 'aval'
+            if self.resultado_id:
+                self.create_payment_commitment = self.resultado.crea_compromiso
+            super().save(*args, **kwargs)
+            if self.fecha_compromiso and self.lead_id:
+                Lead.objects.filter(pk=self.lead_id).update(fecha_compromiso_pago=self.fecha_compromiso)
+            # Si la gestion generó un compromiso de pago (resultado con crea_compromiso y una fecha),
+            # se materializa como un PaymentCommitment consultable aparte.
+            if self.create_payment_commitment and self.fecha_compromiso:
+                PaymentCommitment.objects.update_or_create(
+                    action=self,
+                    defaults={
+                        'lead': self.lead,
+                        'subcartera': self.subcartera,
+                        'fecha_compromiso': self.fecha_compromiso,
+                        'monto': self.monto_compromiso,
+                        'comentario': self.comment,
+                        'created_by': self.user,
+                    },
+                )
+            # El status del lead se calcula solo, a partir del resultado de la gestion.
+            if self.lead_id and self.resultado_id:
+                from .status_logic import apply_status, aplicar_efecto_demografico, compute_status
+                apply_status(self.lead, compute_status(self.resultado, self.fecha_compromiso), changed_by=self.user)
+                # El resultado puede marcar el dato usado (no existe / blacklist / apaga whatsapp) y,
+                # si el lead se queda sin datos activos, dejarlo inubicable.
+                aplicar_efecto_demografico(self)
 
     def __str__(self):
         return f"{self.medio.nombre} for {self.lead.op} on {self.created_at}"
@@ -367,15 +372,16 @@ class Payment(models.Model):
         verbose_name_plural = _('Pagos')
 
     def save(self, *args, **kwargs):
-        if self.lead_id and not self.subcartera_id:
-            self.subcartera = self.lead.subcartera
-        super().save(*args, **kwargs)
-        # Un pago real es la unica via a "pagando" en carteras sin gestion de pago (Tanner,
-        # Nuevo Capital). "Al dia" no es automatico por pago: solo por el resultado Galgo
-        # "PAGO / AL DIA" (via compute_status) o por el override manual de supervisor.
-        if self.lead_id:
-            from .status_logic import apply_status
-            apply_status(self.lead, Lead.PAGANDO, changed_by=self.created_by)
+        with transaction.atomic():
+            if self.lead_id and not self.subcartera_id:
+                self.subcartera = self.lead.subcartera
+            super().save(*args, **kwargs)
+            # Un pago real es la unica via a "pagando" en carteras sin gestion de pago (Tanner,
+            # Nuevo Capital). "Al dia" no es automatico por pago: solo por el resultado Galgo
+            # "PAGO / AL DIA" (via compute_status) o por el override manual de supervisor.
+            if self.lead_id:
+                from .status_logic import apply_status
+                apply_status(self.lead, Lead.PAGANDO, changed_by=self.created_by)
 
     @property
     def op(self):

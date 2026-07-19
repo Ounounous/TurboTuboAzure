@@ -10,9 +10,9 @@
             {% endif %}
             <a href="{% url 'actions:index' %}" class="nav-link">Gestiones</a>
             <a href="{% url 'actions:payments_list' %}" class="nav-link">Pagos</a>
+            <a href="{% url 'actions:commitments_list' %}" class="nav-link">Compromisos de pago</a>
             {% if request.user.userprofile.user_type in 'admin,owner,supervisor' %}
             <a href="{% url 'actions:recordings_list' %}" class="nav-link">Grabaciones</a>
-            <a href="{% url 'actions:commitments_list' %}" class="nav-link">Compromisos de pago</a>
             <a href="{% url 'suspensiones:index' %}" class="nav-link">Suspensiones</a>
             {% endif %}
             <a href="{% url 'demographics:index' %}" class="nav-link">Demografía</a>

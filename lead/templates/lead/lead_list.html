@@ -6,12 +6,14 @@
   <div class="py-6 px-6">
     <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
       <h1 class="text-xl font-bold">Clientes</h1>
+      {% if is_supervisor %}
       <div class="flex flex-wrap gap-3">
         <a href="{% url 'leads:add_lead' %}" class="btn btn-secondary">Agregar Cliente</a>
         <a href="{% url 'leads:upload-excel' %}" class="btn btn-secondary">Desde Excel</a>
         <a href="{% url 'leads:leads_assign' %}" class="btn btn-secondary">Asignaciones</a>
         <a href="{% url 'leads:download-excel' %}" class="btn btn-primary">Descargar Cartera</a>
       </div>
+      {% endif %}
     </div>
 
     <!-- Chips por status + favoritos (filtran al tocar) -->
