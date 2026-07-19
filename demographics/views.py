@@ -4,7 +4,7 @@ from io import BytesIO
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.http import HttpResponse, Http404
 from django.shortcuts import get_object_or_404, render, redirect
@@ -161,83 +161,108 @@ class UploadIDItemView(LoginRequiredMixin, View):
         return redirect('demographics:index')
 
 
-class UploadPhoneView(LoginRequiredMixin, View):
+PHONE_UPLOAD_ALIASES = {
+    'cartera': 'cartera', 'subcartera': 'subcartera',
+    'op': 'op', 'operacion': 'op', 'id': 'op',
+    'phone_number': 'phone_number', 'telefono': 'phone_number', 'numero': 'phone_number', 'fono': 'phone_number',
+    'phone_type': 'phone_type', 'tipo': 'phone_type',
+    'phone_status': 'phone_status', 'estado': 'phone_status', 'status': 'phone_status',
+}
+
+
+class UploadPhoneView(SupervisorRequiredMixin, View):
     def post(self, request, *args, **kwargs):
-        excel_file = request.FILES['excel_file']
-        wb = load_workbook(excel_file)
-        sheet = wb.active
+        from core.bulk_upload import procesar_carga
 
-        found, not_found = 0, []
+        def validar_fila(fila, rownum):
+            errores = []
+            numero = str(fila.get('phone_number') or '').strip()
+            if not numero:
+                errores.append('teléfono: vacío')
+            lead = find_lead(fila.get('cartera'), fila.get('subcartera'), fila.get('op'))
+            if not lead:
+                errores.append(f'no se encontró el lead OP={fila.get("op")} en {fila.get("cartera")}/{fila.get("subcartera")}')
+
+            tipo_raw = str(fila.get('phone_type') or '').strip().lower()
+            tipo = Phone.AVAL if tipo_raw in ('aval',) else Phone.PRINCIPAL
+            if tipo_raw and tipo_raw not in ('principal', 'aval'):
+                errores.append(f'tipo: "{fila.get("phone_type")}" inválido (principal/aval)')
+
+            estado_raw = fila.get('phone_status')
+            estado = _norm_status(estado_raw) if estado_raw not in (None, '') else Phone.ACTIVE
+            if estado_raw not in (None, '') and not estado:
+                errores.append(f'estado: "{estado_raw}" inválido (activo/no existe/fuera de servicio/blacklist)')
+
+            if errores:
+                return None, errores
+            return {'lead': lead, 'numero': numero, 'tipo': tipo, 'estado': estado}, []
+
+        resultado = procesar_carga(
+            request.FILES.get('excel_file'), PHONE_UPLOAD_ALIASES,
+            ('cartera', 'subcartera', 'op', 'phone_number'), validar_fila,
+            nombre_archivo='errores_telefonos.xlsx',
+        )
+        if not resultado.ok:
+            return resultado.respuesta_error
+
         leads_tocados = set()
-        for row_number, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
-            cartera, subcartera, op, phone_number, phone_type, phone_status = row[:6]
-            lead = find_lead(cartera, subcartera, op)
-            if lead:
-                phone, created = Phone.objects.get_or_create(lead=lead, phone_number=phone_number)
-                phone.phone_type = phone_type
-                # Normaliza el estado (acepta español/inglés); si no viene o es inválido, queda activo.
-                phone.phone_number_status = _norm_status(phone_status) or Phone.ACTIVE
+        with transaction.atomic():
+            for f in resultado.filas:
+                phone, _ = Phone.objects.get_or_create(lead=f['lead'], phone_number=f['numero'])
+                phone.phone_type = f['tipo']
+                phone.phone_number_status = f['estado']
                 phone.save()
-                leads_tocados.add(lead.pk)
-                found += 1
-            else:
-                not_found.append(f"Fila {row_number}: no se encontró el lead OP={op} en Cartera={cartera}, Subcartera={subcartera}")
+                leads_tocados.add(f['lead'].pk)
+            _recompute_inubicable_bulk(leads_tocados, request.user)
 
-        _recompute_inubicable_bulk(leads_tocados, request.user)
-        if found:
-            messages.success(request, f"{found} teléfono(s) cargado(s) correctamente")
-        for error in not_found:
-            messages.error(request, error)
-
+        messages.success(request, f"{len(resultado.filas)} teléfono(s) cargado(s) correctamente.")
         return redirect('demographics:index')
 
 
-class UploadIDDemographicsView(LoginRequiredMixin, View):
+EMAIL_UPLOAD_ALIASES = {
+    'cartera': 'cartera', 'subcartera': 'subcartera',
+    'op': 'op', 'operacion': 'op', 'id': 'op',
+    'principal_email': 'email', 'email': 'email', 'mail': 'email',
+    'correo': 'email', 'correo_electronico': 'email',
+}
+
+
+class UploadIDDemographicsView(SupervisorRequiredMixin, View):
     def post(self, request, *args, **kwargs):
-        excel_file = request.FILES['excel_file']
-        wb = load_workbook(excel_file)
-        sheet = wb.active
+        from core.bulk_upload import procesar_carga
 
-        header_row = next(sheet.iter_rows(min_row=1, max_row=1, values_only=True), ())
-        header = [_normalize_header(h) for h in header_row]
-        # Busca la columna de email por nombre (acepta 'principal_email', 'email', 'mail',
-        # 'correo', etc, sin importar en qué posición venga ni si hay columnas extra como
-        # 'tipo'). Si no encuentra ninguna coincidencia, cae de vuelta a la 4ta columna
-        # (comportamiento de la plantilla original: cartera, subcartera, op, principal_email).
-        email_col = next((i for i, h in enumerate(header) if h in EMAIL_COLUMN_ALIASES), 3)
+        def validar_fila(fila, rownum):
+            errores = []
+            correo = str(fila.get('email') or '').strip()
+            if not correo:
+                errores.append('correo: vacío')
+            elif '@' not in correo:
+                errores.append(f'correo: "{correo}" no parece un email válido')
+            lead = find_lead(fila.get('cartera'), fila.get('subcartera'), fila.get('op'))
+            if not lead:
+                errores.append(f'no se encontró el lead OP={fila.get("op")} en {fila.get("cartera")}/{fila.get("subcartera")}')
+            if errores:
+                return None, errores
+            return {'lead': lead, 'correo': correo}, []
 
-        found, errors = 0, []
+        resultado = procesar_carga(
+            request.FILES.get('excel_file'), EMAIL_UPLOAD_ALIASES,
+            ('cartera', 'subcartera', 'op', 'email'), validar_fila,
+            nombre_archivo='errores_correos.xlsx',
+        )
+        if not resultado.ok:
+            return resultado.respuesta_error
+
         leads_tocados = set()
-        for row_number, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
-            if len(row) < 3:
-                continue
-            cartera, subcartera, op = row[0], row[1], row[2]
-            principal_email = row[email_col] if email_col < len(row) else None
+        with transaction.atomic():
+            for f in resultado.filas:
+                idd, _ = IDDemographics.objects.get_or_create(lead=f['lead'])
+                idd.principal_email = f['correo']
+                idd.save()
+                leads_tocados.add(f['lead'].pk)
+            _recompute_inubicable_bulk(leads_tocados, request.user)
 
-            if principal_email and '@' not in str(principal_email):
-                columna = header_row[email_col] if email_col < len(header_row) else email_col
-                errors.append(
-                    f"Fila {row_number}: '{principal_email}' (columna '{columna}') no parece un correo válido, se omitió."
-                )
-                continue
-
-            lead = find_lead(cartera, subcartera, op)
-            if lead:
-                id_demographics, created = IDDemographics.objects.get_or_create(lead=lead)
-                id_demographics.principal_email = principal_email
-                id_demographics.save()
-                leads_tocados.add(lead.pk)
-                found += 1
-            else:
-                errors.append(f"Fila {row_number}: no se encontró el lead OP={op} en Cartera={cartera}, Subcartera={subcartera}")
-
-        _recompute_inubicable_bulk(leads_tocados, request.user)
-        if found:
-            messages.success(request, f"{found} email(s) cargado(s) correctamente")
-        if errors:
-            for error in errors:
-                messages.error(request, error)
-
+        messages.success(request, f"{len(resultado.filas)} email(s) cargado(s) correctamente.")
         return redirect('demographics:index')
 
 

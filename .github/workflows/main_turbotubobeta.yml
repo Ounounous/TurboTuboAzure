@@ -6,8 +6,10 @@ on:
   workflow_dispatch:
 
 env:
-  PYTHON_VERSION: '3.9'  # Match Azure's Python version
+  PYTHON_VERSION: '3.12'  # Debe coincidir con la version del App Service
   DJANGO_SETTINGS_MODULE: turbotubo.deployment
+  # App Service destino. Cambiar por el nombre de la app nueva antes del primer deploy.
+  AZURE_WEBAPP_NAME: turbotubobeta
 
 jobs:
   build-and-deploy:
@@ -43,7 +45,10 @@ jobs:
       - name: Deploy to Azure
         uses: azure/webapps-deploy@v3
         with:
-          app-name: 'turbotubobeta'
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
           slot-name: 'Production'
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           package: .
+      # Las migraciones NO se corren aca (el runner de GitHub no llega a la BD de Azure por
+      # firewall): las corre el startup.sh del App Service en cada arranque. Configurar una vez:
+      #   az webapp config set -g <RG> -n <APP> --startup-file "startup.sh"

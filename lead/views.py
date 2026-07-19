@@ -308,49 +308,178 @@ class LeadCreateView(_SupervisorGate, CreateView):
 
 
 
+# Encabezados aceptados para la carga de clientes: el MISMO formato que produce "Descargar
+# Cartera" (bajar, corregir y resubir funciona directo). Las columnas se detectan por nombre,
+# no por posicion, asi que el orden y las columnas extra no importan.
+LEAD_UPLOAD_ALIASES = {
+    'op': 'op', 'operacion': 'op', 'id': 'op',
+    'name': 'name', 'nombre': 'name', 'cliente': 'name',
+    'rut': 'rut',
+    'dv': 'dv',
+    'saldo_insoluto': 'saldo_insoluto', 'insoluto': 'saldo_insoluto',
+    'saldo_deuda': 'saldo_deuda', 'deuda': 'saldo_deuda',
+    'valor_cuota': 'valor_cuota', 'cuota': 'valor_cuota',
+    'cuotas_atrasadas': 'cuotas_atrasadas', 'atrasadas': 'cuotas_atrasadas',
+    'cartera': 'cartera',
+    'subcartera': 'subcartera',
+    'tipo_cobranza': 'tipo_cobranza',
+    'ciclo_cartera': 'ciclo_cartera',
+    'ciclo': 'ciclo',
+    'activo': 'activo',
+    'tiene_aval': 'tiene_aval', 'aval': 'tiene_aval',
+    # 'status' se ignora a proposito: el status se calcula solo (actions/status_logic.py).
+}
+
+LEAD_UPLOAD_REQUERIDAS = (
+    'op', 'name', 'rut', 'dv', 'saldo_insoluto', 'saldo_deuda', 'valor_cuota', 'cuotas_atrasadas',
+)
+
+
+def _parse_entero(valor, campo, errores, minimo=0):
+    """Acepta numeros de Excel o texto con $ / separadores de miles. None si es invalido."""
+    if valor in (None, ''):
+        errores.append(f'{campo}: vacío')
+        return None
+    if isinstance(valor, (int, float)):
+        return int(valor)
+    texto = str(valor).strip().replace('$', '').replace('.', '').replace(',', '').replace(' ', '')
+    try:
+        numero = int(texto)
+    except ValueError:
+        errores.append(f'{campo}: "{valor}" no es un número')
+        return None
+    if numero < minimo:
+        errores.append(f'{campo}: no puede ser negativo')
+        return None
+    return numero
+
+
+def _parse_choice(valor, choices, default, campo, errores):
+    """Vacío -> default. Acepta el valor interno o la etiqueta, sin importar mayúsculas/espacios."""
+    if valor in (None, ''):
+        return default
+    v = str(valor).strip().lower().replace(' ', '')
+    for interno, etiqueta in choices:
+        if v in (interno.lower().replace(' ', ''), str(etiqueta).strip().lower().replace(' ', '')):
+            return interno
+    errores.append(f'{campo}: "{valor}" no es un valor válido ({", ".join(i for i, _ in choices)})')
+    return default
+
+
 class UploadExcelFileView(_SupervisorGate, View):
     def get(self, request, *args, **kwargs):
         form = UploadExcelFileForm()
         return render(request, 'lead/upload_excel.html', {'form': form})
 
     def post(self, request, *args, **kwargs):
+        from core.bulk_upload import procesar_carga
+
         form = UploadExcelFileForm(request.POST, request.FILES)
+        if not form.is_valid():
+            messages.error(request, 'Selecciona la cartera y el archivo Excel.')
+            return redirect('leads:upload-excel')
 
-        if form.is_valid():
-            cartera = form.cleaned_data['cartera']
-            subcartera = cartera.subcartera_default
-            excel_file = form.cleaned_data['excel_file']
-            wb = load_workbook(excel_file)
-            sheet = wb.active
-            data = []
-            for row in sheet.iter_rows(min_row=2, values_only=True):
-                data.append(row)
-            for row in data:
-                lead = Lead(
-                    op=row[0],
-                    name=row[1],
-                    rut=row[2],
-                    dv=row[3],
-                    saldo_insoluto=row[4],
-                    saldo_deuda=row[5],
-                    valor_cuota=row[6],
-                    cuotas_atrasadas=row[7],
-                    subcartera=subcartera,
-                    tipo_cobranza=row[8],
-                    # status ya no se importa: parte en "recien asignado" (default del modelo)
-                    # y de ahi en adelante se calcula solo (ver actions/status_logic.py).
-                    ciclo_cartera=row[10],
-                    ciclo=row[11],
-                    activo=row[12],
-                    tiene_aval=row[13],
-                    created_by=self.request.user,
-                    assigned_to=self.request.user,
-                    team=self.request.user.userprofile.active_team,
+        cartera = form.cleaned_data['cartera']
+        excel_file = form.cleaned_data['excel_file']
+
+        # Para validar duplicados sin una query por fila.
+        ops_existentes = {
+            op.strip().upper()
+            for op in Lead.objects.filter(subcartera__cartera=cartera).values_list('op', flat=True)
+        }
+        ops_en_archivo = set()
+
+        def validar_fila(fila, rownum):
+            errores = []
+            op = str(fila.get('op') or '').strip()
+            if not op:
+                errores.append('op: vacío')
+            else:
+                if op.upper() in ops_existentes:
+                    errores.append(f'op: "{op}" ya existe en la cartera {cartera.nombre}')
+                if op.upper() in ops_en_archivo:
+                    errores.append(f'op: "{op}" está repetido en este archivo')
+                ops_en_archivo.add(op.upper())
+
+            name = str(fila.get('name') or '').strip()
+            if not name:
+                errores.append('nombre: vacío')
+
+            rut = _parse_entero(fila.get('rut'), 'rut', errores, minimo=1)
+            dv = str(fila.get('dv') or '').strip().upper()
+            if not dv or len(dv) > 1:
+                errores.append(f'dv: "{fila.get("dv")}" inválido (un dígito o K)')
+
+            saldo_insoluto = _parse_entero(fila.get('saldo_insoluto'), 'saldo_insoluto', errores)
+            saldo_deuda = _parse_entero(fila.get('saldo_deuda'), 'saldo_deuda', errores)
+            valor_cuota = _parse_entero(fila.get('valor_cuota'), 'valor_cuota', errores)
+            cuotas = _parse_entero(fila.get('cuotas_atrasadas'), 'cuotas_atrasadas', errores)
+
+            # Si el Excel trae columna cartera, debe coincidir con la cartera elegida en el
+            # formulario (evita subir la cartera equivocada de un archivo descargado).
+            cartera_archivo = str(fila.get('cartera') or '').strip()
+            if cartera_archivo and cartera_archivo.lower() != cartera.nombre.lower():
+                errores.append(f'cartera: el archivo dice "{cartera_archivo}" pero elegiste "{cartera.nombre}"')
+
+            tipo_cobranza = _parse_choice(
+                fila.get('tipo_cobranza'), Lead.CHOICES_TIPO_COBRANZA, Lead.EXTRAJUDICIAL, 'tipo_cobranza', errores)
+            ciclo_cartera = _parse_choice(
+                fila.get('ciclo_cartera'), Lead.CHOICES_CICLO_CARTERA, Lead.VIGENTE, 'ciclo_cartera', errores)
+            ciclo = _parse_choice(fila.get('ciclo'), Lead.CHOICES_CICLO, Lead.NO_DEFINIDO, 'ciclo', errores)
+            activo = _parse_choice(fila.get('activo'), Lead.CHOICES_ACTIVO, Lead.ACTIVO, 'activo', errores)
+            tiene_aval = _parse_choice(fila.get('tiene_aval'), Lead.CHOICES_AVAL, Lead.NO, 'tiene_aval', errores)
+
+            if errores:
+                return None, errores
+            return {
+                'op': op, 'name': name, 'rut': rut, 'dv': dv,
+                'saldo_insoluto': saldo_insoluto, 'saldo_deuda': saldo_deuda,
+                'valor_cuota': valor_cuota, 'cuotas_atrasadas': cuotas,
+                'subcartera_nombre': str(fila.get('subcartera') or '').strip(),
+                'tipo_cobranza': tipo_cobranza, 'ciclo_cartera': ciclo_cartera,
+                'ciclo': ciclo, 'activo': activo, 'tiene_aval': tiene_aval,
+            }, []
+
+        resultado = procesar_carga(
+            excel_file, LEAD_UPLOAD_ALIASES, LEAD_UPLOAD_REQUERIDAS, validar_fila,
+            nombre_archivo=f'errores_clientes_{cartera.slug}.xlsx',
+        )
+        if not resultado.ok:
+            # Nada se guardó: se devuelve el mismo Excel con la columna ERRORES.
+            return resultado.respuesta_error
+
+        # Todo válido: se guarda completo en una sola transacción.
+        with transaction.atomic():
+            sub_default = cartera.subcartera_default
+            sub_cache = {}
+
+            def subcartera_para(nombre):
+                if not nombre:
+                    return sub_default
+                clave = nombre.lower()
+                if clave not in sub_cache:
+                    sub = Subcartera.objects.filter(cartera=cartera, nombre__iexact=nombre).first()
+                    if not sub:
+                        sub = Subcartera.objects.create(cartera=cartera, nombre=nombre)
+                    sub_cache[clave] = sub
+                return sub_cache[clave]
+
+            team = request.user.userprofile.active_team
+            nuevos = [
+                Lead(
+                    op=f['op'], name=f['name'], rut=f['rut'], dv=f['dv'],
+                    saldo_insoluto=f['saldo_insoluto'], saldo_deuda=f['saldo_deuda'],
+                    valor_cuota=f['valor_cuota'], cuotas_atrasadas=f['cuotas_atrasadas'],
+                    subcartera=subcartera_para(f['subcartera_nombre']),
+                    tipo_cobranza=f['tipo_cobranza'], ciclo_cartera=f['ciclo_cartera'],
+                    ciclo=f['ciclo'], activo=f['activo'], tiene_aval=f['tiene_aval'],
+                    created_by=request.user, assigned_to=request.user, team=team,
                 )
-                lead.save()
+                for f in resultado.filas
+            ]
+            Lead.objects.bulk_create(nuevos, batch_size=500)
 
-            return redirect('leads:list')
-
+        messages.success(request, f'{len(resultado.filas)} cliente(s) cargado(s) en {cartera.nombre}.')
         return redirect('leads:list')
 
 class DownloadExcelView(_SupervisorGate, View):

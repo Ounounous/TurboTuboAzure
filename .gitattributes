@@ -1,2 +1,6 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Scripts que corren en Linux (Azure App Service) SIEMPRE con LF, aunque se editen en Windows.
+*.sh text eol=lf
+startup.sh text eol=lf

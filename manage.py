@@ -6,7 +6,10 @@ import sys
 
 def main():
     """Run administrative tasks."""
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'turbotubo.settings')
+    # En Azure (WEBSITE_HOSTNAME presente) usa el settings de produccion, igual que wsgi.py,
+    # para que migrate/collectstatic corran contra la BD y config correctas.
+    settings_module = 'turbotubo.deployment' if 'WEBSITE_HOSTNAME' in os.environ else 'turbotubo.settings'
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', settings_module)
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:

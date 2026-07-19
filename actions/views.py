@@ -4,6 +4,7 @@ import zipfile
 from django.contrib import messages
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.db.models import Q, Sum, Count, Max
 from django.shortcuts import get_object_or_404, redirect,render
 from django.urls import reverse
@@ -932,47 +933,14 @@ class BulkActionUploadView(SupervisorRequiredMixin, View):
         return render(request, self.template_name)
 
     def post(self, request, *args, **kwargs):
-        excel_file = request.FILES.get('excel_file')
-        if not excel_file:
-            messages.error(request, 'Debes seleccionar un archivo Excel.')
-            return redirect('actions:bulk_upload')
-
-        try:
-            wb = load_workbook(excel_file, data_only=True)
-        except Exception:
-            messages.error(request, 'No se pudo leer el archivo. Debe ser un Excel (.xlsx) válido.')
-            return redirect('actions:bulk_upload')
-
-        sheet = wb.active
-        header_row = next(sheet.iter_rows(min_row=1, max_row=1, values_only=True), ())
-        colmap = {}
-        for idx, raw in enumerate(header_row):
-            key = BULK_COLUMN_ALIASES.get(_normalize_header(raw))
-            if key and key not in colmap:
-                colmap[key] = idx
-
-        faltan = [c for c in ('cartera', 'subcartera', 'op', 'medio', 'resultado') if c not in colmap]
-        if faltan:
-            messages.error(request, 'Faltan columnas obligatorias en el Excel: ' + ', '.join(faltan) + '.')
-            return redirect('actions:bulk_upload')
-
-        def cell(row, key):
-            idx = colmap.get(key)
-            if idx is None or idx >= len(row):
-                return None
-            val = row[idx]
-            return val
+        from core.bulk_upload import procesar_carga
 
         report_tz = datetime.timezone(datetime.timedelta(hours=-4))
-        medios_cache = {}      # cartera_id -> {nombre_upper: Medio}
-        resultados_cache = {}  # cartera_id -> {'exact': {(nom,tipo): r}, 'by_name': {nom: [r,...]}}
-        user_cache = {}        # username_lower -> User or None
+        medios_cache, resultados_cache, user_cache = {}, {}, {}
 
         def get_medios(cartera):
             if cartera.id not in medios_cache:
-                medios_cache[cartera.id] = {
-                    m.nombre.strip().upper(): m for m in Medio.objects.filter(cartera=cartera)
-                }
+                medios_cache[cartera.id] = {m.nombre.strip().upper(): m for m in Medio.objects.filter(cartera=cartera)}
             return medios_cache[cartera.id]
 
         def get_resultados(cartera):
@@ -993,51 +961,40 @@ class BulkActionUploadView(SupervisorRequiredMixin, View):
                 user_cache[key] = User.objects.filter(username__iexact=key).first()
             return user_cache[key]
 
-        creadas, errores = 0, []
-        for rownum, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
-            if not row or all(v in (None, '') for v in row):
-                continue
-
-            cartera_nom = cell(row, 'cartera')
-            subcartera_nom = cell(row, 'subcartera')
-            op = cell(row, 'op')
-            medio_nom = cell(row, 'medio')
-            resultado_nom = cell(row, 'resultado')
-
+        def validar_fila(fila, rownum):
+            errores = []
+            cartera_nom, subcartera_nom, op = fila.get('cartera'), fila.get('subcartera'), fila.get('op')
+            medio_nom, resultado_nom = fila.get('medio'), fila.get('resultado')
             if not (cartera_nom and subcartera_nom and op and medio_nom and resultado_nom):
-                errores.append(f'Fila {rownum}: faltan datos obligatorios (cartera, subcartera, op, medio o resultado).')
-                continue
+                return None, ['faltan datos obligatorios (cartera, subcartera, op, medio o resultado)']
 
             lead = find_lead(cartera_nom, subcartera_nom, op)
             if not lead:
-                errores.append(f'Fila {rownum}: no se encontró el lead OP={op} en {cartera_nom} / {subcartera_nom}.')
-                continue
+                return None, [f'no se encontró el lead OP={op} en {cartera_nom} / {subcartera_nom}']
 
             cartera = lead.subcartera.cartera
             medio = get_medios(cartera).get(str(medio_nom).strip().upper())
             if not medio:
-                errores.append(f'Fila {rownum}: la cartera {cartera.nombre} no tiene el medio "{medio_nom}".')
-                continue
+                errores.append(f'la cartera {cartera.nombre} no tiene el medio "{medio_nom}"')
 
             res_data = get_resultados(cartera)
             nom_up = str(resultado_nom).strip().upper()
-            sub_estado = cell(row, 'sub_estado')
+            sub_estado = fila.get('sub_estado')
+            resultado = None
             if sub_estado:
                 resultado = res_data['exact'].get((nom_up, str(sub_estado).strip().upper()))
                 if not resultado:
-                    errores.append(f'Fila {rownum}: no existe el resultado "{resultado_nom}" con sub estado "{sub_estado}" en {cartera.nombre}.')
-                    continue
+                    errores.append(f'no existe el resultado "{resultado_nom}" con sub estado "{sub_estado}" en {cartera.nombre}')
             else:
                 candidatos = res_data['by_name'].get(nom_up, [])
                 if not candidatos:
-                    errores.append(f'Fila {rownum}: la cartera {cartera.nombre} no tiene el resultado "{resultado_nom}".')
-                    continue
-                if len(candidatos) > 1:
-                    errores.append(f'Fila {rownum}: el resultado "{resultado_nom}" es ambiguo en {cartera.nombre}; agrega la columna sub_estado.')
-                    continue
-                resultado = candidatos[0]
+                    errores.append(f'la cartera {cartera.nombre} no tiene el resultado "{resultado_nom}"')
+                elif len(candidatos) > 1:
+                    errores.append(f'el resultado "{resultado_nom}" es ambiguo en {cartera.nombre}; agrega la columna sub_estado')
+                else:
+                    resultado = candidatos[0]
 
-            telefono = cell(row, 'telefono')
+            telefono = fila.get('telefono')
             phone_obj = None
             if telefono:
                 digits = re.sub(r'\D', '', str(telefono))
@@ -1047,47 +1004,50 @@ class BulkActionUploadView(SupervisorRequiredMixin, View):
                             phone_obj = p
                             break
 
-            email = cell(row, 'email')
-            email = str(email).strip() if email else None
+            email = str(fila.get('email') or '').strip() or None
             if email and '@' not in email:
                 email = None
 
-            action = Action(
-                lead=lead,
-                medio=medio,
-                resultado=resultado,
-                user=get_user(cell(row, 'usuario')) or request.user,
-                comment=str(cell(row, 'comentario') or ''),
-                phone=phone_obj,
-                email=email if not phone_obj else None,
-            )
-            try:
+            fecha_raw = fila.get('fecha_gestion')
+            fecha_gestion = _bulk_parse_date(fecha_raw)
+            if fecha_raw not in (None, '') and not fecha_gestion:
+                errores.append(f'fecha_gestion: "{fecha_raw}" no es una fecha válida')
+
+            if errores:
+                return None, errores
+            return {
+                'lead': lead, 'medio': medio, 'resultado': resultado,
+                'user': get_user(fila.get('usuario')) or request.user,
+                'comment': str(fila.get('comentario') or ''),
+                'phone': phone_obj, 'email': email if not phone_obj else None,
+                'fecha_gestion': fecha_gestion, 'hora_gestion': _bulk_parse_time(fila.get('hora_gestion')),
+            }, []
+
+        resultado = procesar_carga(
+            request.FILES.get('excel_file'), BULK_COLUMN_ALIASES,
+            ('cartera', 'subcartera', 'op', 'medio', 'resultado'), validar_fila,
+            nombre_archivo='errores_gestiones.xlsx',
+        )
+        if not resultado.ok:
+            return resultado.respuesta_error
+
+        # Todo válido: se guardan las gestiones en una sola transacción (Action.save calcula el
+        # status, efecto demográfico, etc., por gestión).
+        with transaction.atomic():
+            for f in resultado.filas:
+                action = Action(
+                    lead=f['lead'], medio=f['medio'], resultado=f['resultado'], user=f['user'],
+                    comment=f['comment'], phone=f['phone'], email=f['email'],
+                )
                 action.save()
-            except Exception as exc:
-                errores.append(f'Fila {rownum}: no se pudo guardar ({exc}).')
-                continue
+                if f['fecha_gestion']:
+                    # created_at es auto_now_add; para respetar la fecha real de la campaña se
+                    # sobrescribe. Sin hora se usa mediodía (UTC-4) para caer en el día correcto.
+                    hora = f['hora_gestion'] or datetime.time(12, 0)
+                    dt = datetime.datetime.combine(f['fecha_gestion'], hora, tzinfo=report_tz)
+                    Action.objects.filter(pk=action.pk).update(created_at=dt)
 
-            fecha_gestion = _bulk_parse_date(cell(row, 'fecha_gestion'))
-            if fecha_gestion:
-                # created_at es auto_now_add; para respetar la fecha/hora real de la campaña se
-                # sobrescribe con un UPDATE. Si no viene hora, se usa mediodía (UTC-4) para caer
-                # en el día correcto del reporte.
-                hora = _bulk_parse_time(cell(row, 'hora_gestion')) or datetime.time(12, 0)
-                dt = datetime.datetime.combine(fecha_gestion, hora, tzinfo=report_tz)
-                Action.objects.filter(pk=action.pk).update(created_at=dt)
-
-            creadas += 1
-
-        if creadas:
-            messages.success(request, f'{creadas} gestión(es) cargada(s) correctamente.')
-        if errores:
-            for e in errores[:100]:
-                messages.error(request, e)
-            if len(errores) > 100:
-                messages.error(request, f'... y {len(errores) - 100} error(es) más.')
-        if not creadas and not errores:
-            messages.error(request, 'El archivo no tenía filas de datos.')
-
+        messages.success(request, f'{len(resultado.filas)} gestión(es) cargada(s) correctamente.')
         return redirect('actions:bulk_upload')
 
 
