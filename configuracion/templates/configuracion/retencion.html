@@ -1,0 +1,36 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Retención de datos{% endblock %}
+
+{% block content %}
+<div class="py-6 px-6">
+  <h1 class="text-xl mb-1">Configuración</h1>
+  {% include 'configuracion/_subnav.html' with active='retencion' %}
+
+  <p class="muted mb-4" style="font-size:12.5px;">
+    Plazos de retención de datos. Las grabaciones tienen su propio plazo legal fijo (2 años) y no se editan aquí.
+  </p>
+
+  <form method="post" action="{% url 'configuracion:retencion' %}" class="card p-4" style="border:1px solid var(--border); border-radius:10px; max-width:520px;">
+    {% csrf_token %}
+    <div class="kv-list">
+      <div class="kv">
+        <span class="k">Purga de gestiones — terminado</span>
+        <span class="v"><input type="number" name="dias_purga_terminado" min="1" value="{{ config.dias_purga_terminado }}" style="width:90px; text-align:right;"> días</span>
+      </div>
+      <div class="kv">
+        <span class="k">Purga de gestiones — desasignado</span>
+        <span class="v"><input type="number" name="dias_purga_desasignado" min="1" value="{{ config.dias_purga_desasignado }}" style="width:90px; text-align:right;"> días</span>
+      </div>
+      <div class="kv">
+        <span class="k">Historial de cambios de status</span>
+        <span class="v"><input type="number" name="dias_retencion_statuslog" min="1" value="{{ config.dias_retencion_statuslog }}" style="width:90px; text-align:right;"> días</span>
+      </div>
+    </div>
+    <button type="submit" class="btn btn-primary mt-4">Guardar</button>
+    {% if config.updated_by %}
+      <p class="muted mt-2" style="font-size:11.5px;">Últ. cambio: {{ config.updated_at|date:"d-m-Y H:i" }} · {{ config.updated_by.username }}</p>
+    {% endif %}
+  </form>
+</div>
+{% endblock %}

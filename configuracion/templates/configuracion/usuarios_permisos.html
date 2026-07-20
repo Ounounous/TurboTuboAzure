@@ -1,0 +1,76 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Usuarios y Permisos{% endblock %}
+
+{% block content %}
+<div class="py-6 px-6">
+  <h1 class="text-xl mb-1">Configuración</h1>
+  {% include 'configuracion/_subnav.html' with active='usuarios' %}
+
+  <h2 class="text-lg font-bold mb-2">Carteras por supervisor</h2>
+  <p class="muted mb-3" style="font-size:12.5px;">
+    Un supervisor solo ve y gestiona las carteras donde está asignado acá (admin/owner ven todas siempre).
+    Una cartera puede tener más de un supervisor.
+  </p>
+  <div class="card mb-8" style="border:1px solid var(--border); border-radius:10px;">
+    <div class="overflow-x-auto">
+      <table class="table-dense">
+        <thead><tr><th>Cartera</th><th>Supervisores asignados</th><th>Guardar</th></tr></thead>
+        <tbody>
+          {% for cartera in carteras %}
+            <tr>
+              <td class="op">{{ cartera.nombre }}</td>
+              <td colspan="2">
+                <form method="post" action="{% url 'configuracion:usuarios_permisos' %}" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                  {% csrf_token %}
+                  <input type="hidden" name="accion" value="asignar_supervisores">
+                  <input type="hidden" name="cartera_id" value="{{ cartera.id }}">
+                  <select name="supervisores" multiple size="3" style="min-width:260px;">
+                    {% for u in supervisores_disponibles %}
+                      <option value="{{ u.id }}" {% if u in cartera.supervisores.all %}selected{% endif %}>{{ u.username }} ({{ u.userprofile.get_user_type_display }})</option>
+                    {% endfor %}
+                  </select>
+                  <button type="submit" class="btn btn-secondary" style="font-size:11.5px; padding:4px 10px;">Guardar</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <h2 class="text-lg font-bold mb-2">Usuarios</h2>
+  <p class="muted mb-3" style="font-size:12.5px;">
+    Rol de cada usuario. admin/owner ven todo; supervisor solo sus carteras (arriba); cobrador solo sus clientes asignados.
+  </p>
+  <div class="card mb-6" style="border:1px solid var(--border); border-radius:10px;">
+    <div class="overflow-x-auto">
+      <table class="table-dense">
+        <thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Guardar</th></tr></thead>
+        <tbody>
+          {% for u in usuarios %}
+            <tr>
+              <td class="op">{{ u.username }}</td>
+              <td>{{ u.get_full_name|default:"—" }}</td>
+              <td colspan="2">
+                <form method="post" action="{% url 'configuracion:usuarios_permisos' %}" style="display:flex; gap:8px; align-items:center;">
+                  {% csrf_token %}
+                  <input type="hidden" name="accion" value="cambiar_tipo">
+                  <input type="hidden" name="user_id" value="{{ u.id }}">
+                  <select name="user_type">
+                    {% for val, label in tipos %}
+                      <option value="{{ val }}" {% if u.userprofile.user_type == val %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                  <button type="submit" class="btn btn-secondary" style="font-size:11.5px; padding:4px 10px;">Guardar</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

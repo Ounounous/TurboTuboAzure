@@ -255,14 +255,23 @@ def reconciliar_estados():
 @shared_task(**RETRY_DB)
 def purge_status_change_log(dias=None):
     """
-    Acota el crecimiento de StatusChangeLog: borra registros mas viejos que `dias` (default 365,
-    o STATUSLOG_RETENTION_DAYS en settings). El historico "mejor status" NO vive aca (es un campo
-    del lead), asi que purgar el log no pierde informacion de negocio, solo el detalle antiguo.
+    Acota el crecimiento de StatusChangeLog: borra registros mas viejos que `dias`. El historico
+    "mejor status" NO vive aca (es un campo del lead), asi que purgar el log no pierde
+    informacion de negocio, solo el detalle antiguo.
+
+    El plazo se puede fijar por parametro (para pruebas), y si no, sale de
+    RetentionSettings.dias_retencion_statuslog (editable en Configuracion -> Retencion de
+    datos), con STATUSLOG_RETENTION_DAYS de settings como ultimo fallback.
     """
     from django.conf import settings
     from lead.models import StatusChangeLog
 
-    dias = dias or getattr(settings, 'STATUSLOG_RETENTION_DAYS', 90)
+    if dias is None:
+        try:
+            from suspensiones.models import RetentionSettings
+            dias = RetentionSettings.get_solo().dias_retencion_statuslog
+        except Exception:
+            dias = getattr(settings, 'STATUSLOG_RETENTION_DAYS', 90)
     corte = timezone.now() - timedelta(days=dias)
     borrados, _ = StatusChangeLog.objects.filter(timestamp__lt=corte).delete()
     logger.info(f"purge_status_change_log: {borrados} registro(s) mas viejos que {dias} dias eliminados")

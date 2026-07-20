@@ -1,0 +1,6 @@
+{% comment %}Sub-navegación de Configuración. `active` = index | usuarios | retencion.{% endcomment %}
+<div class="chips mb-4">
+  <a href="{% url 'configuracion:index' %}" class="chip {% if active == 'index' %}active{% endif %}">⚙️ Configuración</a>
+  <a href="{% url 'configuracion:usuarios_permisos' %}" class="chip {% if active == 'usuarios' %}active{% endif %}">👥 Usuarios y Permisos</a>
+  <a href="{% url 'configuracion:retencion' %}" class="chip {% if active == 'retencion' %}active{% endif %}">🗄️ Retención de datos</a>
+</div>

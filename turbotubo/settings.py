@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'actions',
     'cartera',
+    'configuracion',
     'core',
     'dashboard',
     'demographics',

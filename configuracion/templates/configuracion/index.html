@@ -1,0 +1,22 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Configuración{% endblock %}
+
+{% block content %}
+<div class="py-6 px-6">
+  <h1 class="text-xl mb-1">Configuración</h1>
+  {% include 'configuracion/_subnav.html' with active='index' %}
+  <p class="muted mb-6" style="font-size:12.5px;">Solo admin/owner. Acá viven las configuraciones de negocio de la app (a diferencia de las de infraestructura, que quedan en el entorno de despliegue).</p>
+
+  <div class="launcher-grid">
+    <a href="{% url 'configuracion:usuarios_permisos' %}" class="launcher-card">
+      <div class="lc-nm">👥 Usuarios y Permisos</div>
+      <div class="lc-ct">Roles de usuario y qué supervisor ve cada cartera</div>
+    </a>
+    <a href="{% url 'configuracion:retencion' %}" class="launcher-card">
+      <div class="lc-nm">🗄️ Retención de datos</div>
+      <div class="lc-ct">Plazos de purga y del historial de status</div>
+    </a>
+  </div>
+</div>
+{% endblock %}
