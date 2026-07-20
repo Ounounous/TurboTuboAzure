@@ -613,17 +613,17 @@ class AssignLeadsView(LoginRequiredMixin, View):
             raise PermissionDenied
 
         team = request.user.userprofile.active_team
-        form = AssignLeadsForm(team=team)
+        form = AssignLeadsForm(team=team, user=request.user)
         upload_form = UploadAssignmentFileForm()
         return render(request, self.template_name, {'form': form, 'upload_form': upload_form})
 
     def post(self, request, *args, **kwargs):
-        from .permissions import es_supervisor
+        from .permissions import es_supervisor, leads_visibles
         if not es_supervisor(request.user):
             raise PermissionDenied
 
         team = request.user.userprofile.active_team
-        form = AssignLeadsForm(request.POST, team=team)
+        form = AssignLeadsForm(request.POST, team=team, user=request.user)
         upload_form = UploadAssignmentFileForm(request.POST, request.FILES)
 
         if form.is_valid():
@@ -670,6 +670,9 @@ class AssignLeadsView(LoginRequiredMixin, View):
 
                 try:
                     lead = Lead.objects.get(op__iexact=op, subcartera__cartera=cartera, team=team)
+                    if not leads_visibles(request.user, base=Lead.objects.filter(pk=lead.pk)).exists():
+                        messages.error(request, f'No tienes permiso sobre la cartera {cartera_nombre} (OP: {op}).')
+                        continue
                     collector = User.objects.get(username__iexact=collector_username, userprofile__active_team=team)
                     lead.subcartera = subcartera
                     lead.assigned_to = collector

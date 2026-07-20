@@ -4,7 +4,7 @@ from io import BytesIO
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
-from django.db import IntegrityError, transaction
+from django.db import transaction
 from django.db.models import Q
 from django.http import HttpResponse, Http404
 from django.shortcuts import get_object_or_404, render, redirect
@@ -131,33 +131,67 @@ class DemographicsIndexView(LoginRequiredMixin, View):
         return render(request, 'demographics/demographics_index.html', {'form_type': form_type})
 
 
-class UploadIDItemView(LoginRequiredMixin, View):
+ITEM_UPLOAD_ALIASES = {
+    'cartera': 'cartera', 'subcartera': 'subcartera',
+    'op': 'op', 'operacion': 'op', 'id': 'op',
+    'item_type': 'item_type', 'tipo': 'item_type', 'tipo_bien': 'item_type',
+    'patente': 'patente', 'marca': 'marca', 'modelo': 'modelo',
+    'ano': 'anio', 'anio': 'anio', 'year': 'anio',
+}
+
+
+class UploadIDItemView(SupervisorRequiredMixin, View):
     def post(self, request, *args, **kwargs):
-        excel_file = request.FILES['excel_file']
-        wb = load_workbook(excel_file)
-        sheet = wb.active
+        from core.bulk_upload import procesar_carga
 
-        found, not_found = 0, []
-        for row_number, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
-            cartera, subcartera, op, item_type, patente, marca, modelo, año = row[:8]
-            lead = find_lead(cartera, subcartera, op)
-            if lead:
-                id_item, created = IDItem.objects.get_or_create(lead=lead)
-                id_item.item_type = item_type
-                id_item.patente = patente
-                id_item.marca = marca
-                id_item.modelo = modelo
-                id_item.año = año
+        def validar_fila(fila, rownum):
+            errores = []
+            lead = find_lead(fila.get('cartera'), fila.get('subcartera'), fila.get('op'))
+            if not lead:
+                errores.append(f'no se encontró el lead OP={fila.get("op")} en {fila.get("cartera")}/{fila.get("subcartera")}')
+
+            tipos_validos = dict(IDItem.CHOICES_ITEM_TYPE)
+            tipo_raw = str(fila.get('item_type') or '').strip().lower()
+            tipo = tipo_raw if tipo_raw in tipos_validos else IDItem.AUTO
+            if tipo_raw and tipo_raw not in tipos_validos:
+                errores.append(f'tipo de bien: "{fila.get("item_type")}" inválido ({"/".join(tipos_validos)})')
+
+            anio_raw = fila.get('anio')
+            anio = None
+            if anio_raw not in (None, ''):
+                try:
+                    anio = int(anio_raw)
+                except (TypeError, ValueError):
+                    errores.append(f'año: "{anio_raw}" no es un número')
+
+            if errores:
+                return None, errores
+            return {
+                'lead': lead, 'tipo': tipo, 'anio': anio,
+                'patente': str(fila.get('patente') or '').strip(),
+                'marca': str(fila.get('marca') or '').strip(),
+                'modelo': str(fila.get('modelo') or '').strip(),
+            }, []
+
+        resultado = procesar_carga(
+            request.FILES.get('excel_file'), ITEM_UPLOAD_ALIASES,
+            ('cartera', 'subcartera', 'op'), validar_fila,
+            nombre_archivo='errores_bienes.xlsx',
+        )
+        if not resultado.ok:
+            return resultado.respuesta_error
+
+        with transaction.atomic():
+            for f in resultado.filas:
+                id_item, _ = IDItem.objects.get_or_create(lead=f['lead'])
+                id_item.item_type = f['tipo']
+                id_item.patente = f['patente']
+                id_item.marca = f['marca']
+                id_item.modelo = f['modelo']
+                id_item.año = f['anio']
                 id_item.save()
-                found += 1
-            else:
-                not_found.append(f"Fila {row_number}: no se encontró el lead OP={op} en Cartera={cartera}, Subcartera={subcartera}")
 
-        if found:
-            messages.success(request, f"{found} bien(es) cargado(s) correctamente")
-        for error in not_found:
-            messages.error(request, error)
-
+        messages.success(request, f"{len(resultado.filas)} bien(es) cargado(s) correctamente.")
         return redirect('demographics:index')
 
 
@@ -266,102 +300,120 @@ class UploadIDDemographicsView(SupervisorRequiredMixin, View):
         return redirect('demographics:index')
 
 
-class UploadAddressView(LoginRequiredMixin, View):
+ADDRESS_UPLOAD_ALIASES = {
+    'cartera': 'cartera', 'subcartera': 'subcartera',
+    'op': 'op', 'operacion': 'op', 'id': 'op',
+    'principal_address': 'direccion', 'direccion': 'direccion', 'address': 'direccion',
+}
+
+
+class UploadAddressView(SupervisorRequiredMixin, View):
     def post(self, request, *args, **kwargs):
-        excel_file = request.FILES['excel_file']
-        wb = load_workbook(excel_file)
-        sheet = wb.active
+        from core.bulk_upload import procesar_carga
 
-        found, errors = 0, []
-        for row_number, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
-            cartera, subcartera, op, principal_address = row[:4]
+        def validar_fila(fila, rownum):
+            errores = []
+            direccion = str(fila.get('direccion') or '').strip()
+            if not direccion:
+                errores.append('dirección: vacía')
+            lead = find_lead(fila.get('cartera'), fila.get('subcartera'), fila.get('op'))
+            if not lead:
+                errores.append(f'no se encontró el lead OP={fila.get("op")} en {fila.get("cartera")}/{fila.get("subcartera")}')
+            if errores:
+                return None, errores
+            return {'lead': lead, 'direccion': direccion}, []
 
-            lead = find_lead(cartera, subcartera, op)
-            if lead:
-                id_demographics, created = IDDemographics.objects.get_or_create(lead=lead)
-                id_demographics.principal_address = principal_address
+        resultado = procesar_carga(
+            request.FILES.get('excel_file'), ADDRESS_UPLOAD_ALIASES,
+            ('cartera', 'subcartera', 'op', 'direccion'), validar_fila,
+            nombre_archivo='errores_direccion.xlsx',
+        )
+        if not resultado.ok:
+            return resultado.respuesta_error
+
+        with transaction.atomic():
+            for f in resultado.filas:
+                id_demographics, _ = IDDemographics.objects.get_or_create(lead=f['lead'])
+                id_demographics.principal_address = f['direccion']
                 id_demographics.save()
-                found += 1
-            else:
-                errors.append(f"Fila {row_number}: no se encontró el lead OP={op} en Cartera={cartera}, Subcartera={subcartera}")
 
-        if found:
-            messages.success(request, f"{found} dirección(es) cargada(s) correctamente")
-        if errors:
-            for error in errors:
-                messages.error(request, error)
-
+        messages.success(request, f"{len(resultado.filas)} dirección(es) cargada(s) correctamente.")
         return redirect('demographics:index')
 
 
-class UploadAvalDemographicsView(LoginRequiredMixin, View):
+AVAL_UPLOAD_ALIASES = {
+    'cartera': 'cartera', 'subcartera': 'subcartera',
+    'op': 'op', 'operacion': 'op', 'id': 'op',
+    'aval_name': 'aval_name', 'nombre_aval': 'aval_name', 'nombre': 'aval_name',
+    'aval_rut': 'aval_rut', 'rut_aval': 'aval_rut', 'rut': 'aval_rut',
+    'aval_dv': 'aval_dv', 'dv_aval': 'aval_dv', 'dv': 'aval_dv',
+    'aval_email': 'aval_email', 'email_aval': 'aval_email', 'correo_aval': 'aval_email',
+    'aval_address': 'aval_address', 'direccion_aval': 'aval_address',
+}
+
+
+class UploadAvalDemographicsView(SupervisorRequiredMixin, View):
     def post(self, request, *args, **kwargs):
-        excel_file = request.FILES['excel_file']
-        wb = load_workbook(excel_file)
-        sheet = wb.active
+        from core.bulk_upload import procesar_carga
 
-        found, errors = 0, []
-        leads_tocados = set()
+        def validar_fila(fila, rownum):
+            errores = []
+            nombre = str(fila.get('aval_name') or '').strip()
+            rut = str(fila.get('aval_rut') or '').strip()
+            dv = str(fila.get('aval_dv') or '').strip()
+            email = str(fila.get('aval_email') or '').strip()
+            direccion = str(fila.get('aval_address') or '').strip()
+            if not nombre:
+                errores.append('aval_name: vacío')
+            if not rut:
+                errores.append('aval_rut: vacío')
+            if not dv:
+                errores.append('aval_dv: vacío')
+            if not email:
+                errores.append('aval_email: vacío')
+            elif '@' not in email:
+                errores.append(f'aval_email: "{email}" no parece un email válido')
+            if not direccion:
+                errores.append('aval_address: vacía')
 
-        for row_number, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
-            try:
-                cartera, subcartera, op, aval_name, aval_rut, aval_dv, aval_email, aval_address = row[:8]
-            except ValueError as e:
-                errors.append(f"Fila {row_number}: no se pudo leer la fila correctamente - {str(e)}")
-                continue
-
-            # Validate field presence
-            missing_fields = []
-            if not op:
-                missing_fields.append('op')
-            if not cartera:
-                missing_fields.append('cartera')
-            if not subcartera:
-                missing_fields.append('subcartera')
-            if not aval_name:
-                missing_fields.append('aval_name')
-            if not aval_rut:
-                missing_fields.append('aval_rut')
-            if aval_dv is None:
-                missing_fields.append('aval_dv')
-            if not aval_email:
-                missing_fields.append('aval_email')
-            if not aval_address and aval_address != "sin direccion":
-                missing_fields.append('aval_address')
-
-            if missing_fields:
-                errors.append(f"Fila {row_number}: faltan campos: {', '.join(missing_fields)}")
-                continue
-
-            lead = find_lead(cartera, subcartera, op)
-            if lead:
-                try:
-                    id_demographics = IDDemographics.objects.filter(lead=lead).first()
-                    if id_demographics:
-                        aval_demographics, created = AvalDemographics.objects.get_or_create(
-                            id_demographics=id_demographics)
-                        aval_demographics.aval_name = aval_name
-                        aval_demographics.aval_rut = aval_rut
-                        aval_demographics.aval_dv = aval_dv
-                        aval_demographics.aval_email = aval_email
-                        aval_demographics.aval_address = aval_address
-                        aval_demographics.save()
-                        leads_tocados.add(lead.pk)
-                        found += 1
-                    else:
-                        errors.append(f"Fila {row_number}: el lead OP={op} no tiene demografía principal cargada todavía (sube primero el archivo de email/dirección)")
-                except IntegrityError as e:
-                    errors.append(f"Fila {row_number}: error de integridad - {str(e)}")
+            lead = find_lead(fila.get('cartera'), fila.get('subcartera'), fila.get('op'))
+            idd = None
+            if not lead:
+                errores.append(f'no se encontró el lead OP={fila.get("op")} en {fila.get("cartera")}/{fila.get("subcartera")}')
             else:
-                errors.append(f"Fila {row_number}: no se encontró el lead OP={op} en Cartera={cartera}, Subcartera={subcartera}")
+                idd = IDDemographics.objects.filter(lead=lead).first()
+                if not idd:
+                    errores.append(
+                        f'el lead OP={fila.get("op")} no tiene demografía principal cargada todavía '
+                        '(sube primero el archivo de email/dirección)'
+                    )
 
+            if errores:
+                return None, errores
+            return {'idd': idd, 'lead': lead, 'nombre': nombre, 'rut': rut, 'dv': dv, 'email': email, 'direccion': direccion}, []
+
+        resultado = procesar_carga(
+            request.FILES.get('excel_file'), AVAL_UPLOAD_ALIASES,
+            ('cartera', 'subcartera', 'op', 'aval_name', 'aval_rut', 'aval_dv', 'aval_email', 'aval_address'),
+            validar_fila, nombre_archivo='errores_aval.xlsx',
+        )
+        if not resultado.ok:
+            return resultado.respuesta_error
+
+        leads_tocados = set()
+        with transaction.atomic():
+            for f in resultado.filas:
+                aval, _ = AvalDemographics.objects.get_or_create(id_demographics=f['idd'])
+                aval.aval_name = f['nombre']
+                aval.aval_rut = f['rut']
+                aval.aval_dv = f['dv']
+                aval.aval_email = f['email']
+                aval.aval_address = f['direccion']
+                aval.save()
+                leads_tocados.add(f['lead'].pk)
         _recompute_inubicable_bulk(leads_tocados, request.user)
-        if found:
-            messages.success(request, f"{found} aval(es) cargado(s) correctamente")
-        if errors:
-            for error in errors:
-                messages.error(request, error)
 
+        messages.success(request, f"{len(resultado.filas)} aval(es) cargado(s) correctamente.")
         return redirect('demographics:index')
 
 
@@ -400,52 +452,69 @@ class PhoneStatusView(SupervisorRequiredMixin, View):
         return redirect(request.POST.get('next') or 'demographics:phone_status')
 
 
+PHONE_STATUS_UPLOAD_ALIASES = {
+    'cartera': 'cartera', 'subcartera': 'subcartera',
+    'op': 'op', 'operacion': 'op', 'id': 'op',
+    'telefono': 'telefono', 'phone_number': 'telefono', 'numero': 'telefono', 'fono': 'telefono',
+    'estado': 'estado', 'status': 'estado', 'phone_status': 'estado',
+    'whatsapp': 'whatsapp',
+}
+
+
 class PhoneStatusBulkView(SupervisorRequiredMixin, View):
     """Excel: CARTERA, SUBCARTERA, ID, TELEFONO, ESTADO, WHATSAPP (whatsapp opcional: si/no)."""
 
     def post(self, request, *args, **kwargs):
-        excel_file = request.FILES.get('excel_file')
-        if not excel_file:
-            messages.error(request, 'Debes subir un archivo Excel.')
-            return redirect('demographics:phone_status')
+        from core.bulk_upload import procesar_carga
+
+        def validar_fila(fila, rownum):
+            errores = []
+            numero = str(fila.get('telefono') or '').strip()
+            if not numero:
+                errores.append('teléfono: vacío')
+            nuevo = _norm_status(fila.get('estado'))
+            if not nuevo:
+                errores.append(f'estado: "{fila.get("estado")}" inválido')
+
+            lead = find_lead(fila.get('cartera'), fila.get('subcartera'), fila.get('op'))
+            phone = None
+            if not lead:
+                errores.append(f'no se encontró el lead OP={fila.get("op")} en {fila.get("cartera")}/{fila.get("subcartera")}')
+            elif numero:
+                phone = Phone.objects.filter(lead=lead, phone_number=numero).first()
+                if not phone:
+                    errores.append(f'el lead OP={fila.get("op")} no tiene el teléfono {numero}')
+
+            whatsapp_raw = fila.get('whatsapp')
+            whatsapp = None
+            if whatsapp_raw not in (None, ''):
+                whatsapp = str(whatsapp_raw).strip().lower() in ('si', 'sí', 'yes', 'true', '1')
+
+            if errores:
+                return None, errores
+            return {'phone': phone, 'estado': nuevo, 'whatsapp': whatsapp, 'lead': lead}, []
+
+        resultado = procesar_carga(
+            request.FILES.get('excel_file'), PHONE_STATUS_UPLOAD_ALIASES,
+            ('cartera', 'subcartera', 'op', 'telefono', 'estado'), validar_fila,
+            nombre_archivo='errores_estado_telefonos.xlsx',
+        )
+        if not resultado.ok:
+            return resultado.respuesta_error
 
         from actions.status_logic import recompute_inubicable
-        wb = load_workbook(excel_file)
-        sheet = wb.active
-        actualizados, errores = 0, []
         leads_tocados = set()
-        for row_number, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
-            cartera, subcartera, op, phone_number, estado, whatsapp = (list(row) + [None] * 6)[:6]
-            if not cartera or not subcartera or not op or not phone_number or not estado:
-                errores.append(f"Fila {row_number}: faltan datos (cartera, subcartera, ID, teléfono o estado).")
-                continue
-            nuevo = _norm_status(estado)
-            if not nuevo:
-                errores.append(f"Fila {row_number}: estado '{estado}' inválido.")
-                continue
-            lead = find_lead(cartera, subcartera, op)
-            if not lead:
-                errores.append(f"Fila {row_number}: no se encontró lead OP={op} en {cartera}/{subcartera}.")
-                continue
-            phone = Phone.objects.filter(lead=lead, phone_number=str(phone_number).strip()).first()
-            if not phone:
-                errores.append(f"Fila {row_number}: el lead OP={op} no tiene el teléfono {phone_number}.")
-                continue
-            phone.phone_number_status = nuevo
-            if whatsapp is not None and str(whatsapp).strip() != '':
-                phone.whatsapp_activo = str(whatsapp).strip().lower() in ('si', 'sí', 'yes', 'true', '1')
-            phone.save()
-            leads_tocados.add(lead.pk)
-            actualizados += 1
-
+        with transaction.atomic():
+            for f in resultado.filas:
+                f['phone'].phone_number_status = f['estado']
+                if f['whatsapp'] is not None:
+                    f['phone'].whatsapp_activo = f['whatsapp']
+                f['phone'].save()
+                leads_tocados.add(f['lead'].pk)
         for lead in Lead.objects.filter(pk__in=leads_tocados):
             recompute_inubicable(lead, changed_by=request.user)
-        if actualizados:
-            messages.success(request, f'{actualizados} teléfono(s) actualizado(s).')
-        for e in errores[:20]:
-            messages.error(request, e)
-        if len(errores) > 20:
-            messages.error(request, f'... y {len(errores) - 20} error(es) más.')
+
+        messages.success(request, f"{len(resultado.filas)} teléfono(s) actualizado(s).")
         return redirect('demographics:phone_status')
 
 
@@ -507,48 +576,63 @@ class EmailStatusView(SupervisorRequiredMixin, View):
         return redirect(request.POST.get('next') or 'demographics:email_status')
 
 
+EMAIL_STATUS_UPLOAD_ALIASES = {
+    'cartera': 'cartera', 'subcartera': 'subcartera',
+    'op': 'op', 'operacion': 'op', 'id': 'op',
+    'correo': 'correo', 'email': 'correo', 'mail': 'correo',
+    'estado': 'estado', 'status': 'estado',
+}
+
+
 class EmailStatusBulkView(SupervisorRequiredMixin, View):
     """Excel: CARTERA, SUBCARTERA, ID, CORREO, ESTADO."""
 
     def post(self, request, *args, **kwargs):
-        excel_file = request.FILES.get('excel_file')
-        if not excel_file:
-            messages.error(request, 'Debes subir un archivo Excel.')
-            return redirect('demographics:email_status')
+        from core.bulk_upload import procesar_carga
+
+        def validar_fila(fila, rownum):
+            errores = []
+            correo = str(fila.get('correo') or '').strip()
+            if not correo:
+                errores.append('correo: vacío')
+            nuevo = _norm_status(fila.get('estado'))
+            if not nuevo:
+                errores.append(f'estado: "{fila.get("estado")}" inválido')
+
+            lead = find_lead(fila.get('cartera'), fila.get('subcartera'), fila.get('op'))
+            if not lead:
+                errores.append(f'no se encontró el lead OP={fila.get("op")} en {fila.get("cartera")}/{fila.get("subcartera")}')
+            elif correo:
+                existe = (
+                    IDDemographics.objects.filter(lead=lead, principal_email=correo).exists()
+                    or AvalDemographics.objects.filter(id_demographics__lead=lead, aval_email=correo).exists()
+                )
+                if not existe:
+                    errores.append(f'el lead OP={fila.get("op")} no tiene el correo {correo}')
+
+            if errores:
+                return None, errores
+            return {'lead': lead, 'correo': correo, 'estado': nuevo}, []
+
+        resultado = procesar_carga(
+            request.FILES.get('excel_file'), EMAIL_STATUS_UPLOAD_ALIASES,
+            ('cartera', 'subcartera', 'op', 'correo', 'estado'), validar_fila,
+            nombre_archivo='errores_estado_correos.xlsx',
+        )
+        if not resultado.ok:
+            return resultado.respuesta_error
 
         from actions.status_logic import recompute_inubicable
-        wb = load_workbook(excel_file)
-        sheet = wb.active
-        actualizados, errores = 0, []
         leads_tocados = set()
-        for row_number, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
-            cartera, subcartera, op, correo, estado = (list(row) + [None] * 5)[:5]
-            if not cartera or not subcartera or not op or not correo or not estado:
-                errores.append(f"Fila {row_number}: faltan datos (cartera, subcartera, ID, correo o estado).")
-                continue
-            nuevo = _norm_status(estado)
-            if not nuevo:
-                errores.append(f"Fila {row_number}: estado '{estado}' inválido.")
-                continue
-            lead = find_lead(cartera, subcartera, op)
-            if not lead:
-                errores.append(f"Fila {row_number}: no se encontró lead OP={op} en {cartera}/{subcartera}.")
-                continue
-            correo = str(correo).strip()
-            n = IDDemographics.objects.filter(lead=lead, principal_email=correo).update(principal_email_status=nuevo)
-            n += AvalDemographics.objects.filter(id_demographics__lead=lead, aval_email=correo).update(aval_email_status=nuevo)
-            if n:
-                leads_tocados.add(lead.pk)
+        actualizados = 0
+        with transaction.atomic():
+            for f in resultado.filas:
+                n = IDDemographics.objects.filter(lead=f['lead'], principal_email=f['correo']).update(principal_email_status=f['estado'])
+                n += AvalDemographics.objects.filter(id_demographics__lead=f['lead'], aval_email=f['correo']).update(aval_email_status=f['estado'])
                 actualizados += n
-            else:
-                errores.append(f"Fila {row_number}: el lead OP={op} no tiene el correo {correo}.")
-
+                leads_tocados.add(f['lead'].pk)
         for lead in Lead.objects.filter(pk__in=leads_tocados):
             recompute_inubicable(lead, changed_by=request.user)
-        if actualizados:
-            messages.success(request, f'{actualizados} correo(s) actualizado(s).')
-        for e in errores[:20]:
-            messages.error(request, e)
-        if len(errores) > 20:
-            messages.error(request, f'... y {len(errores) - 20} error(es) más.')
+
+        messages.success(request, f"{actualizados} correo(s) actualizado(s).")
         return redirect('demographics:email_status')

@@ -1,10 +1,10 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
-from openpyxl import load_workbook
 
 from demographics.views import find_lead
 from lead.lifecycle import desasignar, reactivar, suspender
@@ -76,7 +76,8 @@ class LeadLifecycleActionView(SupervisorRequiredMixin, View):
     """Suspender / desasignar / reactivar un lead. Usada desde la ficha y desde esta pantalla."""
 
     def post(self, request, pk, *args, **kwargs):
-        lead = get_object_or_404(Lead, pk=pk)
+        from lead.permissions import leads_visibles
+        lead = get_object_or_404(leads_visibles(request.user), pk=pk)
         accion = request.POST.get('accion', '')
         if accion not in ACCIONES:
             messages.error(request, 'Acción inválida.')
@@ -90,48 +91,56 @@ class LeadLifecycleActionView(SupervisorRequiredMixin, View):
         return redirect('leads:detail', pk=lead.pk)
 
 
+LIFECYCLE_UPLOAD_ALIASES = {
+    'cartera': 'cartera', 'subcartera': 'subcartera',
+    'op': 'op', 'operacion': 'op', 'id': 'op',
+    'accion': 'accion', 'action': 'accion',
+    'motivo': 'motivo', 'reason': 'motivo',
+}
+
+
 class BulkLifecycleUploadView(SupervisorRequiredMixin, View):
     """Carga masiva: Excel con columnas CARTERA, SUBCARTERA, ID, ACCION, MOTIVO (opcional)."""
 
     def post(self, request, *args, **kwargs):
-        excel_file = request.FILES.get('excel_file')
-        if not excel_file:
-            messages.error(request, 'Debes subir un archivo Excel.')
-            return redirect('suspensiones:index')
+        from core.bulk_upload import procesar_carga
+        from lead.permissions import leads_visibles
 
-        wb = load_workbook(excel_file)
-        sheet = wb.active
-
-        aplicados, errores = 0, []
-        for row_number, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
-            cartera, subcartera, op, accion, motivo = (list(row) + [None] * 5)[:5]
-            if not cartera or not subcartera or not op or not accion:
-                errores.append(f"Fila {row_number}: faltan datos (cartera, subcartera, ID o acción).")
-                continue
-
-            accion_norm = str(accion).strip().lower()
+        def validar_fila(fila, rownum):
+            errores = []
+            accion_norm = str(fila.get('accion') or '').strip().lower()
             if accion_norm not in ACCIONES:
-                errores.append(f"Fila {row_number}: acción '{accion}' inválida (usa suspender/desasignar/reactivar).")
-                continue
+                errores.append(f"acción '{fila.get('accion')}' inválida (usa suspender/desasignar/reactivar)")
 
-            lead = find_lead(cartera, subcartera, op)
+            lead = find_lead(fila.get('cartera'), fila.get('subcartera'), fila.get('op'))
             if not lead:
-                errores.append(f"Fila {row_number}: no se encontró lead OP={op} en Cartera={cartera}, Subcartera={subcartera}.")
-                continue
+                errores.append(
+                    f"no se encontró lead OP={fila.get('op')} en Cartera={fila.get('cartera')}, "
+                    f"Subcartera={fila.get('subcartera')}"
+                )
+            elif not leads_visibles(request.user, base=Lead.objects.filter(pk=lead.pk)).exists():
+                errores.append(f"no tienes permiso sobre la cartera {fila.get('cartera')} (OP={fila.get('op')})")
 
-            if accion_norm == 'suspender':
-                suspender(lead, motivo=str(motivo or ''), changed_by=request.user)
-            elif accion_norm == 'desasignar':
-                desasignar(lead, changed_by=request.user)
-            else:
-                reactivar(lead, changed_by=request.user)
-            aplicados += 1
+            if errores:
+                return None, errores
+            return {'lead': lead, 'accion': accion_norm, 'motivo': str(fila.get('motivo') or '')}, []
 
-        if aplicados:
-            messages.success(request, f'Se aplicó la acción a {aplicados} lead(s).')
-        for error in errores[:20]:
-            messages.error(request, error)
-        if len(errores) > 20:
-            messages.error(request, f'... y {len(errores) - 20} error(es) más.')
+        resultado = procesar_carga(
+            request.FILES.get('excel_file'), LIFECYCLE_UPLOAD_ALIASES,
+            ('cartera', 'subcartera', 'op', 'accion'), validar_fila,
+            nombre_archivo='errores_suspensiones.xlsx',
+        )
+        if not resultado.ok:
+            return resultado.respuesta_error
 
+        with transaction.atomic():
+            for f in resultado.filas:
+                if f['accion'] == 'suspender':
+                    suspender(f['lead'], motivo=f['motivo'], changed_by=request.user)
+                elif f['accion'] == 'desasignar':
+                    desasignar(f['lead'], changed_by=request.user)
+                else:
+                    reactivar(f['lead'], changed_by=request.user)
+
+        messages.success(request, f"Se aplicó la acción a {len(resultado.filas)} lead(s).")
         return redirect('suspensiones:index')
