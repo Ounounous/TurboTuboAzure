@@ -13,6 +13,7 @@ def suspender(lead, motivo='', changed_by=None):
     lead.suspendido_at = timezone.localdate()
     lead.motivo_suspension = (motivo or '').strip()
     lead.save(update_fields=['activo', 'suspendido_at', 'motivo_suspension'])
+    _registrar_metadata(lead, 'suspendido')
 
 
 def desasignar(lead, changed_by=None):
@@ -22,6 +23,7 @@ def desasignar(lead, changed_by=None):
     lead.desasignado_at = timezone.localdate()
     lead.assigned_to = None
     lead.save(update_fields=['activo', 'desasignado_at', 'assigned_to'])
+    _registrar_metadata(lead, 'desasignado')
 
 
 def terminar(lead, changed_by=None):
@@ -30,6 +32,7 @@ def terminar(lead, changed_by=None):
     lead.activo = Lead.TERMINADO
     lead.terminado_at = timezone.localdate()
     lead.save(update_fields=['activo', 'terminado_at'])
+    _registrar_metadata(lead, 'terminado')
 
 
 def reactivar(lead, changed_by=None):
@@ -43,3 +46,12 @@ def reactivar(lead, changed_by=None):
     lead.save(update_fields=[
         'activo', 'suspendido_at', 'desasignado_at', 'terminado_at', 'motivo_suspension',
     ])
+    _registrar_metadata(lead, 'reactivado')
+
+
+def _registrar_metadata(lead, tipo):
+    """Metadata anonimizada para entrenar/recomendar acciones de cobranza (mlmetadata). No hay
+    transaction.atomic() aca arriba que proteger, pero igual nunca debe poder tumbar la
+    transicion real -- registrar_transicion ya se traga cualquier excepcion."""
+    from mlmetadata.capture import registrar_transicion
+    registrar_transicion(lead, tipo)

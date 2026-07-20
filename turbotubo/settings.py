@@ -67,6 +67,7 @@ INSTALLED_APPS = [
     'demographics',
     'django_celery_beat',
     'lead',
+    'mlmetadata',
     'suspensiones',
     'team',
     'userprofile',

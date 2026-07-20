@@ -201,6 +201,9 @@ class Action(models.Model):
     convert_debt_free = models.BooleanField(_('Convert Debt Free'), default=False)
 
     def save(self, *args, **kwargs):
+        # Status antes de que apply_status lo pise, para la metadata anonimizada (mlmetadata) --
+        # se lee antes del bloque atomico para no depender de su resultado.
+        status_antes = self.lead.status if self.lead_id else None
         # Todo en una transaccion: la gestion y sus efectos derivados (compromiso, status,
         # efecto demografico) son un solo hecho atomico. Si algo falla, no queda estado parcial
         # (Action sin status, status sin efecto demografico, etc.); la tarea de reconciliacion
@@ -246,6 +249,13 @@ class Action(models.Model):
                 # El resultado puede marcar el dato usado (no existe / blacklist / apaga whatsapp) y,
                 # si el lead se queda sin datos activos, dejarlo inubicable.
                 aplicar_efecto_demografico(self)
+        # Fuera del atomic a proposito: metadata anonimizada para entrenar/recomendar acciones de
+        # cobranza (mlmetadata). Un fallo aca nunca debe poder abortar la gestion real -- si
+        # estuviera dentro del bloque de arriba, un error de SQL aca dejaria la transaccion en
+        # estado "aborted" aunque se atrape la excepcion en Python.
+        if self.lead_id and self.resultado_id:
+            from mlmetadata.capture import registrar_gestion
+            registrar_gestion(self, status_antes)
 
     def __str__(self):
         return f"{self.medio.nombre} for {self.lead.op} on {self.created_at}"
@@ -376,6 +386,7 @@ class Payment(models.Model):
         verbose_name_plural = _('Pagos')
 
     def save(self, *args, **kwargs):
+        status_antes = self.lead.status if self.lead_id else None
         with transaction.atomic():
             if self.lead_id and not self.subcartera_id:
                 self.subcartera = self.lead.subcartera
@@ -386,6 +397,10 @@ class Payment(models.Model):
             if self.lead_id:
                 from .status_logic import apply_status
                 apply_status(self.lead, Lead.PAGANDO, changed_by=self.created_by)
+        # Fuera del atomic (ver el mismo comentario en Action.save): metadata anonimizada.
+        if self.lead_id:
+            from mlmetadata.capture import registrar_pago
+            registrar_pago(self, status_antes)
 
     @property
     def op(self):
