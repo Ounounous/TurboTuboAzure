@@ -5,7 +5,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.views.generic import ListView, DetailView, CreateView
 
-from lead.permissions import carteras_visibles
+from lead.permissions import carteras_visibles, es_supervisor
 from .forms import CarteraForm, SubcarteraForm
 from .models import Cartera, Subcartera
 
@@ -20,7 +20,16 @@ class CarteraManageRequiredMixin(LoginRequiredMixin):
         return super().dispatch(request, *args, **kwargs)
 
 
-class CarteraListView(LoginRequiredMixin, ListView):
+class CarteraViewRequiredMixin(LoginRequiredMixin):
+    """Ver carteras (lista/detalle) es para admin/owner/supervisor -- un cobrador no navega
+    carteras, solo sus leads (mismo criterio que oculta el link en el nav)."""
+    def dispatch(self, request, *args, **kwargs):
+        if not es_supervisor(request.user):
+            raise PermissionDenied
+        return super().dispatch(request, *args, **kwargs)
+
+
+class CarteraListView(CarteraViewRequiredMixin, ListView):
     model = Cartera
     context_object_name = 'carteras'
 
@@ -29,7 +38,7 @@ class CarteraListView(LoginRequiredMixin, ListView):
         return carteras_visibles(self.request.user)
 
 
-class CarteraDetailView(LoginRequiredMixin, DetailView):
+class CarteraDetailView(CarteraViewRequiredMixin, DetailView):
     model = Cartera
     context_object_name = 'cartera'
 
