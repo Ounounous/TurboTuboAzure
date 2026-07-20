@@ -148,6 +148,25 @@ DATABASES = {
     }
 }
 
+# Conexion de SOLO LECTURA a la base de datos vieja (turbotubobeta en Azure), usada unicamente
+# por los comandos de migracion de datos (manage.py inspeccionar_legacy). Se activa solo si
+# LEGACY_DB_HOST esta definido en el entorno -- nunca se commitea una credencial real. sslmode
+# require porque Azure Postgres lo exige.
+if os.environ.get('LEGACY_DB_HOST'):
+    DATABASES['legacy'] = {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.environ.get('LEGACY_DB_NAME', 'turbotubobeta-database'),
+        'USER': os.environ.get('LEGACY_DB_USER', ''),
+        'PASSWORD': os.environ.get('LEGACY_DB_PASSWORD', ''),
+        'HOST': os.environ.get('LEGACY_DB_HOST', ''),
+        'PORT': os.environ.get('LEGACY_DB_PORT', '5432'),
+        'CONN_MAX_AGE': 0,
+        'OPTIONS': {
+            'sslmode': 'require',
+            'connect_timeout': int(os.environ.get('DB_CONNECT_TIMEOUT', '5')),
+        },
+    }
+
 
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
