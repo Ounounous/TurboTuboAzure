@@ -30,7 +30,7 @@
     <p class="empty-state mb-6">No existen subcarteras todavía.</p>
   {% endif %}
 
-  <div class="card p-4">
+  <div class="card p-4 mb-6">
     <h2 class="mb-3 text-lg font-bold">Agregar subcartera</h2>
     <form method="post" action="{% url 'cartera:add_subcartera' cartera.pk %}">
       {% csrf_token %}
@@ -38,5 +38,19 @@
       <button class="btn btn-primary mt-2">Guardar</button>
     </form>
   </div>
+
+  {% if puede_eliminar %}
+    <details class="card p-4">
+      <summary class="cursor-pointer font-semibold" style="font-size:12.5px; color:var(--text-muted);">Más opciones</summary>
+      <div class="mt-3">
+        <p class="muted mb-2" style="font-size:12.5px;">
+          Elimina la cartera junto con todos sus leads, gestiones, pagos, compromisos y demografía.
+          Las grabaciones de llamadas se conservan (retención legal). Esta acción no se puede deshacer.
+        </p>
+        <form id="cartera_delete_form" method="post" action="{% url 'cartera:delete' cartera.pk %}">{% csrf_token %}</form>
+        <a href="#" onclick="if(confirm('¿Eliminar la cartera \'{{ cartera.nombre }}\' junto con todos sus leads y gestiones? Esta acción no se puede deshacer.')){document.getElementById('cartera_delete_form').submit();} return false;" class="btn btn-danger">Eliminar cartera</a>
+      </div>
+    </details>
+  {% endif %}
 </div>
 {% endblock %}

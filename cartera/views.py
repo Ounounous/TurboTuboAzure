@@ -1,13 +1,16 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
+from django.db.models import Count, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
+from django.views import View
 from django.views.generic import ListView, DetailView, CreateView
 
-from lead.permissions import carteras_visibles, es_supervisor
+from lead.permissions import carteras_visibles, es_admin_owner, es_supervisor
 from .forms import CarteraForm, SubcarteraForm
 from .models import Cartera, Subcartera
+from .services import eliminar_cartera
 
 # Crear/editar carteras y subcarteras: solo admin/owner (el supervisor las gestiona, no las crea).
 CAN_MANAGE_CARTERAS = ('admin', 'owner')
@@ -29,13 +32,24 @@ class CarteraViewRequiredMixin(LoginRequiredMixin):
         return super().dispatch(request, *args, **kwargs)
 
 
+def _puede_eliminar_cartera(user, cartera):
+    """admin/owner pueden eliminar cualquier cartera; un supervisor solo la que el mismo creo."""
+    if es_admin_owner(user):
+        return True
+    return es_supervisor(user) and cartera.created_by_id == user.pk
+
+
 class CarteraListView(CarteraViewRequiredMixin, ListView):
     model = Cartera
     context_object_name = 'carteras'
 
     def get_queryset(self):
-        # Un supervisor solo ve sus carteras; admin/owner todas.
-        return carteras_visibles(self.request.user)
+        # Un supervisor solo ve sus carteras; admin/owner todas. Los totales van en el mismo
+        # query (un solo join subcarteras->leads, sin fan-out entre Sum y Count).
+        return carteras_visibles(self.request.user).annotate(
+            total_saldo_insoluto=Sum('subcarteras__leads__saldo_insoluto'),
+            n_leads=Count('subcarteras__leads', distinct=True),
+        )
 
 
 class CarteraDetailView(CarteraViewRequiredMixin, DetailView):
@@ -49,7 +63,26 @@ class CarteraDetailView(CarteraViewRequiredMixin, DetailView):
         context = super().get_context_data(**kwargs)
         context['subcarteras'] = self.object.subcarteras.all()
         context['subcartera_form'] = SubcarteraForm()
+        context['puede_eliminar'] = _puede_eliminar_cartera(self.request.user, self.object)
         return context
+
+
+class CarteraDeleteView(CarteraViewRequiredMixin, View):
+    def post(self, request, pk, *args, **kwargs):
+        # Sin filtrar por carteras_visibles: el permiso de borrado es "admin/owner o quien la
+        # creo", independiente de si hoy sigue apareciendo en su lista de carteras supervisadas
+        # (esa asignacion la puede cambiar otro admin despues via el dashboard de Configuracion).
+        cartera = get_object_or_404(Cartera, pk=pk)
+        if not _puede_eliminar_cartera(request.user, cartera):
+            raise PermissionDenied
+        nombre = cartera.nombre
+        eliminar_cartera(cartera)
+        messages.success(
+            request,
+            f'Cartera "{nombre}" eliminada junto con sus leads y gestiones. '
+            'Las grabaciones de llamadas se conservaron (retención legal).',
+        )
+        return redirect('cartera:list')
 
 
 class CarteraCreateView(CarteraManageRequiredMixin, CreateView):

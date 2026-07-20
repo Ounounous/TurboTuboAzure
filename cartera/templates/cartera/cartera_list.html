@@ -14,7 +14,10 @@
         <div class="overflow-x-auto">
           <table class="table-dense">
             <thead>
-              <tr><th>Nombre</th><th>Activo</th><th class="num">Subcarteras</th><th>Acciones</th></tr>
+              <tr>
+                <th>Nombre</th><th>Activo</th><th class="num">Subcarteras</th>
+                <th class="num">Clientes</th><th class="num">Saldo insoluto</th><th>Acciones</th>
+              </tr>
             </thead>
             <tbody>
               {% for cartera in carteras %}
@@ -25,6 +28,8 @@
                     {% else %}<span class="dot-st"><span class="d st-slate"></span>Inactivo</span>{% endif %}
                   </td>
                   <td class="num">{{ cartera.subcarteras.count }}</td>
+                  <td class="num" style="font-variant-numeric:tabular-nums">{{ cartera.n_leads|default:0 }}</td>
+                  <td class="num" style="font-variant-numeric:tabular-nums">${{ cartera.total_saldo_insoluto|default:0|floatformat:0 }}</td>
                   <td><a href="{% url 'cartera:detail' cartera.pk %}" class="btn btn-secondary">Ver detalles</a></td>
                 </tr>
               {% endfor %}

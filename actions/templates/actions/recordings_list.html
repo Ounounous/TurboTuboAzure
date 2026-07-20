@@ -34,9 +34,13 @@
           <tbody>
             {% for rec in recordings %}
               <tr>
-                <td class="op"><a href="{% url 'leads:detail' rec.lead.pk %}" class="link">{{ rec.lead.op }}</a></td>
-                <td style="font-weight:600">{{ rec.lead.name }}</td>
-                <td>{{ rec.lead.subcartera.cartera.nombre }}</td>
+                {% if rec.lead %}
+                  <td class="op"><a href="{% url 'leads:detail' rec.lead.pk %}" class="link">{{ rec.lead.op }}</a></td>
+                  <td style="font-weight:600">{{ rec.lead.name }}</td>
+                  <td>{{ rec.lead.subcartera.cartera.nombre }}</td>
+                {% else %}
+                  <td class="op muted" colspan="3" title="El lead y su cartera fueron eliminados; la grabación se conserva por su retención legal.">(cartera eliminada)</td>
+                {% endif %}
                 <td style="font-variant-numeric:tabular-nums">{% if rec.call_date %}{{ rec.call_date|date:"d-m-Y H:i" }}{% else %}{{ rec.created_at|date:"d-m-Y H:i" }}{% endif %}</td>
                 <td class="num">{% if rec.duration_seconds %}{{ rec.duration_seconds }}s{% else %}-{% endif %}</td>
                 <td>{{ rec.user.username|default:"-" }}</td>

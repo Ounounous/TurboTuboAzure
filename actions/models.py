@@ -309,7 +309,11 @@ class PendingPbxCall(models.Model):
 
 class CallRecording(models.Model):
     pending_call = models.ForeignKey(PendingPbxCall, on_delete=models.SET_NULL, null=True, blank=True, related_name='recordings')
-    lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name='call_recordings')
+    # SET_NULL (no CASCADE): la grabacion tiene retencion legal propia de 2 anios (ver
+    # retention_until abajo) que no depende de que el lead o la cartera sigan existiendo --
+    # borrar un lead o una cartera completa (cartera/services.py) no debe destruir audio que
+    # todavia esta dentro de su plazo de retencion.
+    lead = models.ForeignKey(Lead, on_delete=models.SET_NULL, null=True, blank=True, related_name='call_recordings')
     action = models.ForeignKey(Action, on_delete=models.SET_NULL, null=True, blank=True, related_name='call_recordings')
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
     cdr_id = models.CharField(max_length=100)
