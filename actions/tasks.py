@@ -284,6 +284,12 @@ HEARTBEAT_MAX_DIAS = {
     'actions.tasks.check_compromisos_rotos': 2,
     'actions.tasks.reconciliar_estados': 2,
     'actions.tasks.purge_expired_recordings': 8,
+    # sync_pbx_recordings corre cada pocos minutos en produccion (resuelve llamadas pendientes
+    # dentro de su ventana de 24h, ver GIVE_UP_AFTER_HOURS) -- si se detiene un dia entero, las
+    # grabaciones dejan de bajarse.
+    'actions.tasks.sync_pbx_recordings': 1,
+    'actions.tasks.purge_status_change_log': 8,
+    'mlmetadata.tasks.exportar_metadata_ml': 8,
 }
 
 
