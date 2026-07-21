@@ -1,4 +1,5 @@
 {% extends 'core/base.html' %}
+{% load money %}
 
 {% block title %}Compromisos de pago{% endblock %}
 
@@ -29,17 +30,17 @@
   <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
     <div class="card p-4">
       <p class="muted text-sm mb-1">Compromisos de hoy</p>
-      <p class="text-2xl font-bold">${{ resumen_hoy.total|floatformat:0 }}</p>
+      <p class="text-2xl font-bold">{{ resumen_hoy.total|clp }}</p>
       <p class="muted text-sm">{{ resumen_hoy.count }} compromiso(s)</p>
     </div>
     <div class="card p-4">
       <p class="muted text-sm mb-1">Esta semana</p>
-      <p class="text-2xl font-bold">${{ resumen_semana.total|floatformat:0 }}</p>
+      <p class="text-2xl font-bold">{{ resumen_semana.total|clp }}</p>
       <p class="muted text-sm">{{ resumen_semana.count }} compromiso(s)</p>
     </div>
     <div class="card p-4">
       <p class="muted text-sm mb-1">Este mes</p>
-      <p class="text-2xl font-bold">${{ resumen_mes.total|floatformat:0 }}</p>
+      <p class="text-2xl font-bold">{{ resumen_mes.total|clp }}</p>
       <p class="muted text-sm">{{ resumen_mes.count }} compromiso(s)</p>
     </div>
   </div>
@@ -48,13 +49,13 @@
   <div class="launcher-grid mb-6">
     <a href="?op={{ selected_op }}&fecha={{ selected_fecha }}" class="launcher-card {% if not selected_cartera %}active{% endif %}">
       <div class="lc-nm">Todas las carteras</div>
-      <div class="lc-amt">${{ gran_total.total|floatformat:0 }}</div>
+      <div class="lc-amt">{{ gran_total.total|clp }}</div>
       <div class="lc-ct">{{ gran_total.count }} compromiso(s)</div>
     </a>
     {% for c in carteras_launcher %}
       <a href="?op={{ selected_op }}&fecha={{ selected_fecha }}&cartera={{ c.id }}" class="launcher-card {% if c.active %}active{% endif %}">
         <div class="lc-nm">{{ c.nombre }}</div>
-        <div class="lc-amt">${{ c.total|floatformat:0 }}</div>
+        <div class="lc-amt">{{ c.total|clp }}</div>
         <div class="lc-ct">{{ c.count }} compromiso(s)</div>
       </a>
     {% endfor %}
@@ -79,7 +80,7 @@
                 <td class="op"><a href="{% url 'leads:detail' c.lead.pk %}" class="link">{{ c.lead.op }}</a></td>
                 <td style="font-weight:600">{{ c.lead.name }}</td>
                 <td style="font-variant-numeric:tabular-nums">{{ c.fecha_compromiso|date:"d-m-Y" }}</td>
-                <td class="num">{% if c.monto %}${{ c.monto|floatformat:0 }}{% else %}-{% endif %}</td>
+                <td class="num">{{ c.monto|clp }}</td>
                 <td>{{ c.comentario|default:"-"|truncatechars:60 }}</td>
                 <td>{{ c.created_by.username|default:"-" }}</td>
               </tr>

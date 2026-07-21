@@ -1,4 +1,5 @@
 {% extends 'core/base.html' %}
+{% load money %}
 
 {% block title %}Carteras{% endblock %}
 
@@ -29,7 +30,7 @@
                   </td>
                   <td class="num">{{ cartera.subcarteras.count }}</td>
                   <td class="num" style="font-variant-numeric:tabular-nums">{{ cartera.n_leads|default:0 }}</td>
-                  <td class="num" style="font-variant-numeric:tabular-nums">${{ cartera.total_saldo_insoluto|default:0|floatformat:0 }}</td>
+                  <td class="num" style="font-variant-numeric:tabular-nums">{{ cartera.total_saldo_insoluto|default:0|clp }}</td>
                   <td><a href="{% url 'cartera:detail' cartera.pk %}" class="btn btn-secondary">Ver detalles</a></td>
                 </tr>
               {% endfor %}

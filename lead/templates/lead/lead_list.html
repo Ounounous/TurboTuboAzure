@@ -1,4 +1,5 @@
 {% extends 'core/base.html' %}
+{% load money %}
 
 {% block title %}Clientes{% endblock %}
 
@@ -102,9 +103,9 @@
                   <td class="op"><a href="{% url 'leads:detail' lead.pk %}" class="link">{{ lead.op }}</a></td>
                   <td style="font-weight:600">{{ lead.name }}</td>
                   <td style="font-variant-numeric:tabular-nums; color:var(--text-muted)">{{ lead.rut }}-{{ lead.dv }}</td>
-                  <td class="num">${{ lead.saldo_insoluto|floatformat:0 }}</td>
-                  <td class="num">${{ lead.saldo_deuda|floatformat:0 }}</td>
-                  <td class="num">${{ lead.valor_cuota|floatformat:0 }}</td>
+                  <td class="num">{{ lead.saldo_insoluto|clp }}</td>
+                  <td class="num">{{ lead.saldo_deuda|clp }}</td>
+                  <td class="num">{{ lead.valor_cuota|clp }}</td>
                   <td class="num">{{ lead.cuotas_atrasadas }}</td>
                   <td>{{ lead.subcartera.cartera.nombre }}</td>
                   <td>{{ lead.subcartera.nombre }}</td>

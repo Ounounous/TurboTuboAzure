@@ -1,4 +1,5 @@
 {% extends 'core/base.html' %}
+{% load money %}
 
 {% block title %}Gestiones{% endblock %}
 
@@ -154,9 +155,9 @@
             </tr>
             <tr>
               <td>Monto</td>
-              <td class="num">${{ compromisos_periodo.hoy.total|floatformat:0 }}</td>
-              <td class="num">${{ compromisos_periodo.semana.total|floatformat:0 }}</td>
-              <td class="num">${{ compromisos_periodo.mes.total|floatformat:0 }}</td>
+              <td class="num">{{ compromisos_periodo.hoy.total|clp }}</td>
+              <td class="num">{{ compromisos_periodo.semana.total|clp }}</td>
+              <td class="num">{{ compromisos_periodo.mes.total|clp }}</td>
             </tr>
           </tbody>
         </table>
@@ -178,9 +179,9 @@
             </tr>
             <tr>
               <td>Monto</td>
-              <td class="num">${{ pagos_periodo.hoy.total|floatformat:0 }}</td>
-              <td class="num">${{ pagos_periodo.semana.total|floatformat:0 }}</td>
-              <td class="num">${{ pagos_periodo.mes.total|floatformat:0 }}</td>
+              <td class="num">{{ pagos_periodo.hoy.total|clp }}</td>
+              <td class="num">{{ pagos_periodo.semana.total|clp }}</td>
+              <td class="num">{{ pagos_periodo.mes.total|clp }}</td>
             </tr>
           </tbody>
         </table>

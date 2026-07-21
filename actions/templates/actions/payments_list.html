@@ -1,4 +1,5 @@
 {% extends 'core/base.html' %}
+{% load money %}
 
 {% block title %}Pagos{% endblock %}
 
@@ -48,18 +49,18 @@
   <h2 class="text-lg font-bold mb-2">Pagos de este mes</h2>
   <div class="card p-4 mb-4 flex flex-wrap items-center justify-between gap-3">
     <span class="font-bold">Total (todas las carteras)</span>
-    <span>{{ resumen_mes_total.count }} pago(s) · <strong>${{ resumen_mes_total.total|floatformat:0 }}</strong></span>
+    <span>{{ resumen_mes_total.count }} pago(s) · <strong>{{ resumen_mes_total.total|clp }}</strong></span>
   </div>
   <div class="launcher-grid mb-8">
     <a href="?q={{ q }}" class="launcher-card {% if not selected_cartera %}active{% endif %}">
       <div class="lc-nm">Todas las carteras</div>
-      <div class="lc-amt">${{ resumen_mes_total.total|floatformat:0 }}</div>
+      <div class="lc-amt">{{ resumen_mes_total.total|clp }}</div>
       <div class="lc-ct">{{ resumen_mes_total.count }} pago(s) este mes</div>
     </a>
     {% for c in carteras_launcher %}
       <a href="?q={{ q }}&cartera={{ c.id }}" class="launcher-card {% if c.active %}active{% endif %}">
         <div class="lc-nm">{{ c.nombre }}</div>
-        <div class="lc-amt">${{ c.total|floatformat:0 }}</div>
+        <div class="lc-amt">{{ c.total|clp }}</div>
         <div class="lc-ct">{{ c.count }} pago(s) este mes</div>
       </a>
     {% endfor %}
@@ -85,7 +86,7 @@
                 <td class="op"><a href="{% url 'leads:detail' p.lead.pk %}" class="link">{{ p.lead.op }}</a></td>
                 <td style="font-weight:600">{{ p.lead.name }}</td>
                 <td style="font-variant-numeric:tabular-nums">{{ p.fecha|date:"d-m-Y" }}</td>
-                <td class="num">${{ p.monto|floatformat:0 }}</td>
+                <td class="num">{{ p.monto|clp }}</td>
                 <td>{{ p.get_tipo_display }}</td>
                 <td>{% if p.comprobante %}<a href="{{ p.comprobante.url }}" target="_blank" class="link">Ver</a>{% else %}-{% endif %}</td>
                 <td>{{ p.created_by.username|default:"-" }}</td>

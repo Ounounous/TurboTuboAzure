@@ -1,4 +1,5 @@
 {% extends 'core/base.html' %}
+{% load money %}
 
 {% block title %}{{ lead.name }}{% endblock %}
 
@@ -35,7 +36,7 @@
 
         <div class="debt-highlight">
           <div class="lbl">Saldo deuda</div>
-          <div class="amt">${{ lead.saldo_deuda|floatformat:0 }}</div>
+          <div class="amt">{{ lead.saldo_deuda|clp }}</div>
         </div>
 
         <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
@@ -69,8 +70,8 @@
       <div class="card p-4">
         <div class="kv-list">
           <div class="kv"><span class="k">Cartera</span><span class="v">{{ lead.subcartera.cartera.nombre }} / {{ lead.subcartera.nombre }}</span></div>
-          <div class="kv"><span class="k">Saldo insoluto</span><span class="v">${{ lead.saldo_insoluto|floatformat:0 }}</span></div>
-          <div class="kv"><span class="k">Valor cuota</span><span class="v">${{ lead.valor_cuota|floatformat:0 }}</span></div>
+          <div class="kv"><span class="k">Saldo insoluto</span><span class="v">{{ lead.saldo_insoluto|clp }}</span></div>
+          <div class="kv"><span class="k">Valor cuota</span><span class="v">{{ lead.valor_cuota|clp }}</span></div>
           <div class="kv"><span class="k">Cuotas atrasadas</span><span class="v">{{ lead.cuotas_atrasadas }}</span></div>
           <div class="kv"><span class="k">Ciclo</span><span class="v">{{ lead.ciclo }}</span></div>
           <div class="kv"><span class="k">Tipo cobranza</span><span class="v">{{ lead.get_tipo_cobranza_display }}</span></div>
@@ -79,7 +80,7 @@
             {% else %}<span class="dias {% if dias_ultima_gestion <= 3 %}ok{% elif dias_ultima_gestion < 10 %}warn{% else %}late{% endif %}">{{ dias_ultima_gestion }} d</span>{% endif %}
           </span></div>
           {% if next_commitment %}
-            <div class="kv"><span class="k">Próx. compromiso</span><span class="v">{{ next_commitment.fecha_compromiso|date:"d-m-Y" }}{% if next_commitment.monto %} · ${{ next_commitment.monto|floatformat:0 }}{% endif %}</span></div>
+            <div class="kv"><span class="k">Próx. compromiso</span><span class="v">{{ next_commitment.fecha_compromiso|date:"d-m-Y" }}{% if next_commitment.monto %} · {{ next_commitment.monto|clp }}{% endif %}</span></div>
           {% endif %}
         </div>
       </div>
@@ -163,7 +164,7 @@
                 {% for pc in lead.payment_commitments.all %}
                   <tr>
                     <td style="font-variant-numeric:tabular-nums">{{ pc.fecha_compromiso|date:"d-m-Y" }}</td>
-                    <td class="num">{% if pc.monto %}${{ pc.monto|floatformat:0 }}{% else %}-{% endif %}</td>
+                    <td class="num">{{ pc.monto|clp }}</td>
                     <td>{{ pc.comentario|default:"-"|truncatechars:80 }}</td>
                     <td>{{ pc.created_by.username|default:"-" }}</td>
                   </tr>
@@ -193,7 +194,7 @@
                 {% for p in lead.payments.all %}
                   <tr>
                     <td style="font-variant-numeric:tabular-nums">{{ p.fecha|date:"d-m-Y" }}</td>
-                    <td class="num">${{ p.monto|floatformat:0 }}</td>
+                    <td class="num">{{ p.monto|clp }}</td>
                     <td>{{ p.get_tipo_display }}</td>
                     <td>{% if p.comprobante %}<a href="{{ p.comprobante.url }}" target="_blank" class="link">Ver comprobante</a>{% else %}-{% endif %}</td>
                     <td>{{ p.created_by.username|default:"-" }}</td>
