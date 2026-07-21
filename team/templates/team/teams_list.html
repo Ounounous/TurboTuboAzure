@@ -19,16 +19,35 @@
     </details>
 
     <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-      {% for team in teams %}
-        <div class="{% if team == active_team %}card-selected{% else %}card{% endif %} p-5">
+      {% for data in teams_data %}
+        <div class="{% if data.team == active_team %}card-selected{% else %}card{% endif %} p-5">
           <div class="flex items-center gap-3 mb-3">
-            {% if team == active_team %}<span class="dot-st"><span class="d st-green"></span></span>{% endif %}
-            <h2 class="text-lg font-bold">{{ team.name }}</h2>
+            {% if data.team == active_team %}<span class="dot-st"><span class="d st-green"></span></span>{% endif %}
+            <h2 class="text-lg font-bold">{{ data.team.name }}</h2>
           </div>
-          {% if team == active_team %}
-            <a href="{% url 'team:detail' team.id %}" class="btn btn-primary">Ver equipo</a>
+
+          <p class="muted mb-1" style="font-size:10.5px; text-transform:uppercase; letter-spacing:.04em;">Supervisores</p>
+          <div class="mb-3">
+            {% for s in data.supervisores %}
+              <span style="display:inline-block; background:var(--surface-alt); border:1px solid var(--border); border-radius:6px; padding:2px 8px; font-size:11px; margin:0 4px 4px 0;">{{ s.username }}</span>
+            {% empty %}
+              <span class="muted" style="font-size:11.5px;">Ninguno</span>
+            {% endfor %}
+          </div>
+
+          <p class="muted mb-1" style="font-size:10.5px; text-transform:uppercase; letter-spacing:.04em;">Cobradores</p>
+          <div class="mb-4">
+            {% for m in data.cobradores %}
+              <span style="display:inline-block; background:var(--surface-alt); border:1px solid var(--border); border-radius:6px; padding:2px 8px; font-size:11px; margin:0 4px 4px 0;">{{ m.username }}</span>
+            {% empty %}
+              <span class="muted" style="font-size:11.5px;">Ninguno</span>
+            {% endfor %}
+          </div>
+
+          {% if data.team == active_team %}
+            <a href="{% url 'team:detail' data.team.id %}" class="btn btn-primary">Ver equipo</a>
           {% else %}
-            <a href="{% url 'team:activate' team.id %}" class="btn btn-secondary">Activar equipo</a>
+            <a href="{% url 'team:activate' data.team.id %}" class="btn btn-secondary">Activar equipo</a>
           {% endif %}
         </div>
       {% empty %}

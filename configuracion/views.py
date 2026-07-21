@@ -9,6 +9,7 @@ from cartera.models import Cartera
 from lead.permissions import es_admin_owner
 from suspensiones.models import RetentionSettings
 from team.forms import TeamForm
+from team.models import Team
 from userprofile.models import Userprofile
 
 from .forms import CrearUsuarioForm
@@ -43,6 +44,7 @@ class UsuariosPermisosView(ConfiguracionRequiredMixin, View):
             'carteras': carteras,
             'supervisores_disponibles': supervisores_disponibles,
             'tipos': Userprofile.USER_TYPES,
+            'equipos': Team.objects.order_by('name'),
             'crear_usuario_form': CrearUsuarioForm(),
         })
 
@@ -84,6 +86,27 @@ class UsuariosPermisosView(ConfiguracionRequiredMixin, View):
                 userprofile.user_type = nuevo_tipo
                 userprofile.save(update_fields=['user_type'])
                 messages.success(request, f'{user.username} ahora es {dict(Userprofile.USER_TYPES)[nuevo_tipo]}.')
+
+        elif accion == 'cambiar_equipo':
+            user = get_object_or_404(User, pk=request.POST.get('user_id'))
+            team_id = request.POST.get('team_id')
+            userprofile, _ = Userprofile.objects.get_or_create(user=user)
+            equipo_anterior = userprofile.active_team
+
+            if not team_id:
+                if equipo_anterior:
+                    equipo_anterior.members.remove(user)
+                userprofile.active_team = None
+                userprofile.save(update_fields=['active_team'])
+                messages.success(request, f'{user.username} ya no pertenece a ningún equipo.')
+            else:
+                nuevo_equipo = get_object_or_404(Team, pk=team_id)
+                if equipo_anterior:
+                    equipo_anterior.members.remove(user)
+                nuevo_equipo.members.add(user)
+                userprofile.active_team = nuevo_equipo
+                userprofile.save(update_fields=['active_team'])
+                messages.success(request, f'{user.username} ahora pertenece al equipo "{nuevo_equipo.name}".')
 
         elif accion == 'asignar_supervisores':
             cartera = get_object_or_404(Cartera, pk=request.POST.get('cartera_id'))

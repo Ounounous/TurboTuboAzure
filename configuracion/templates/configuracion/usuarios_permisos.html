@@ -60,18 +60,18 @@
 
   <h2 class="text-lg font-bold mb-2">Usuarios</h2>
   <p class="muted mb-3" style="font-size:12.5px;">
-    Rol de cada usuario. admin/owner ven todo; supervisor solo sus carteras (arriba); cobrador solo sus clientes asignados.
+    Rol y equipo de cada usuario. admin/owner ven todo; supervisor solo sus carteras (arriba); cobrador solo sus clientes asignados.
   </p>
   <div class="card mb-6" style="border:1px solid var(--border); border-radius:10px;">
     <div class="overflow-x-auto">
       <table class="table-dense">
-        <thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Guardar</th></tr></thead>
+        <thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Equipo</th></tr></thead>
         <tbody>
           {% for u in usuarios %}
             <tr>
               <td class="op">{{ u.username }}</td>
               <td>{{ u.get_full_name|default:"—" }}</td>
-              <td colspan="2">
+              <td>
                 <form method="post" action="{% url 'configuracion:usuarios_permisos' %}" style="display:flex; gap:8px; align-items:center;">
                   {% csrf_token %}
                   <input type="hidden" name="accion" value="cambiar_tipo">
@@ -79,6 +79,20 @@
                   <select name="user_type">
                     {% for val, label in tipos %}
                       <option value="{{ val }}" {% if u.userprofile.user_type == val %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                  <button type="submit" class="btn btn-secondary" style="font-size:11.5px; padding:4px 10px;">Guardar</button>
+                </form>
+              </td>
+              <td>
+                <form method="post" action="{% url 'configuracion:usuarios_permisos' %}" style="display:flex; gap:8px; align-items:center;">
+                  {% csrf_token %}
+                  <input type="hidden" name="accion" value="cambiar_equipo">
+                  <input type="hidden" name="user_id" value="{{ u.id }}">
+                  <select name="team_id">
+                    <option value="">— sin equipo —</option>
+                    {% for eq in equipos %}
+                      <option value="{{ eq.id }}" {% if u.userprofile.active_team_id == eq.id %}selected{% endif %}>{{ eq.name }}</option>
                     {% endfor %}
                   </select>
                   <button type="submit" class="btn btn-secondary" style="font-size:11.5px; padding:4px 10px;">Guardar</button>

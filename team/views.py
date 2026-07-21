@@ -2,15 +2,32 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, get_object_or_404, redirect
 
+from lead.permissions import es_admin_owner
+
 from .forms import TeamForm
 from .models import Team
 
+SUPERVISOR_TYPES = ('admin', 'owner', 'supervisor')
+
+
 @login_required
 def teams_list(request):
-    teams = Team.objects.filter(members__in=[request.user])
+    # admin/owner ven TODOS los equipos (mismo criterio que Usuarios y Permisos, que ya
+    # muestra a todo el mundo sin acotar por equipo); el resto solo los suyos.
+    if es_admin_owner(request.user):
+        teams = Team.objects.all().order_by('name')
+    else:
+        teams = Team.objects.filter(members__in=[request.user]).order_by('name')
+
+    teams_data = []
+    for team in teams:
+        miembros = list(team.members.select_related('userprofile').order_by('username'))
+        supervisores = [m for m in miembros if getattr(m, 'userprofile', None) and m.userprofile.user_type in SUPERVISOR_TYPES]
+        cobradores = [m for m in miembros if getattr(m, 'userprofile', None) and m.userprofile.user_type == 'collector']
+        teams_data.append({'team': team, 'supervisores': supervisores, 'cobradores': cobradores})
 
     return render(request, 'team/teams_list.html', {
-        'teams': teams,
+        'teams_data': teams_data,
         'active_team': request.user.userprofile.active_team,
         'crear_equipo_form': TeamForm(),
     })
@@ -46,7 +63,16 @@ def crear_equipo(request):
 
 @login_required
 def teams_activate(request, pk):
-    team = get_object_or_404(Team, members__in=[request.user], pk=pk)
+    if es_admin_owner(request.user):
+        # admin/owner puede activar cualquier equipo (los ve todos en la lista); si no era
+        # miembro todavia, queda agregado -- no tiene sentido "activar" un equipo del que no
+        # formas parte.
+        team = get_object_or_404(Team, pk=pk)
+        if not team.members.filter(pk=request.user.pk).exists():
+            team.members.add(request.user)
+    else:
+        team = get_object_or_404(Team, members__in=[request.user], pk=pk)
+
     userprofile = request.user.userprofile
     userprofile.active_team = team
     userprofile.save()
@@ -55,7 +81,10 @@ def teams_activate(request, pk):
 
 @login_required
 def detail(request, pk):
-    team = get_object_or_404(Team, members__in=[request.user], pk=pk)
+    if es_admin_owner(request.user):
+        team = get_object_or_404(Team, pk=pk)
+    else:
+        team = get_object_or_404(Team, members__in=[request.user], pk=pk)
 
     return render(request, 'team/detail.html', { 'team': team })
 
