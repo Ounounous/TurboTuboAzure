@@ -285,6 +285,22 @@ textarea:focus {
 /* labels: heredan el color de texto de la paleta (legibles sobre el fondo del form) */
 label { color: var(--field-label); }
 
+/* ---------------- formularios largos (varios campos) ----------------
+   Para form.as_p() con muchos campos (ej. Agregar cliente, Mi cuenta): cada <p> que Django
+   genera pasa a ser una celda de grilla, en vez de apilarse en una sola columna angosta. */
+.grid-form { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px 20px; }
+.grid-form p { margin: 0 0 14px; }
+.grid-form label { display: block; font-weight: 600; font-size: 13px; margin-bottom: 5px; }
+.grid-form .helptext { display: block; font-size: 11.5px; color: var(--text-muted); margin-top: 3px; }
+.grid-form ul.errorlist { color: var(--danger); font-size: 12px; margin: 2px 0 4px; padding-left: 18px; }
+/* A diferencia del resto de la app (donde los inputs se dejan angostos a proposito, ej. las
+   barras de filtro en flex-row), un formulario largo en grilla si necesita que cada campo
+   ocupe su celda completa. */
+.grid-form input, .grid-form select, .grid-form textarea { width: 100%; box-sizing: border-box; }
+@media (max-width: 640px) {
+  .grid-form { grid-template-columns: 1fr; }
+}
+
 /* ---------------- medio picker (multistep gestion) ---------------- */
 .medio-btn {
   padding: .5rem 1rem;

@@ -56,6 +56,7 @@ db.sqlite3
 db.sqlite3-journal
 backups/
 sample_uploads/
+qa_fixtures/
 media/call_recordings/
 media/payment_receipts/
 

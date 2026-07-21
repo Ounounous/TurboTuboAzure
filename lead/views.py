@@ -290,7 +290,7 @@ class LeadCreateView(_SupervisorGate, CreateView):
         context = super().get_context_data(**kwargs)
         team = self.request.user.userprofile.active_team
         context['team'] = team
-        context['title'] = 'Add lead'
+        context['title'] = 'Agregar cliente'
 
         return context
 
