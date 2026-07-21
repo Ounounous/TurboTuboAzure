@@ -1,18 +1,12 @@
 from django import forms
 from django.contrib.auth.models import User
 from cartera.models import Cartera
-from .models import Lead, Comment, LeadFile
+from .models import Lead, LeadFile
 
 class AddLeadForm(forms.ModelForm):
     class Meta:
         model = Lead
         fields = ('op', 'name', 'rut', 'dv', 'saldo_insoluto', 'saldo_deuda', 'valor_cuota', 'cuotas_atrasadas', 'subcartera', 'tipo_cobranza', 'status', 'ciclo_cartera', 'ciclo', 'activo', 'tiene_aval',)
-
-
-class AddCommentForm(forms.ModelForm):
-    class Meta:
-        model = Comment
-        fields = ('content',)
 
 
 class AddFileForm(forms.ModelForm):

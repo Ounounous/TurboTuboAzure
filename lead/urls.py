@@ -10,7 +10,6 @@ urlpatterns = [
     path('<int:pk>/', views.LeadDetailView.as_view(), name='detail'),
     path('<int:pk>/delete/', views.LeadDeleteView.as_view(), name='delete'),
     path('<int:pk>/marcar-al-dia/', views.MarcarAlDiaView.as_view(), name='marcar_al_dia'),
-    path('<int:pk>/add-comment/', views.AddCommentView.as_view(), name='add_comment'),
     path('<int:pk>/add-note/', views.AddLeadNoteView.as_view(), name='add_note'),
     path('<int:pk>/toggle-favorite/', views.ToggleFavoriteView.as_view(), name='toggle_favorite'),
     path('<int:pk>/add-file/', views.AddFileView.as_view(), name='add_file'),

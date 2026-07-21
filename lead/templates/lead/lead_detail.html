@@ -121,7 +121,6 @@
         <button type="button" class="tab-btn" data-tab="grabaciones">Grabaciones</button>
         <button type="button" class="tab-btn" data-tab="demografia">Demografía</button>
         <button type="button" class="tab-btn" data-tab="archivos">Archivos</button>
-        <button type="button" class="tab-btn" data-tab="comentarios">Comentarios</button>
       </div>
 
       <!-- Gestiones -->
@@ -280,23 +279,6 @@
           {% csrf_token %}
           {{ fileform.as_p }}
           <button class="btn btn-primary mt-2">Subir archivo</button>
-        </form>
-      </div>
-
-      <!-- Comentarios -->
-      <div class="tab-panel" data-panel="comentarios">
-        {% for comment in lead.comments.all %}
-          <div class="card py-3 px-3 mb-2">
-            <p class="mb-1 text-sm"><strong>{{ comment.created_by }}</strong> · {{ comment.created_at|date:"d-m-Y H:i" }}</p>
-            {{ comment.content }}
-          </div>
-        {% empty %}
-          <p class="muted mb-4">Sin comentarios.</p>
-        {% endfor %}
-        <form method="post" action="{% url 'leads:add_comment' lead.id %}" class="mt-4">
-          {% csrf_token %}
-          {{ form.as_p }}
-          <button class="btn btn-primary mt-2">Comentar</button>
         </form>
       </div>
     </div>

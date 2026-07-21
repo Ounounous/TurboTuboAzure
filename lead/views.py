@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 from openpyxl import load_workbook
 
-from .forms import AddCommentForm, AddFileForm, AddLeadForm, UploadExcelFileForm, AssignLeadsForm, UploadAssignmentFileForm
+from .forms import AddFileForm, AddLeadForm, UploadExcelFileForm, AssignLeadsForm, UploadAssignmentFileForm
 from .models import Lead, LeadAssignment, LeadNote, User
 from cartera.models import Cartera, Subcartera
 from demographics.models import IDDemographics, AvalDemographics, IDItem, Phone
@@ -216,7 +216,6 @@ class LeadDetailView(LoginRequiredMixin, DetailView):
         context['demographics'] = IDDemographics.objects.filter(lead=self.object)
         context['aval_demographics'] = AvalDemographics.objects.filter(
             id_demographics__in=context['demographics']).first()
-        context['form'] = AddCommentForm()
         context['fileform'] = AddFileForm()
         context['notes'] = self.object.notes.select_related('author')
         context['phones'] = self.object.phone_set.all()
@@ -528,22 +527,6 @@ class AddFileView(LoginRequiredMixin, View):
             file.save()
 
         return redirect('leads:list', pk=pk)
-
-class AddCommentView(LoginRequiredMixin, View):
-    def post(self, request, *args, **kwargs):
-        pk = kwargs.get('pk')
-
-        form = AddCommentForm(request.POST)
-
-        if form.is_valid():
-            comment = form.save(commit=False)
-            comment.team = self.request.user.userprofile.active_team
-            comment.created_by = request.user
-            comment.lead_id = pk
-            comment.save()
-
-
-        return redirect('leads:detail', pk=pk)
 
 def _puede_ver_lead(user, lead):
     """Un usuario puede ver/anotar un lead si es suyo (asignado/creado) o es supervisor+."""
