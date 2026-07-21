@@ -43,6 +43,23 @@ class DemographicSelectionForm(forms.Form):
             self.fields['email'].choices = email_choices
 
 
+class AddPhoneQuickForm(forms.Form):
+    """Agregar un teléfono nuevo sin salir del flujo de gestión (paso 2). Queda activo por
+    default -- cualquier usuario logueado puede usarlo, no solo supervisor+."""
+    phone_number = forms.CharField(max_length=20, label='Nuevo teléfono')
+
+    def clean_phone_number(self):
+        value = self.cleaned_data['phone_number'].strip()
+        if not any(c.isdigit() for c in value):
+            raise forms.ValidationError('Ingresa un número de teléfono válido.')
+        return value
+
+
+class AddEmailQuickForm(forms.Form):
+    """Igual que AddPhoneQuickForm pero para el correo principal. Solo se ofrece cuando el lead
+    todavía no tiene uno (ver MultiStepActionView) -- evita pisar un correo ya cargado."""
+    email = forms.EmailField(label='Nuevo correo')
+
 
 class PaymentForm(forms.ModelForm):
     class Meta:

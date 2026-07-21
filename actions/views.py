@@ -22,9 +22,9 @@ from lead.models import Lead
 from lead.permissions import carteras_visibles, es_supervisor, leads_visibles, scope_por_lead
 from team.models import Team
 from cartera.models import Cartera
-from demographics.models import Phone
+from demographics.models import CONTACT_ACTIVE, IDDemographics, Phone
 from demographics.views import find_lead, _normalize_header
-from .forms import ActionForm, LeadSearchForm, DemographicSelectionForm, PaymentForm
+from .forms import ActionForm, AddEmailQuickForm, AddPhoneQuickForm, LeadSearchForm, DemographicSelectionForm, PaymentForm
 import openpyxl
 import re
 from io import BytesIO
@@ -242,6 +242,20 @@ class MultiStepActionView(View):
             'lead': lead, 'step': step, 'no_gestionable': lead.motivo_no_gestionable,
         })
 
+    def _step2_context(self, lead, demographic_form=None, quick_phone_form=None, quick_email_form=None):
+        idd = IDDemographics.objects.filter(lead=lead).first()
+        return {
+            'lead': lead,
+            'step': 2,
+            'demographic_form': demographic_form or DemographicSelectionForm(lead=lead),
+            'quick_phone_form': quick_phone_form or AddPhoneQuickForm(),
+            'quick_email_form': quick_email_form or AddEmailQuickForm(),
+            # Solo se ofrece "agregar correo" cuando el lead todavia no tiene uno -- evita pisar
+            # silenciosamente el que ya esta cargado (ese cambio va por Demografia).
+            'puede_agregar_email': not (idd and idd.principal_email),
+            'lead_notes': lead.notes.select_related('author'),
+        }
+
     def get(self, request, step=1, lead_id=None):
         if lead_id:
             lead = get_object_or_404(Lead, id=lead_id)
@@ -259,11 +273,7 @@ class MultiStepActionView(View):
             lead = get_object_or_404(Lead, id=lead_id)
             if not lead.es_gestionable:
                 return self._blocked_response(request, lead, step)
-            form = DemographicSelectionForm(lead=lead)
-            return render(request, 'actions/multistep_form.html', {
-                'lead': lead, 'demographic_form': form, 'step': step,
-                'lead_notes': lead.notes.select_related('author'),
-            })
+            return render(request, 'actions/multistep_form.html', self._step2_context(lead))
         elif step == 3 and lead_id:
             lead = get_object_or_404(Lead, id=lead_id)
             if not lead.es_gestionable:
@@ -292,6 +302,36 @@ class MultiStepActionView(View):
         if not lead.es_gestionable:
             return self._blocked_response(request, lead, step)
         if step == 2:
+            accion = request.POST.get('accion', 'seleccionar')
+
+            if accion == 'agregar_telefono':
+                quick_form = AddPhoneQuickForm(request.POST)
+                if quick_form.is_valid():
+                    phone = Phone.objects.create(
+                        lead=lead, phone_number=quick_form.cleaned_data['phone_number'],
+                        phone_type=Phone.PRINCIPAL, phone_number_status=Phone.ACTIVE,
+                    )
+                    request.session['selected_phone'] = phone.id
+                    request.session['selected_email'] = None
+                    return redirect('actions:multistep_step', step=3)
+                return render(request, 'actions/multistep_form.html', self._step2_context(lead, quick_phone_form=quick_form))
+
+            if accion == 'agregar_email':
+                quick_form = AddEmailQuickForm(request.POST)
+                idd = IDDemographics.objects.filter(lead=lead).first()
+                ya_tiene_email = bool(idd and idd.principal_email)
+                if not ya_tiene_email and quick_form.is_valid():
+                    idd = idd or IDDemographics.objects.create(lead=lead)
+                    idd.principal_email = quick_form.cleaned_data['email']
+                    idd.principal_email_status = CONTACT_ACTIVE
+                    idd.save(update_fields=['principal_email', 'principal_email_status'])
+                    request.session['selected_email'] = idd.principal_email
+                    request.session['selected_phone'] = None
+                    return redirect('actions:multistep_step', step=3)
+                if ya_tiene_email:
+                    quick_form.add_error(None, 'El lead ya tiene un correo principal registrado.')
+                return render(request, 'actions/multistep_form.html', self._step2_context(lead, quick_email_form=quick_form))
+
             form = DemographicSelectionForm(request.POST, lead=lead)
             if form.is_valid():
                 selected_phone = form.cleaned_data['phone']
@@ -299,9 +339,7 @@ class MultiStepActionView(View):
                 request.session['selected_phone'] = selected_phone.id if selected_phone else None
                 request.session['selected_email'] = selected_email
                 return redirect('actions:multistep_step', step=3)
-            return render(request, 'actions/multistep_form.html', {
-                'lead': lead, 'demographic_form': form, 'step': step
-            })
+            return render(request, 'actions/multistep_form.html', self._step2_context(lead, demographic_form=form))
         elif step == 3:
             selected_phone_id = request.session.get('selected_phone')
             selected_email = request.session.get('selected_email')
