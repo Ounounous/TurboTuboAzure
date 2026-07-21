@@ -117,6 +117,7 @@ class EquipoView(ConfiguracionRequiredMixin, View):
             'team': team,
             'miembros': miembros,
             'team_form': TeamForm(instance=team) if team else None,
+            'crear_equipo_form': TeamForm(),
         })
 
     def post(self, request, *args, **kwargs):

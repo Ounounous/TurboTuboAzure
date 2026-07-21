@@ -56,6 +56,19 @@
         </table>
       </div>
     </div>
+
+    <details class="card p-4 mb-6" style="max-width:420px;">
+      <summary class="cursor-pointer font-semibold" style="font-size:13px;">+ Crear otro equipo</summary>
+      <p class="muted mt-2 mb-2" style="font-size:12px;">
+        Crea un equipo nuevo y separado (quedas como su único miembro) y lo activa de inmediato -- para volver a este, usa "Activar equipo" en Equipos.
+      </p>
+      <form method="post" action="{% url 'team:crear' %}" class="mt-3">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="configuracion:equipo">
+        {{ crear_equipo_form.as_p }}
+        <button type="submit" class="btn btn-primary mt-2">Crear equipo</button>
+      </form>
+    </details>
   {% endif %}
 </div>
 

@@ -12,6 +12,7 @@
       <summary class="cursor-pointer font-semibold" style="font-size:13px;">+ Crear equipo nuevo</summary>
       <form method="post" action="{% url 'team:crear' %}" class="mt-3">
         {% csrf_token %}
+        <input type="hidden" name="next" value="team:list">
         {{ crear_equipo_form.as_p }}
         <button type="submit" class="btn btn-primary mt-2">Crear equipo</button>
       </form>

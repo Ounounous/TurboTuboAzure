@@ -16,8 +16,16 @@ def teams_list(request):
     })
 
 
+# A donde volver tras crear un equipo -- whitelist explicita para no armar un open-redirect con
+# un valor de POST arbitrario. Se llama tanto desde "Mis equipos" como desde Configuracion.
+CREAR_EQUIPO_NEXT = {'team:list', 'configuracion:equipo'}
+
+
 @login_required
 def crear_equipo(request):
+    next_name = request.POST.get('next')
+    next_name = next_name if next_name in CREAR_EQUIPO_NEXT else 'team:list'
+
     if request.method == 'POST':
         form = TeamForm(request.POST)
         if form.is_valid():
@@ -34,7 +42,7 @@ def crear_equipo(request):
         else:
             messages.error(request, 'Nombre de equipo inválido.')
 
-    return redirect('team:list')
+    return redirect(next_name)
 
 @login_required
 def teams_activate(request, pk):
