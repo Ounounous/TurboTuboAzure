@@ -1,5 +1,5 @@
 /* ============================================================
-   TurboTubo — sistema de diseño (4 paletas)
+   TurboTubo — sistema de diseño (6 paletas)
    Por defecto: azul-claro. Cambia con [data-theme] en <html>.
    ============================================================ */
 
@@ -116,6 +116,66 @@ html[data-theme="oliva-oscuro"] {
   --success: #A9D18E;
   --success-contrast: #17300C;
   --success-hover: #C2E0AC;
+}
+
+html[data-theme="rosado"] {
+  --bg-page: #FBF0F2;
+  --surface: #FFFFFF;
+  --surface-alt: #F6DEE4;
+  --surface-alt-hover: #F0CBD5;
+  --border: #E8B9C6;
+  --text: #3F1E28;
+  --text-muted: #8C5C6A;
+  --accent: #C2447A;
+  --accent-contrast: #FFFFFF;
+  --accent-hover: #A5335F;
+  --field-bg: #FFFFFF;
+  --field-text: #3F1E28;
+  --field-border: #E3B7C4;
+  --field-placeholder: #B98598;
+  --field-label: var(--text);
+  --nav-bg: #FFFFFF;
+  --nav-text: #3F1E28;
+  --nav-text-muted: #8C5C6A;
+  --nav-active-bg: #F0CBD5;
+  /* danger/success quedan semanticos (rojo/verde reales) aunque el acento sea rosado, para que
+     un error o un exito nunca se confunda con el color de marca. */
+  --danger: #B33A3A;
+  --danger-contrast: #FFFFFF;
+  --danger-hover: #96302F;
+  --success: #21804C;
+  --success-contrast: #FFFFFF;
+  --success-hover: #186640;
+}
+
+html[data-theme="gris"] {
+  --bg-page: #F2F2F2;
+  --surface: #FFFFFF;
+  --surface-alt: #E4E4E4;
+  --surface-alt-hover: #D6D6D6;
+  --border: #C7C7C7;
+  --text: #1F1F1F;
+  --text-muted: #6B6B6B;
+  --accent: #2B2B2B;
+  --accent-contrast: #FFFFFF;
+  --accent-hover: #000000;
+  --field-bg: #FFFFFF;
+  --field-text: #1F1F1F;
+  --field-border: #CCCCCC;
+  --field-placeholder: #999999;
+  --field-label: var(--text);
+  --nav-bg: #FFFFFF;
+  --nav-text: #1F1F1F;
+  --nav-text-muted: #6B6B6B;
+  --nav-active-bg: #DDDDDD;
+  /* escala de grises a proposito hasta en el acento -- pero danger/success se dejan cromaticos:
+     un estado de error/exito en gris puro es dificil de distinguir de un dato normal. */
+  --danger: #C0392B;
+  --danger-contrast: #FFFFFF;
+  --danger-hover: #A5301F;
+  --success: #1C7A4A;
+  --success-contrast: #FFFFFF;
+  --success-hover: #166139;
 }
 
 /* ---------------- base ---------------- */
