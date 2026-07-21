@@ -4,8 +4,10 @@ from django.db import models
 
 class RetentionSettings(models.Model):
     """
-    Configuracion global (una sola fila) de la purga de datos del ciclo de vida del lead. Solo
-    guarda los plazos; las tareas que efectivamente borran datos son fase 2. Editable en /admin.
+    Configuracion global (una sola fila) de la purga de datos del ciclo de vida del lead. Guarda
+    los plazos que consumen las tareas de purga: actions.tasks.purgar_gestiones_ciclo_vida (leads
+    terminados/desasignados) y purge_status_change_log (historial de status). Editable en
+    Configuracion -> Retencion de datos, o en /admin.
     """
     dias_purga_terminado = models.PositiveIntegerField(
         default=15,

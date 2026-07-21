@@ -42,9 +42,13 @@ def reactivar(lead, changed_by=None):
     lead.suspendido_at = None
     lead.desasignado_at = None
     lead.terminado_at = None
+    # Se vuelve a gestionar: si sus datos ya se habian purgado por retencion, limpiar la marca
+    # para que una futura terminacion/desasignacion lo haga elegible de nuevo.
+    lead.datos_purgados_at = None
     lead.motivo_suspension = ''
     lead.save(update_fields=[
-        'activo', 'suspendido_at', 'desasignado_at', 'terminado_at', 'motivo_suspension',
+        'activo', 'suspendido_at', 'desasignado_at', 'terminado_at', 'datos_purgados_at',
+        'motivo_suspension',
     ])
     _registrar_metadata(lead, 'reactivado')
 

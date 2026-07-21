@@ -253,6 +253,77 @@ def reconciliar_estados():
 
 
 @shared_task(**RETRY_DB)
+def purgar_gestiones_ciclo_vida():
+    """
+    FASE 2 de retencion (Ley 21.719): purga los datos accesorios -- gestiones (Action, que en
+    cascada se lleva sus compromisos de pago) y notas internas (LeadNote, texto libre) -- de los
+    leads cuya finalidad de tratamiento ya ceso: TERMINADOS (deuda pagada) y DESASIGNADOS. Los
+    plazos son configurables en Configuracion -> Retencion de datos:
+      - terminado:    N dias despues del FIN DEL MES en que se declaro "al dia".
+      - desasignado:  N dias desde que quedo desasignado.
+
+    Se CONSERVAN a proposito: el lead en si (dato de credito con base legal: RUT, nombre, deuda),
+    los pagos (respaldo contable), y las grabaciones (retencion legal propia de 2 anios, ver
+    purge_expired_recordings). La demografia (telefonos/correos adquiridos) NO se toca todavia:
+    depende de la marca de procedencia (dato del credito vs adquirido) que es fase 3.
+
+    Idempotente y acotada: solo mira leads con datos_purgados_at nulo, y lo setea al purgar.
+    """
+    import calendar
+    from lead.models import Lead, LeadNote
+    from .models import Action
+
+    cfg = _retention_settings()
+    hoy = timezone.now().date()
+
+    def _fin_de_mes(d):
+        return d.replace(day=calendar.monthrange(d.year, d.month)[1])
+
+    # Terminados: elegibles cuando fin_de_mes(terminado_at) + plazo <= hoy. El "fin de mes" varia
+    # por fila, asi que se filtra en Python (el conjunto es acotado: una vez purgado ya no vuelve).
+    terminados = [
+        lead.pk
+        for lead in Lead.objects.filter(
+            activo=Lead.TERMINADO, terminado_at__isnull=False, datos_purgados_at__isnull=True
+        ).only('pk', 'terminado_at').iterator(chunk_size=CHUNK)
+        if _fin_de_mes(lead.terminado_at) + timedelta(days=cfg.dias_purga_terminado) <= hoy
+    ]
+
+    # Desasignados: plazo fijo desde desasignado_at -> se puede filtrar en la consulta.
+    corte_desasignado = hoy - timedelta(days=cfg.dias_purga_desasignado)
+    desasignados = list(
+        Lead.objects.filter(
+            activo=Lead.DESASIGNADO, desasignado_at__isnull=False,
+            desasignado_at__lte=corte_desasignado, datos_purgados_at__isnull=True,
+        ).values_list('pk', flat=True)
+    )
+
+    pks = terminados + desasignados
+    if not pks:
+        logger.info('purgar_gestiones_ciclo_vida: nada que purgar.')
+        return 0
+
+    for i in range(0, len(pks), CHUNK):
+        chunk = pks[i:i + CHUNK]
+        # Borrar Action arrastra su PaymentCommitment (OneToOne CASCADE) y deja CallRecording y
+        # PendingPbxCall con action=NULL (SET_NULL): la grabacion sobrevive.
+        Action.objects.filter(lead_id__in=chunk).delete()
+        LeadNote.objects.filter(lead_id__in=chunk).delete()
+        Lead.objects.filter(pk__in=chunk).update(datos_purgados_at=hoy)
+
+    logger.info(
+        f'purgar_gestiones_ciclo_vida: {len(pks)} lead(s) purgado(s) '
+        f'({len(terminados)} terminado(s), {len(desasignados)} desasignado(s)).'
+    )
+    return len(pks)
+
+
+def _retention_settings():
+    from suspensiones.models import RetentionSettings
+    return RetentionSettings.get_solo()
+
+
+@shared_task(**RETRY_DB)
 def purge_status_change_log(dias=None):
     """
     Acota el crecimiento de StatusChangeLog: borra registros mas viejos que `dias`. El historico
@@ -289,6 +360,7 @@ HEARTBEAT_MAX_DIAS = {
     # grabaciones dejan de bajarse.
     'actions.tasks.sync_pbx_recordings': 1,
     'actions.tasks.purge_status_change_log': 8,
+    'actions.tasks.purgar_gestiones_ciclo_vida': 2,
     'mlmetadata.tasks.exportar_metadata_ml': 8,
 }
 

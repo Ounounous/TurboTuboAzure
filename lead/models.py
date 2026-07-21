@@ -146,6 +146,12 @@ class Lead(models.Model):
     terminado_at = models.DateField(null=True, blank=True)
     desasignado_at = models.DateField(null=True, blank=True)
     suspendido_at = models.DateField(null=True, blank=True)
+    # Fecha en que se purgaron los datos accesorios (gestiones, notas) de este lead por retencion
+    # (actions.tasks.purgar_gestiones_ciclo_vida, fase 2). Deja la purga idempotente (no re-escanea
+    # ni re-purga) y sirve de evidencia de cumplimiento (Ley 21.719): consta cuando se depuro. Se
+    # limpia si el lead se reactiva (vuelve a gestionarse). Ley 21.719: al cesar la finalidad del
+    # tratamiento, los datos accesorios no se conservan indefinidamente.
+    datos_purgados_at = models.DateField(null=True, blank=True)
     motivo_suspension = models.CharField(max_length=255, blank=True)
     tiene_aval = models.CharField(max_length=2, choices=CHOICES_AVAL, default=NO)
     fecha_compromiso_pago = models.DateField(null=True, blank=True)
