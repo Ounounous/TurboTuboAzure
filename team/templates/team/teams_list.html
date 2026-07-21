@@ -4,7 +4,19 @@
 
 {% block content %}
   <div class="py-6 px-6">
-    <h1 class="mb-4 text-xl font-bold">Equipos</h1>
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+      <h1 class="text-xl font-bold">Equipos</h1>
+    </div>
+
+    <details class="card p-4 mb-6" style="max-width:420px;">
+      <summary class="cursor-pointer font-semibold" style="font-size:13px;">+ Crear equipo nuevo</summary>
+      <form method="post" action="{% url 'team:crear' %}" class="mt-3">
+        {% csrf_token %}
+        {{ crear_equipo_form.as_p }}
+        <button type="submit" class="btn btn-primary mt-2">Crear equipo</button>
+      </form>
+    </details>
+
     <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
       {% for team in teams %}
         <div class="{% if team == active_team %}card-selected{% else %}card{% endif %} p-5">

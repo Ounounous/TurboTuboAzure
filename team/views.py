@@ -9,7 +9,32 @@ from .models import Team
 def teams_list(request):
     teams = Team.objects.filter(members__in=[request.user])
 
-    return render(request, 'team/teams_list.html', {'teams': teams})
+    return render(request, 'team/teams_list.html', {
+        'teams': teams,
+        'active_team': request.user.userprofile.active_team,
+        'crear_equipo_form': TeamForm(),
+    })
+
+
+@login_required
+def crear_equipo(request):
+    if request.method == 'POST':
+        form = TeamForm(request.POST)
+        if form.is_valid():
+            team = form.save(commit=False)
+            team.created_by = request.user
+            team.save()
+            team.members.add(request.user)
+
+            userprofile = request.user.userprofile
+            userprofile.active_team = team
+            userprofile.save(update_fields=['active_team'])
+
+            messages.success(request, f'Equipo "{team.name}" creado y activado.')
+        else:
+            messages.error(request, 'Nombre de equipo inválido.')
+
+    return redirect('team:list')
 
 @login_required
 def teams_activate(request, pk):
