@@ -8,6 +8,7 @@ from django.views import View
 from cartera.models import Cartera
 from lead.permissions import es_admin_owner
 from suspensiones.models import RetentionSettings
+from team.forms import TeamForm
 from userprofile.models import Userprofile
 
 from .forms import CrearUsuarioForm
@@ -100,6 +101,58 @@ class UsuariosPermisosView(ConfiguracionRequiredMixin, View):
             messages.error(request, 'Acción inválida.')
 
         return redirect('configuracion:usuarios_permisos')
+
+
+class EquipoView(ConfiguracionRequiredMixin, View):
+    """Nombre del equipo y sus miembros. Opera siempre sobre el equipo activo del admin que
+    entra -- mismo equipo al que "Crear usuario" (UsuariosPermisosView) agrega gente nueva."""
+    template_name = 'configuracion/equipo.html'
+
+    def get(self, request, *args, **kwargs):
+        team = request.user.userprofile.active_team
+        miembros = (
+            team.members.select_related('userprofile').order_by('username') if team else User.objects.none()
+        )
+        return render(request, self.template_name, {
+            'team': team,
+            'miembros': miembros,
+            'team_form': TeamForm(instance=team) if team else None,
+        })
+
+    def post(self, request, *args, **kwargs):
+        team = request.user.userprofile.active_team
+        if not team:
+            messages.error(request, 'No tienes un equipo activo.')
+            return redirect('configuracion:equipo')
+
+        accion = request.POST.get('accion')
+
+        if accion == 'renombrar':
+            form = TeamForm(request.POST, instance=team)
+            if form.is_valid():
+                form.save()
+                messages.success(request, 'Nombre del equipo actualizado.')
+            else:
+                messages.error(request, 'Nombre inválido.')
+
+        elif accion == 'quitar_miembro':
+            user = get_object_or_404(User, pk=request.POST.get('user_id'), teams=team)
+            if user.pk == request.user.pk:
+                # Evita que un admin se saque a si mismo del equipo sin querer y se quede
+                # sin acceso a nada (mismo espiritu que el auto-bloqueo de rol en Usuarios).
+                messages.error(request, 'No puedes quitarte a ti mismo del equipo desde aquí.')
+            else:
+                team.members.remove(user)
+                userprofile = getattr(user, 'userprofile', None)
+                if userprofile and userprofile.active_team_id == team.pk:
+                    userprofile.active_team = None
+                    userprofile.save(update_fields=['active_team'])
+                messages.success(request, f'{user.username} ya no es parte del equipo.')
+
+        else:
+            messages.error(request, 'Acción inválida.')
+
+        return redirect('configuracion:equipo')
 
 
 class RetencionDatosView(ConfiguracionRequiredMixin, View):
