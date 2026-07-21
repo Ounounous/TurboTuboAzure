@@ -22,9 +22,13 @@ def signup(request):
 
             team = Team.objects.create(name='The team name', created_by=user)
             team.members.add(user)
-            team.save()
-            
-            Userprofile.objects.create(user=user, active_team=team)
+
+            # El signal post_save de User (ver create_user_profile abajo) ya crea el
+            # Userprofile en cuanto se guarda el user -- Userprofile.objects.create() acá
+            # chocaba con ese y tiraba ValueError en todo signup ("ya existe para este user").
+            userprofile = get_userprofile(user)
+            userprofile.active_team = team
+            userprofile.save(update_fields=['active_team'])
 
             return redirect('/log-in/')
     else:

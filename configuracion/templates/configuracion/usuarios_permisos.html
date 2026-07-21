@@ -40,6 +40,19 @@
     </div>
   </div>
 
+  <h2 class="text-lg font-bold mb-2">Crear usuario</h2>
+  <p class="muted mb-3" style="font-size:12.5px;">
+    Queda dentro de tu mismo equipo (a diferencia del registro público, que crea un equipo nuevo por cada persona).
+  </p>
+  <div class="card p-4 mb-8" style="border:1px solid var(--border); border-radius:10px; max-width:640px;">
+    <form method="post" action="{% url 'configuracion:usuarios_permisos' %}" class="grid-form">
+      {% csrf_token %}
+      <input type="hidden" name="accion" value="crear_usuario">
+      {{ crear_usuario_form.as_p }}
+      <button type="submit" class="btn btn-primary mt-2" style="grid-column: 1 / -1; justify-self: start;">Crear usuario</button>
+    </form>
+  </div>
+
   <h2 class="text-lg font-bold mb-2">Usuarios</h2>
   <p class="muted mb-3" style="font-size:12.5px;">
     Rol de cada usuario. admin/owner ven todo; supervisor solo sus carteras (arriba); cobrador solo sus clientes asignados.

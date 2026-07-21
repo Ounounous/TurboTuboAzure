@@ -10,6 +10,8 @@ from lead.permissions import es_admin_owner
 from suspensiones.models import RetentionSettings
 from userprofile.models import Userprofile
 
+from .forms import CrearUsuarioForm
+
 
 class ConfiguracionRequiredMixin(LoginRequiredMixin):
     """Solo admin/owner: configurar usuarios/permisos y retencion no es cosa de supervisor."""
@@ -40,12 +42,35 @@ class UsuariosPermisosView(ConfiguracionRequiredMixin, View):
             'carteras': carteras,
             'supervisores_disponibles': supervisores_disponibles,
             'tipos': Userprofile.USER_TYPES,
+            'crear_usuario_form': CrearUsuarioForm(),
         })
 
     def post(self, request, *args, **kwargs):
         accion = request.POST.get('accion')
 
-        if accion == 'cambiar_tipo':
+        if accion == 'crear_usuario':
+            form = CrearUsuarioForm(request.POST)
+            if form.is_valid():
+                team = request.user.userprofile.active_team
+                user = form.save()
+                team.members.add(user)
+                # El signal post_save de User (userprofile/models.py) ya crea el Userprofile
+                # -- get_or_create en vez de create() para no chocar con el que el signal
+                # acaba de dejar.
+                userprofile, _ = Userprofile.objects.get_or_create(user=user)
+                userprofile.active_team = team
+                userprofile.user_type = form.cleaned_data['user_type']
+                userprofile.save(update_fields=['active_team', 'user_type'])
+                messages.success(
+                    request,
+                    f'Usuario "{user.username}" creado como {dict(Userprofile.USER_TYPES)[userprofile.user_type]}.'
+                )
+            else:
+                for field, errores in form.errors.items():
+                    for error in errores:
+                        messages.error(request, f'{field}: {error}')
+
+        elif accion == 'cambiar_tipo':
             user = get_object_or_404(User, pk=request.POST.get('user_id'))
             nuevo_tipo = request.POST.get('user_type')
             if nuevo_tipo not in dict(Userprofile.USER_TYPES):
