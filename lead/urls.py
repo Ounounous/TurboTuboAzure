@@ -18,5 +18,6 @@ urlpatterns = [
     path('upload_excel/', views.UploadExcelFileView.as_view(), name='upload-excel'),
     path('download_excel/', views.DownloadExcelView.as_view(), name='download-excel'),
     path('assign/', AssignLeadsView.as_view(), name='leads_assign'),
+    path('assign/plantilla/', views.DownloadAssignmentTemplateView.as_view(), name='assign_template'),
     path('status-changes/<str:period>/', views.status_changes_by_date, name='status-changes'),
 ]

@@ -8,6 +8,11 @@
 
   <div class="card p-4 mb-4">
     <h2 class="mb-3 text-lg font-bold">Asignar desde Excel</h2>
+    <p class="muted mb-3" style="font-size:12.5px;">
+      Columnas: Cartera, Subcartera, OP, Collector (usuario del cobrador).
+      <a href="{% url 'leads:assign_template' %}" class="link">Descargar plantilla</a>.
+      Si alguna fila tiene un error, no se asigna nada y se descarga el mismo Excel con el detalle.
+    </p>
     <form method="post" enctype="multipart/form-data">
       {% csrf_token %}
       {{ upload_form.as_p }}

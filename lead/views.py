@@ -604,6 +604,39 @@ class AddLeadNoteView(LoginRequiredMixin, View):
         return redirect(request.POST.get('next') or reverse('leads:detail', kwargs={'pk': lead.pk}))
 
 
+ASSIGNMENT_UPLOAD_ALIASES = {
+    'cartera': 'cartera',
+    'subcartera': 'subcartera',
+    'op': 'op', 'operacion': 'op', 'id': 'op',
+    'collector': 'collector', 'cobrador': 'collector', 'username': 'collector', 'usuario': 'collector',
+}
+
+
+class DownloadAssignmentTemplateView(LoginRequiredMixin, View):
+    """Plantilla Excel para la asignacion masiva de leads (carga por cartera/subcartera/op/collector)."""
+
+    def get(self, request, *args, **kwargs):
+        from .permissions import es_supervisor
+        if not es_supervisor(request.user):
+            raise PermissionDenied
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = 'Asignaciones'
+        ws.append(['Cartera', 'Subcartera', 'OP', 'Collector'])
+        ws.append(['CARTERA-EJEMPLO', 'SUBCARTERA-EJEMPLO', 'OP-EJEMPLO', 'nombre_usuario_cobrador'])
+
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+        response = HttpResponse(
+            content=output.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        response['Content-Disposition'] = 'attachment; filename=plantilla_asignacion.xlsx'
+        return response
+
+
 class AssignLeadsView(LoginRequiredMixin, View):
     template_name = "lead/leads_assign.html"
 
@@ -648,49 +681,75 @@ class AssignLeadsView(LoginRequiredMixin, View):
             return redirect('leads:list')
 
         if upload_form.is_valid():
-            excel_file = upload_form.cleaned_data['file']
-            workbook = openpyxl.load_workbook(excel_file)
-            sheet = workbook.active
-            data = []
+            from core.bulk_upload import procesar_carga
 
-            for row in sheet.iter_rows(min_row=2, values_only=True):
-                cartera_nombre = str(row[0]).strip() if row[0] is not None else ''
-                subcartera_nombre = str(row[1]).strip() if row[1] is not None else ''
-                op = str(row[2]).strip() if row[2] is not None else ''
-                collector_username = str(row[3]).strip() if row[3] is not None else ''
-                try:
-                    cartera = Cartera.objects.get(nombre__iexact=cartera_nombre)
-                except Cartera.DoesNotExist:
-                    messages.error(request, f'Cartera no encontrada: {cartera_nombre}.')
-                    continue
+            def validar_fila(fila, rownum):
+                errores = []
+                cartera_nombre = str(fila.get('cartera') or '').strip()
+                subcartera_nombre = str(fila.get('subcartera') or '').strip()
+                op = str(fila.get('op') or '').strip()
+                collector_username = str(fila.get('collector') or '').strip()
 
-                subcartera = Subcartera.objects.filter(cartera=cartera, nombre__iexact=subcartera_nombre).first()
-                if subcartera is None:
-                    subcartera = Subcartera.objects.create(cartera=cartera, nombre=subcartera_nombre)
+                cartera = Cartera.objects.filter(nombre__iexact=cartera_nombre).first() if cartera_nombre else None
+                if not cartera:
+                    errores.append(f'cartera "{cartera_nombre}" no encontrada')
 
-                try:
-                    lead = Lead.objects.get(op__iexact=op, subcartera__cartera=cartera, team=team)
-                    if not leads_visibles(request.user, base=Lead.objects.filter(pk=lead.pk)).exists():
-                        messages.error(request, f'No tienes permiso sobre la cartera {cartera_nombre} (OP: {op}).')
-                        continue
-                    collector = User.objects.get(username__iexact=collector_username, userprofile__active_team=team)
+                lead = None
+                if cartera and op:
+                    lead = Lead.objects.filter(op__iexact=op, subcartera__cartera=cartera, team=team).first()
+                    if not lead:
+                        errores.append(f'no se encontró el lead OP={op} en cartera {cartera_nombre}')
+                    elif not leads_visibles(request.user, base=Lead.objects.filter(pk=lead.pk)).exists():
+                        errores.append(f'no tienes permiso sobre la cartera {cartera_nombre} (OP={op})')
+
+                collector_obj = None
+                if collector_username:
+                    collector_obj = User.objects.filter(
+                        username__iexact=collector_username, userprofile__active_team=team
+                    ).first()
+                if not collector_obj:
+                    errores.append(f'cobrador "{collector_username}" no existe en tu equipo')
+
+                if not subcartera_nombre:
+                    errores.append('subcartera: vacía')
+
+                if errores:
+                    return None, errores
+                return {
+                    'lead': lead, 'collector': collector_obj,
+                    'cartera': cartera, 'subcartera_nombre': subcartera_nombre,
+                }, []
+
+            resultado = procesar_carga(
+                upload_form.cleaned_data['file'], ASSIGNMENT_UPLOAD_ALIASES,
+                ('cartera', 'subcartera', 'op', 'collector'), validar_fila,
+                nombre_archivo='errores_asignacion.xlsx',
+            )
+            if not resultado.ok:
+                return resultado.respuesta_error
+
+            with transaction.atomic():
+                for f in resultado.filas:
+                    subcartera = Subcartera.objects.filter(
+                        cartera=f['cartera'], nombre__iexact=f['subcartera_nombre']
+                    ).first()
+                    if subcartera is None:
+                        subcartera = Subcartera.objects.create(cartera=f['cartera'], nombre=f['subcartera_nombre'])
+
+                    lead = f['lead']
                     lead.subcartera = subcartera
-                    lead.assigned_to = collector
+                    lead.assigned_to = f['collector']
                     if lead.activo == Lead.DESASIGNADO:
                         lead.activo = Lead.ACTIVO
                         lead.desasignado_at = None
                     lead.save()
                     LeadAssignment.objects.create(
                         lead=lead,
-                        user=collector,
-                        assigned_by=request.user
+                        user=f['collector'],
+                        assigned_by=request.user,
                     )
-                except Lead.DoesNotExist:
-                    messages.error(request, f'Lead not found for OP: {op}, Cartera: {cartera_nombre}.')
-                except User.DoesNotExist:
-                    messages.error(request, f'Collector with username {collector_username} does not exist.')
 
-            messages.success(request, 'Leads assigned from file successfully')
+            messages.success(request, f"{len(resultado.filas)} lead(s) asignado(s) correctamente.")
             return redirect('leads:list')
 
         return render(request, self.template_name, {'form': form, 'upload_form': upload_form})
