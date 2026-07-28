@@ -19,7 +19,7 @@ from openpyxl import load_workbook
 from .models import Action, Medio, Resultado, PendingPbxCall, CallRecording, PaymentCommitment, Payment
 from .pbx_client import PbxClient, PbxError
 from lead.models import Lead
-from lead.permissions import carteras_visibles, es_supervisor, leads_visibles, scope_por_lead
+from lead.permissions import carteras_visibles, es_admin_owner, es_supervisor, leads_visibles, scope_por_lead
 from team.models import Team
 from cartera.models import Cartera
 from demographics.models import CONTACT_ACTIVE, IDDemographics, Phone
@@ -623,7 +623,40 @@ class RecordingListView(SupervisorRequiredMixin, ListView):
         context['selected_op'] = self.request.GET.get('op', '')
         context['selected_cartera'] = self.request.GET.get('cartera', '')
         context['selected_fecha'] = self.request.GET.get('fecha', '')
+        context['es_admin'] = es_admin_owner(self.request.user)
         return context
+
+
+class SyncRecordingsNowView(LoginRequiredMixin, View):
+    """Botón de admin en Grabaciones para disparar la sincronización a mano (sin esperar el
+    cron de cada 5 min). Corre inline (no via Celery) para dar feedback inmediato: recorre las
+    llamadas pendientes y baja de pbxip.cl las que correspondan, usando las credenciales de cada
+    usuario que originó la llamada."""
+    def post(self, request, *args, **kwargs):
+        if not es_admin_owner(request.user):
+            raise PermissionDenied
+        from .tasks import sync_pbx_recordings_user, MIN_AGE_SECONDS, MAX_ATTEMPTS
+        cutoff = timezone.now() - datetime.timedelta(seconds=MIN_AGE_SECONDS)
+        user_ids = list(
+            PendingPbxCall.objects.filter(
+                resolved=False, requested_at__lte=cutoff, attempts__lt=MAX_ATTEMPTS
+            ).order_by('user_id').values_list('user_id', flat=True).distinct()
+        )
+        nuevas = 0
+        for uid in user_ids:
+            try:
+                nuevas += sync_pbx_recordings_user(uid) or 0
+            except Exception as exc:
+                logger.warning(f'SyncRecordingsNowView: fallo al sincronizar usuario {uid}: {exc}')
+        if user_ids:
+            messages.success(
+                request,
+                f'Sincronización ejecutada: {nuevas} grabación(es) nueva(s) sobre '
+                f'{len(user_ids)} usuario(s) con llamadas pendientes.'
+            )
+        else:
+            messages.info(request, 'No había llamadas pendientes de sincronizar.')
+        return redirect('actions:recordings_list')
 
 
 class RecordingsExportZipView(SupervisorRequiredMixin, View):

@@ -14,6 +14,7 @@ urlpatterns = [
     path('pbx/call/', views.OriginatePbxCallView.as_view(), name='pbx_call'),
     path('grabaciones/', views.RecordingListView.as_view(), name='recordings_list'),
     path('grabaciones/exportar/', views.RecordingsExportZipView.as_view(), name='recordings_export'),
+    path('grabaciones/sincronizar/', views.SyncRecordingsNowView.as_view(), name='recordings_sync'),
     path('create/<int:lead_id>/', views.ActionCreateView.as_view(), name='create'),
     path('<int:pk>/', views.ActionDetailView.as_view(), name='detail'),
     path('download/<str:scope>/', views.ActionDownloadExcelView.as_view(), name='download_actions'),

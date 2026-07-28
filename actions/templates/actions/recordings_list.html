@@ -6,6 +6,12 @@
 <div class="py-6 px-6">
   <div class="flex flex-wrap items-center justify-between gap-3 mb-1">
     <h1 class="text-xl">Grabaciones de llamadas</h1>
+    {% if es_admin %}
+    <form method="post" action="{% url 'actions:recordings_sync' %}" style="margin:0;">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-secondary" title="Busca en pbxip.cl las grabaciones de las llamadas pendientes, sin esperar el cron de cada 5 min.">🔄 Buscar grabaciones ahora</button>
+    </form>
+    {% endif %}
   </div>
   <p class="muted mb-4" style="font-size: 12.5px;">Se conservan durante 2 años desde la llamada por norma legal; pasado ese plazo se eliminan automáticamente. No es posible eliminarlas manualmente.</p>
 
