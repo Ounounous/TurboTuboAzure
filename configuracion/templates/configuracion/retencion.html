@@ -26,6 +26,10 @@
         <span class="k">Historial de cambios de status</span>
         <span class="v"><input type="number" name="dias_retencion_statuslog" min="1" value="{{ config.dias_retencion_statuslog }}" style="width:90px; text-align:right;"> días</span>
       </div>
+      <div class="kv">
+        <span class="k">Registro de accesos a datos</span>
+        <span class="v"><input type="number" name="dias_retencion_accesos" min="1" value="{{ config.dias_retencion_accesos }}" style="width:90px; text-align:right;"> días</span>
+      </div>
     </div>
     <button type="submit" class="btn btn-primary mt-4">Guardar</button>
     {% if config.updated_by %}
