@@ -285,7 +285,7 @@
       <div class="tab-panel" data-panel="archivos">
         {% for file in lead.files.all %}
           <div class="card py-3 px-3 mb-2">
-            <p class="mb-1 text-sm"><strong>{{ file.created_by }}</strong> · {{ file.created_at|date:"d-m-Y H:i" }}</p>
+            <p class="mb-1 text-sm"><strong>{{ file.filename }}</strong> · {{ file.created_by }} · {{ file.created_at|date:"d-m-Y H:i" }}</p>
             <a href="{{ file.file.url }}" class="link">Descargar</a>
           </div>
         {% empty %}

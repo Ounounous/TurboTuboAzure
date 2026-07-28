@@ -218,6 +218,12 @@ class LeadFile(models.Model):
     created_by = models.ForeignKey(User, related_name='lead_files', on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    @property
+    def filename(self):
+        """Nombre del archivo subido, sin la ruta de almacenamiento (leadfiles/...)."""
+        import os
+        return os.path.basename(self.file.name) if self.file else ''
+
     def __str__(self):
         return self.created_by.username
 

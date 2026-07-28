@@ -557,7 +557,7 @@ class AddFileView(LoginRequiredMixin, View):
             file.created_by = request.user
             file.save()
 
-        return redirect('leads:list', pk=pk)
+        return redirect('leads:detail', pk=pk)
 
 def _puede_ver_lead(user, lead):
     """Un usuario puede ver/anotar un lead si es suyo (asignado/creado) o es supervisor+."""
