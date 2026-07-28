@@ -83,3 +83,17 @@ class PbxClient:
 
     def download_recording(self, month, cdr_id):
         return self._request('GET', f'/pbx/recordFile/{month}/{cdr_id}').content
+
+
+def get_pbx_master_client():
+    """
+    Devuelve el cliente de la cuenta MAESTRA (una sola cuenta admin consulta/descarga por todas
+    las extensiones), configurada por entorno (PBX_MASTER_EMAIL / PBX_MASTER_PASSWORD). Si no esta
+    configurada, devuelve None y el llamador cae al modo por-usuario (credenciales de cada uno).
+    """
+    from django.conf import settings
+    email = getattr(settings, 'PBX_MASTER_EMAIL', '') or ''
+    password = getattr(settings, 'PBX_MASTER_PASSWORD', '') or ''
+    if email and password:
+        return PbxClient(email, password)
+    return None

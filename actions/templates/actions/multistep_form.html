@@ -219,7 +219,13 @@
           btn.disabled = false;
           btn.textContent = originalText;
           if (!data.ok) {
-            // Sin credenciales o error de la central: cae de vuelta al tel: nativo.
+            // Advertencia: sin extension SIP no se podra cruzar/adjuntar la grabacion despues.
+            if (data.reason === 'no_extension' || data.reason === 'no_credentials') {
+              alert('No tenés una extensión SIP configurada. La llamada se abrirá en tu softphone, ' +
+                    'pero la grabación no se podrá adjuntar automáticamente. Pedile a un supervisor ' +
+                    'o admin que cargue tu extensión en Configuración → Usuarios.');
+            }
+            // Sin credenciales/extension o error de la central: cae de vuelta al tel: nativo.
             window.open(btn.dataset.nativeUrl, '_blank');
           }
         }).catch(function () {

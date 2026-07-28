@@ -92,6 +92,13 @@ X_FRAME_OPTIONS = 'SAMEORIGIN'
 # Fernet key used to encrypt/decrypt per-user PBX (pbxip.cl) passwords at rest.
 PBX_ENCRYPTION_KEY = os.environ.get('PBX_ENCRYPTION_KEY', '')
 
+# Cuenta MAESTRA de pbxip.cl: si esta configurada, UNA sola cuenta (admin) hace todas las
+# consultas y descargas al API, y los usuarios solo necesitan su EXTENSION cargada (no su
+# password). Si no esta configurada, el sistema cae al modo por-usuario (cada uno con sus
+# credenciales). Se deja en el entorno, nunca en el codigo.
+PBX_MASTER_EMAIL = os.environ.get('PBX_MASTER_EMAIL', '')
+PBX_MASTER_PASSWORD = os.environ.get('PBX_MASTER_PASSWORD', '')
+
 CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0')
 CELERY_RESULT_BACKEND = CELERY_BROKER_URL
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
