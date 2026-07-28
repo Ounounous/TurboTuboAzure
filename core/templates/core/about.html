@@ -1,10 +1,58 @@
-{% extends 'core/base.html'%}
+{% extends 'core/base.html' %}
+{% load money %}
 
-{% block title %}Acerca de{% endblock %}
+{% block title %}TurboTubo — Gestión de cobranza{% endblock %}
 
 {% block content %}
-<div class="py-6 px-6" style="max-width: 640px;">
-  <h1 class="text-xl font-bold mb-3">Acerca de TurboTubo</h1>
-  <p class="muted">Plataforma de gestión de cobranza multi-cartera.</p>
+<div class="py-6 px-6">
+  <h1 class="mb-4 text-xl font-bold">TurboTubo</h1>
+
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+    <div class="card p-4">
+      <p class="muted text-sm mb-1">Clientes activos</p>
+      <p class="text-2xl font-bold">{{ n_clientes }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="muted text-sm mb-1">Saldo insoluto total</p>
+      <p class="text-2xl font-bold">{{ saldo_total|clp }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="muted text-sm mb-1">% Contactabilidad (mes)</p>
+      <p class="text-2xl font-bold">{{ contactabilidad_pct }}%</p>
+      <p class="muted text-sm">{{ total_gestiones_mes }} gestión(es) este mes</p>
+    </div>
+  </div>
+
+  <h2 class="mb-3 text-lg font-bold">Próximos compromisos de pago</h2>
+  {% if compromisos %}
+    <div class="card mb-2" style="border:1px solid var(--border); border-radius:10px;">
+      <div class="overflow-x-auto">
+        <table class="table-dense">
+          <thead>
+            <tr>
+              <th>Cartera</th><th>ID</th><th>Cliente</th><th>Fecha compromiso</th><th class="num">Monto</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in compromisos %}
+              <tr>
+                <td>{{ c.subcartera.cartera.nombre|default:"-" }}</td>
+                <td class="op"><a href="{% url 'leads:detail' c.lead.pk %}" class="link">{{ c.lead.op }}</a></td>
+                <td style="font-weight:600">{{ c.lead.name }}</td>
+                <td style="font-variant-numeric:tabular-nums">{{ c.fecha_compromiso|date:"d-m-Y" }}</td>
+                <td class="num">{{ c.monto|clp }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <p class="muted text-sm mb-6">
+      Total de {{ compromisos_count }} compromiso(s) próximo(s): <strong>{{ compromisos_total|clp }}</strong>
+      {% if compromisos_count > 20 %}(mostrando los 20 más próximos){% endif %}
+    </p>
+  {% else %}
+    <p class="empty-state">No hay compromisos de pago próximos.</p>
+  {% endif %}
 </div>
 {% endblock %}
