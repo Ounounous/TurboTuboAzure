@@ -39,6 +39,78 @@
     </form>
   </div>
 
+  {% if medios or resultados %}
+  <h2 class="mb-3 text-lg font-bold">Árbol de decisiones</h2>
+
+  {% if medios %}
+  <div class="card mb-4" style="border:1px solid var(--border); border-radius:10px;">
+    <div class="p-4">
+      <h3 class="text-base font-bold mb-3">Medios de contacto</h3>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+        {% for medio in medios %}
+          <span class="tag" style="background: var(--surface-2); padding: 6px 12px; border-radius: 6px; font-size: 13px;">{{ medio.nombre }}</span>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if resultados %}
+  <div class="card overflow-x-auto" style="border:1px solid var(--border); border-radius:10px;">
+    <table class="table-dense" style="width: 100%; font-size: 13px;">
+      <thead>
+        <tr style="background: var(--surface-2); border-bottom: 1px solid var(--border);">
+          <th style="padding: 10px 12px; text-align: left; font-weight: 600;">Resultado</th>
+          <th style="padding: 10px 12px; text-align: center; font-weight: 600;">Contactabilidad</th>
+          <th style="padding: 10px 12px; text-align: center; font-weight: 600;">Compromiso</th>
+          <th style="padding: 10px 12px; text-align: center; font-weight: 600;">Efecto</th>
+          <th style="padding: 10px 12px; text-align: center; font-weight: 600;">Por defecto</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for resultado in resultados %}
+        <tr style="border-bottom: 1px solid var(--border);">
+          <td style="padding: 10px 12px;">
+            <span style="font-weight: 500;">{{ resultado.nombre }}</span>
+          </td>
+          <td style="padding: 10px 12px; text-align: center;">
+            {% if resultado.contactabilidad == 'con_contacto' %}
+              <span class="dot-st"><span class="d st-green"></span>Sí</span>
+            {% else %}
+              <span class="muted">No</span>
+            {% endif %}
+          </td>
+          <td style="padding: 10px 12px; text-align: center;">
+            {% if resultado.crea_compromiso %}
+              <span class="dot-st"><span class="d st-green"></span>Sí</span>
+            {% else %}
+              <span class="muted">No</span>
+            {% endif %}
+          </td>
+          <td style="padding: 10px 12px; text-align: center; font-size: 12px;">
+            {% if resultado.efecto_pago == 'pagando' %}
+              <span style="background: var(--accent-soft); color: var(--accent); padding: 3px 8px; border-radius: 3px; font-weight: 500;">Pagando</span>
+            {% elif resultado.efecto_pago == 'al_dia' %}
+              <span style="background: #E4F2EE; color: #0E7A63; padding: 3px 8px; border-radius: 3px; font-weight: 500;">Al día</span>
+            {% else %}
+              <span class="muted">—</span>
+            {% endif %}
+          </td>
+          <td style="padding: 10px 12px; text-align: center;">
+            {% if resultado.es_default %}
+              <span class="dot-st"><span class="d st-green"></span>Sí</span>
+            {% else %}
+              <span class="muted">No</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+  {% endif %}
+
   {% if puede_eliminar %}
     <details class="card p-4">
       <summary class="cursor-pointer font-semibold" style="font-size:12.5px; color:var(--text-muted);">Más opciones</summary>

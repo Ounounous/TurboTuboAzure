@@ -60,10 +60,16 @@ class CarteraDetailView(CarteraViewRequiredMixin, DetailView):
         return carteras_visibles(self.request.user)
 
     def get_context_data(self, **kwargs):
+        from actions.models import Resultado, Medio
         context = super().get_context_data(**kwargs)
         context['subcarteras'] = self.object.subcarteras.all()
         context['subcartera_form'] = SubcarteraForm()
         context['puede_eliminar'] = _puede_eliminar_cartera(self.request.user, self.object)
+
+        # Árbol de decisiones
+        context['medios'] = Medio.objects.filter(cartera=self.object).order_by('nombre')
+        context['resultados'] = Resultado.objects.filter(cartera=self.object).order_by('nombre')
+
         return context
 
 
