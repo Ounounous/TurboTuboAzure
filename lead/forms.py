@@ -19,7 +19,12 @@ class UploadExcelFileForm(forms.Form):
     excel_file = forms.FileField(label='Upload Excel file')
 
 class AssignLeadsForm(forms.Form):
-    collector = forms.ModelChoiceField(queryset=User.objects.none())
+    search = forms.CharField(
+        required=False,
+        label='Buscar clientes',
+        widget=forms.TextInput(attrs={'placeholder': 'Buscar por OP, RUT o nombre...', 'class': 'form-control'})
+    )
+    collector = forms.ModelChoiceField(queryset=User.objects.none(), label='Cobrador')
     leads = forms.ModelMultipleChoiceField(queryset=Lead.objects.none(), widget=forms.CheckboxSelectMultiple)
 
     def __init__(self, *args, **kwargs):
@@ -27,8 +32,7 @@ class AssignLeadsForm(forms.Form):
         user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
         if team:
-            # Cobradores del mismo equipo unicamente -- un supervisor no puede asignar leads a
-            # un cobrador de otro equipo (tenant), sea cual sea su cartera.
+            # Cobradores del mismo equipo unicamente
             self.fields['collector'].queryset = User.objects.filter(
                 userprofile__user_type='collector', userprofile__active_team=team
             )
@@ -37,6 +41,29 @@ class AssignLeadsForm(forms.Form):
             from .permissions import leads_visibles
             base = leads_visibles(user, base=base)
         self.fields['leads'].queryset = base
+
+    def clean(self):
+        cleaned_data = super().clean()
+        collector = cleaned_data.get('collector')
+        leads = cleaned_data.get('leads')
+        if not collector:
+            self.add_error('collector', 'Debe seleccionar un cobrador')
+        if not leads:
+            self.add_error('leads', 'Debe seleccionar al menos un cliente')
+        return cleaned_data
+
+
+class QuickAssignForm(forms.Form):
+    """Formulario simple para asignar un lead a un cobrador (en la ficha de detalle)."""
+    collector = forms.ModelChoiceField(queryset=User.objects.none(), label='Asignar a')
+
+    def __init__(self, *args, **kwargs):
+        team = kwargs.pop('team', None)
+        super().__init__(*args, **kwargs)
+        if team:
+            self.fields['collector'].queryset = User.objects.filter(
+                userprofile__user_type='collector', userprofile__active_team=team
+            )
 
 
 class UploadAssignmentFileForm(forms.Form):

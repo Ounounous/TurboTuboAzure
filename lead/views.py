@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 from openpyxl import load_workbook
 
-from .forms import AddFileForm, AddLeadForm, UploadExcelFileForm, AssignLeadsForm, UploadAssignmentFileForm
+from .forms import AddFileForm, AddLeadForm, UploadExcelFileForm, AssignLeadsForm, UploadAssignmentFileForm, QuickAssignForm
 from .models import Lead, LeadAssignment, LeadNote, User
 from cartera.models import Cartera, Subcartera
 from demographics.models import IDDemographics, AvalDemographics, IDItem, Phone
@@ -240,7 +240,38 @@ class LeadDetailView(LoginRequiredMixin, DetailView):
         user_type = getattr(self.request.user.userprofile, 'user_type', '')
         context['is_supervisor'] = user_type in ('admin', 'owner', 'supervisor')
 
+        # Formulario de asignación rápida (solo supervisores)
+        if context['is_supervisor']:
+            team = getattr(self.request.user.userprofile, 'active_team', None)
+            context['quick_assign_form'] = QuickAssignForm(team=team)
+
         return context
+
+    def post(self, request, *args, **kwargs):
+        from .permissions import leads_visibles, es_supervisor
+        if not es_supervisor(request.user):
+            raise PermissionDenied
+
+        lead = self.get_object()
+        if not leads_visibles(request.user, base=Lead.objects.filter(pk=lead.pk)).exists():
+            raise PermissionDenied
+
+        team = getattr(request.user.userprofile, 'active_team', None)
+        form = QuickAssignForm(request.POST, team=team)
+
+        if form.is_valid():
+            collector = form.cleaned_data['collector']
+            lead.assigned_to = collector
+            # Reasignar saca al lead de desasignado, lo vuelve activo
+            if lead.activo == Lead.DESASIGNADO:
+                lead.activo = Lead.ACTIVO
+                lead.desasignado_at = None
+            lead.save()
+            LeadAssignment.objects.create(lead=lead, user=collector, assigned_by=request.user)
+            messages.success(request, f'Cliente asignado a {collector.username}')
+            return redirect('leads:detail', pk=lead.pk)
+
+        return self.get(request, *args, **kwargs)
 class LeadDeleteView(_AdminOwnerGate, DeleteView):
     model = Lead
     success_url = reverse_lazy('leads:list')
