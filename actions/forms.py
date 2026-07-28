@@ -32,10 +32,15 @@ class DemographicSelectionForm(forms.Form):
             id_demographics = IDDemographics.objects.filter(lead=lead).first()
             aval_demographics = AvalDemographics.objects.filter(id_demographics=id_demographics)
 
+            from demographics.models import Email, CONTACT_BLACKLISTED
+
             email_choices = []
             if id_demographics and id_demographics.principal_email and id_demographics.principal_email_status != 'blacklisted':
                 email_choices.append(
                     (id_demographics.principal_email, f'{id_demographics.principal_email} (principal)'))
+            # Correos adicionales del lead (modelo Email), mismo criterio: se ofrecen salvo blacklisted.
+            for em in Email.objects.filter(lead=lead).exclude(email_status=CONTACT_BLACKLISTED):
+                email_choices.append((em.email, f'{em.email} (adicional)'))
             for aval in aval_demographics:
                 if aval.aval_email and aval.aval_email_status != 'blacklisted':
                     email_choices.append((aval.aval_email, f'{aval.aval_email} (aval)'))

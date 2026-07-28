@@ -250,9 +250,9 @@ class MultiStepActionView(View):
             'demographic_form': demographic_form or DemographicSelectionForm(lead=lead),
             'quick_phone_form': quick_phone_form or AddPhoneQuickForm(),
             'quick_email_form': quick_email_form or AddEmailQuickForm(),
-            # Solo se ofrece "agregar correo" cuando el lead todavia no tiene uno -- evita pisar
-            # silenciosamente el que ya esta cargado (ese cambio va por Demografia).
-            'puede_agregar_email': not (idd and idd.principal_email),
+            # Se puede agregar correo siempre: el primero queda como principal; los siguientes se
+            # guardan como correos adicionales (modelo Email), sin pisar el principal.
+            'puede_agregar_email': True,
             'lead_notes': lead.notes.select_related('author'),
         }
 
@@ -318,18 +318,23 @@ class MultiStepActionView(View):
 
             if accion == 'agregar_email':
                 quick_form = AddEmailQuickForm(request.POST)
-                idd = IDDemographics.objects.filter(lead=lead).first()
-                ya_tiene_email = bool(idd and idd.principal_email)
-                if not ya_tiene_email and quick_form.is_valid():
-                    idd = idd or IDDemographics.objects.create(lead=lead)
-                    idd.principal_email = quick_form.cleaned_data['email']
-                    idd.principal_email_status = CONTACT_ACTIVE
-                    idd.save(update_fields=['principal_email', 'principal_email_status'])
-                    request.session['selected_email'] = idd.principal_email
+                if quick_form.is_valid():
+                    nuevo = quick_form.cleaned_data['email']
+                    idd = IDDemographics.objects.filter(lead=lead).first()
+                    if not (idd and idd.principal_email):
+                        # Primer correo del lead -> queda como principal (integra con reportes,
+                        # carga masiva y "Estado de correos").
+                        idd = idd or IDDemographics.objects.create(lead=lead)
+                        idd.principal_email = nuevo
+                        idd.principal_email_status = CONTACT_ACTIVE
+                        idd.save(update_fields=['principal_email', 'principal_email_status'])
+                    elif nuevo != idd.principal_email:
+                        # Ya hay principal -> se guarda como correo adicional (sin duplicar).
+                        from demographics.models import Email
+                        Email.objects.get_or_create(lead=lead, email=nuevo)
+                    request.session['selected_email'] = nuevo
                     request.session['selected_phone'] = None
                     return redirect('actions:multistep_step', step=3)
-                if ya_tiene_email:
-                    quick_form.add_error(None, 'El lead ya tiene un correo principal registrado.')
                 return render(request, 'actions/multistep_form.html', self._step2_context(lead, quick_email_form=quick_form))
 
             form = DemographicSelectionForm(request.POST, lead=lead)

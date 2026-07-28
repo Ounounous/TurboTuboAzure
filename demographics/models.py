@@ -16,6 +16,27 @@ CHOICES_CONTACT_STATUS = (
 )
 
 
+class Email(models.Model):
+    """Correos ADICIONALES de un lead, mas alla del principal (IDDemographics.principal_email) y
+    del aval. Permite tener varios correos por lead: el primero que se carga queda como principal
+    (integra con reportes, carga masiva y 'Estado de correos'); estos son los extra, que se pueden
+    agregar y seleccionar en el paso 2 de gestion como cualquier otro dato de contacto."""
+    lead = models.ForeignKey(Lead, related_name='emails', on_delete=models.CASCADE)
+    email = models.EmailField(max_length=255)
+    email_status = models.CharField(max_length=20, choices=CHOICES_CONTACT_STATUS, default=CONTACT_ACTIVE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    @property
+    def is_reachable(self):
+        return self.email_status != CONTACT_BLACKLISTED
+
+    def __str__(self):
+        return f"{self.email} ({self.lead.op})"
+
+
 class IDItem(models.Model):
     #tipo de bien
     AUTO = 'auto'

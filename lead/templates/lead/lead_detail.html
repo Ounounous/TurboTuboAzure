@@ -110,6 +110,9 @@
           {% endfor %}
           {% with demo=demographics.first %}
             <div class="kv"><span class="k">✉️ Email</span><span class="v">{{ demo.principal_email|default:"-" }}</span></div>
+          {% for em in lead.emails.all %}
+            <div class="kv"><span class="k">✉️ Email extra</span><span class="v">{{ em.email }}{% if em.email_status != 'active' %} <span class="muted">({{ em.get_email_status_display }})</span>{% endif %}</span></div>
+          {% endfor %}
             <div class="kv"><span class="k">📍 Dirección</span><span class="v">{{ demo.principal_address|default:"-" }}</span></div>
           {% endwith %}
           {% if aval_demographics %}

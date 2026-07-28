@@ -41,16 +41,17 @@ def _tiene_contacto_activo(lead):
     """True si al lead le queda algun telefono o correo en estado 'activo'. Una sola query
     (tres EXISTS correlacionados en un unico round-trip, en vez de 3 consultas separadas)."""
     from django.db.models import Exists, OuterRef, Q
-    from demographics.models import Phone, IDDemographics, AvalDemographics, CONTACT_ACTIVE
+    from demographics.models import Phone, IDDemographics, AvalDemographics, Email, CONTACT_ACTIVE
 
     return Lead.objects.filter(pk=lead.pk).annotate(
         _tel=Exists(Phone.objects.filter(lead=OuterRef('pk'), phone_number_status=CONTACT_ACTIVE)),
         _mail=Exists(IDDemographics.objects.filter(
             lead=OuterRef('pk'), principal_email_status=CONTACT_ACTIVE).exclude(principal_email='')),
+        _mail2=Exists(Email.objects.filter(lead=OuterRef('pk'), email_status=CONTACT_ACTIVE)),
         _aval=Exists(AvalDemographics.objects.filter(
             id_demographics__lead=OuterRef('pk'), aval_email_status=CONTACT_ACTIVE,
         ).exclude(aval_email='').exclude(aval_email__isnull=True)),
-    ).filter(Q(_tel=True) | Q(_mail=True) | Q(_aval=True)).exists()
+    ).filter(Q(_tel=True) | Q(_mail=True) | Q(_mail2=True) | Q(_aval=True)).exists()
 
 
 def recompute_inubicable(lead, changed_by=None):
@@ -94,13 +95,16 @@ def aplicar_efecto_demografico(action):
         if campos:
             phone.save(update_fields=campos)
     elif action.email and nuevo_status:
-        # El correo vive como texto en la demografia; se marca la fila que coincide.
+        # El correo vive como texto en la demografia; se marca la fila que coincide (principal,
+        # aval o adicional).
+        from demographics.models import Email
         IDDemographics.objects.filter(lead=action.lead, principal_email=action.email).update(
             principal_email_status=nuevo_status
         )
         AvalDemographics.objects.filter(
             id_demographics__lead=action.lead, aval_email=action.email
         ).update(aval_email_status=nuevo_status)
+        Email.objects.filter(lead=action.lead, email=action.email).update(email_status=nuevo_status)
 
     if efecto or apaga_wa:
         recompute_inubicable(action.lead, changed_by=action.user)
