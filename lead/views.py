@@ -211,6 +211,13 @@ class LeadDetailView(LoginRequiredMixin, DetailView):
         from .permissions import leads_visibles
         return leads_visibles(self.request.user, base=super().get_queryset())
 
+    def get(self, request, *args, **kwargs):
+        response = super().get(request, *args, **kwargs)
+        # Registro de acceso a datos del deudor (Ley 20.575): quien vio la ficha y cuando.
+        from configuracion.models import AccessLog, registrar_acceso
+        registrar_acceso(request.user, AccessLog.VER_FICHA, lead=self.object)
+        return response
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['demographics'] = IDDemographics.objects.filter(lead=self.object)
@@ -541,6 +548,8 @@ class DownloadExcelView(_SupervisorGate, View):
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
         response['Content-Disposition'] = 'attachment; filename=clients.xlsx'
+        from configuracion.models import AccessLog, registrar_acceso
+        registrar_acceso(request.user, AccessLog.EXPORTAR_CLIENTES, detail='Excel de clientes')
         return response
 
 class AddFileView(LoginRequiredMixin, View):

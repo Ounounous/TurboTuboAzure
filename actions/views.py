@@ -17,7 +17,7 @@ from django.views import View
 from django.utils.dateparse import parse_date
 from openpyxl import load_workbook
 from .models import Action, Medio, Resultado, PendingPbxCall, CallRecording, PaymentCommitment, Payment
-from .pbx_client import PbxClient, PbxError
+from .pbx_client import PbxClient, PbxError, get_pbx_master_client
 from lead.models import Lead
 from lead.permissions import carteras_visibles, es_admin_owner, es_supervisor, leads_visibles, scope_por_lead
 from team.models import Team
@@ -418,7 +418,17 @@ class OriginatePbxCallView(LoginRequiredMixin, View):
 
     def post(self, request, *args, **kwargs):
         userprofile = getattr(request.user, 'userprofile', None)
-        if not userprofile or not userprofile.has_pbx_credentials:
+        if not userprofile:
+            return JsonResponse({'ok': False, 'reason': 'no_credentials'}, status=400)
+
+        # Modo maestro (una cuenta admin origina/consulta): el usuario solo necesita su extension.
+        # Modo por-usuario: credenciales completas. En ambos, sin extension no se puede llamar ni
+        # cruzar la grabacion despues -> se avisa.
+        master = get_pbx_master_client()
+        if master is not None:
+            if not userprofile.pbx_extension:
+                return JsonResponse({'ok': False, 'reason': 'no_extension'}, status=400)
+        elif not userprofile.has_pbx_credentials:
             return JsonResponse({'ok': False, 'reason': 'no_credentials'}, status=400)
 
         lead_id = request.POST.get('lead_id')
@@ -435,7 +445,7 @@ class OriginatePbxCallView(LoginRequiredMixin, View):
         if not destination:
             return JsonResponse({'ok': False, 'reason': 'invalid_number'}, status=400)
 
-        client = PbxClient(userprofile.pbx_email, userprofile.pbx_password)
+        client = master if master is not None else PbxClient(userprofile.pbx_email, userprofile.pbx_password)
         try:
             client.originate_call(userprofile.pbx_extension, destination)
         except PbxError as exc:
@@ -568,6 +578,8 @@ class ActionDownloadExcelView(LoginRequiredMixin, View):
             if cartera_obj:
                 filename_parts.append(re.sub(r'\W+', '_', cartera_obj.nombre))
         response['Content-Disposition'] = f'attachment; filename={"_".join(filename_parts)}.xlsx'
+        from configuracion.models import AccessLog, registrar_acceso
+        registrar_acceso(request.user, AccessLog.EXPORTAR_GESTIONES, detail='Excel de gestiones')
         return response
 
 
@@ -725,6 +737,8 @@ class RecordingsExportZipView(SupervisorRequiredMixin, View):
         buffer.seek(0)
         response = HttpResponse(buffer.read(), content_type='application/zip')
         response['Content-Disposition'] = 'attachment; filename=grabaciones.zip'
+        from configuracion.models import AccessLog, registrar_acceso
+        registrar_acceso(request.user, AccessLog.DESCARGAR_GRABACIONES, detail='ZIP de grabaciones')
         return response
 
 
@@ -808,6 +822,8 @@ class TannerReportView(SupervisorRequiredMixin, View):
 
         response = HttpResponse(content, content_type='text/plain; charset=utf-8')
         response['Content-Disposition'] = f'attachment; filename={filename}'
+        from configuracion.models import AccessLog, registrar_acceso
+        registrar_acceso(request.user, AccessLog.EXPORTAR_TANNER, detail=f"Fecha {fecha:%d-%m-%Y}")
         return response
 
 
@@ -931,6 +947,8 @@ class PaymentCommitmentExportExcelView(SupervisorRequiredMixin, View):
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         )
         response['Content-Disposition'] = 'attachment; filename=compromisos_de_pago.xlsx'
+        from configuracion.models import AccessLog, registrar_acceso
+        registrar_acceso(request.user, AccessLog.EXPORTAR_COMPROMISOS, detail='Excel de compromisos')
         return response
 
 
@@ -1319,4 +1337,6 @@ class NuevoCapitalReportView(SupervisorRequiredMixin, View):
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         )
         response['Content-Disposition'] = f'attachment; filename={filename}'
+        from configuracion.models import AccessLog, registrar_acceso
+        registrar_acceso(request.user, AccessLog.EXPORTAR_NUEVOCAPITAL, detail=f"Fecha {fecha:%d-%m-%Y}")
         return response

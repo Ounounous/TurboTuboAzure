@@ -255,11 +255,13 @@ class RetencionDatosView(ConfiguracionRequiredMixin, View):
             config.dias_purga_terminado = int(request.POST.get('dias_purga_terminado'))
             config.dias_purga_desasignado = int(request.POST.get('dias_purga_desasignado'))
             config.dias_retencion_statuslog = int(request.POST.get('dias_retencion_statuslog'))
+            config.dias_retencion_accesos = int(request.POST.get('dias_retencion_accesos'))
         except (TypeError, ValueError):
             messages.error(request, 'Los plazos deben ser números enteros.')
             return redirect('configuracion:retencion')
 
-        if min(config.dias_purga_terminado, config.dias_purga_desasignado, config.dias_retencion_statuslog) < 1:
+        if min(config.dias_purga_terminado, config.dias_purga_desasignado,
+               config.dias_retencion_statuslog, config.dias_retencion_accesos) < 1:
             messages.error(request, 'Los plazos deben ser mayores a 0.')
             return redirect('configuracion:retencion')
 
@@ -267,3 +269,34 @@ class RetencionDatosView(ConfiguracionRequiredMixin, View):
         config.save()
         messages.success(request, 'Configuración de retención actualizada.')
         return redirect('configuracion:retencion')
+
+
+class RegistrosAccionesView(ConfiguracionRequiredMixin, View):
+    """Registro de accesos a datos de deudores (Ley 20.575). Solo admin/owner. Lista liviana:
+    ultimos 300 accesos, con filtros por usuario, tipo de accion y fecha."""
+    template_name = 'configuracion/registros_acciones.html'
+
+    def get(self, request, *args, **kwargs):
+        from django.utils.dateparse import parse_date
+        from .models import AccessLog
+
+        registros = AccessLog.objects.select_related('user', 'lead')
+        f_usuario = request.GET.get('usuario', '').strip()
+        f_accion = request.GET.get('accion', '').strip()
+        f_fecha = request.GET.get('fecha', '').strip()
+        if f_usuario:
+            registros = registros.filter(user__username__icontains=f_usuario)
+        if f_accion:
+            registros = registros.filter(action_type=f_accion)
+        if f_fecha:
+            parsed = parse_date(f_fecha)
+            if parsed:
+                registros = registros.filter(timestamp__date=parsed)
+
+        return render(request, self.template_name, {
+            'registros': registros[:300],
+            'acciones': AccessLog.CHOICES_ACCION,
+            'f_usuario': f_usuario,
+            'f_accion': f_accion,
+            'f_fecha': f_fecha,
+        })

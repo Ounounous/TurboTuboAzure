@@ -27,6 +27,11 @@ class RetentionSettings(models.Model):
         help_text='Dias que se conserva el detalle del historial de cambios de status antes de '
                   'purgarlo (el "mejor status" es un campo del lead, no se pierde).',
     )
+    dias_retencion_accesos = models.PositiveIntegerField(
+        default=90,
+        help_text='Dias que se conserva el registro de accesos a datos de deudores '
+                  '(Configuracion -> Registros de acciones) antes de purgarlo.',
+    )
     updated_at = models.DateTimeField(auto_now=True)
     updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
 

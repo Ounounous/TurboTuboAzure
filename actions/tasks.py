@@ -8,7 +8,7 @@ from django.db import InterfaceError, OperationalError
 from django.utils import timezone
 
 from .models import PendingPbxCall, CallRecording
-from .pbx_client import PbxClient, PbxError
+from .pbx_client import PbxClient, PbxError, get_pbx_master_client
 from .pbx_matching import find_matching_cdr, cdr_id, parse_cdr_call_date, cdr_duration
 
 logger = logging.getLogger(__name__)
@@ -94,7 +94,18 @@ def sync_pbx_recordings_user(user_id):
         return 0
 
     userprofile = calls[0].user.userprofile
-    if not userprofile.has_pbx_credentials:
+    # Modo maestro: una sola cuenta admin consulta el API y el usuario solo necesita su extension
+    # (con ella se cruza el CDR). Si no hay cuenta maestra configurada, se cae al modo por-usuario
+    # (cada uno con sus credenciales completas), como antes.
+    master = get_pbx_master_client()
+    if master is not None:
+        if not userprofile.pbx_extension:
+            logger.warning(
+                f"sync_pbx_recordings_user: el usuario {userprofile.user.username} hizo llamadas "
+                f"pero no tiene EXTENSION SIP guardada -- no se pueden cruzar sus grabaciones."
+            )
+            return 0
+    elif not userprofile.has_pbx_credentials:
         return 0
 
     # Solo nos molestamos en consultar la central si hay al menos una llamada
@@ -119,7 +130,8 @@ def sync_pbx_recordings_user(user_id):
     if not actionable:
         return 0
 
-    client = PbxClient(userprofile.pbx_email, userprofile.pbx_password)
+    # La cuenta maestra (si esta) hace la consulta; si no, las credenciales del propio usuario.
+    client = master if master is not None else PbxClient(userprofile.pbx_email, userprofile.pbx_password)
     month = timezone.now().strftime('%Y%m')
     resueltas = 0
 
@@ -372,6 +384,28 @@ def purge_status_change_log(dias=None):
     return borrados
 
 
+@shared_task(**RETRY_DB)
+def purgar_access_log(dias=None):
+    """
+    Purga el registro de accesos a datos de deudores (configuracion.AccessLog, Ley 20.575) mas
+    viejo que `dias`. El plazo sale de RetentionSettings.dias_retencion_accesos (editable en
+    Configuracion -> Retencion de datos). El propio registro es dato personal, asi que no se
+    conserva indefinidamente.
+    """
+    from configuracion.models import AccessLog
+
+    if dias is None:
+        try:
+            from suspensiones.models import RetentionSettings
+            dias = RetentionSettings.get_solo().dias_retencion_accesos
+        except Exception:
+            dias = 90
+    corte = timezone.now() - timedelta(days=dias)
+    borrados, _ = AccessLog.objects.filter(timestamp__lt=corte).delete()
+    logger.info(f"purgar_access_log: {borrados} registro(s) de acceso mas viejos que {dias} dias eliminados")
+    return borrados
+
+
 # Ventana maxima (en dias) que puede pasar sin que cada tarea programada corra, antes de avisar.
 HEARTBEAT_MAX_DIAS = {
     'actions.tasks.reset_status_mensual': 32,
@@ -384,6 +418,7 @@ HEARTBEAT_MAX_DIAS = {
     'actions.tasks.sync_pbx_recordings': 1,
     'actions.tasks.purge_status_change_log': 8,
     'actions.tasks.purgar_gestiones_ciclo_vida': 2,
+    'actions.tasks.purgar_access_log': 8,
     'mlmetadata.tasks.exportar_metadata_ml': 8,
 }
 

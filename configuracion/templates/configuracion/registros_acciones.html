@@ -1,0 +1,48 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Registros de acciones{% endblock %}
+
+{% block content %}
+<div class="py-6 px-6">
+  <h1 class="text-xl mb-1">Configuración</h1>
+  {% include 'configuracion/_subnav.html' with active='registros' %}
+
+  <p class="muted mb-4" style="font-size:12.5px;">
+    Quién accedió a datos de deudores y cuándo (Ley 20.575): apertura de fichas y exportaciones/descargas.
+    Se conserva según el plazo de "Registro de accesos a datos" en Retención. Se muestran los últimos 300.
+  </p>
+
+  <form method="get" class="mb-4 flex flex-wrap items-end gap-3">
+    <div><label class="font-semibold block mb-1" for="usuario">Usuario</label><input type="text" name="usuario" id="usuario" value="{{ f_usuario }}"></div>
+    <div><label class="font-semibold block mb-1" for="accion">Acción</label>
+      <select name="accion" id="accion">
+        <option value="">--- Todas ---</option>
+        {% for val, label in acciones %}<option value="{{ val }}" {% if f_accion == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+    </div>
+    <div><label class="font-semibold block mb-1" for="fecha">Fecha</label><input type="date" name="fecha" id="fecha" value="{{ f_fecha }}"></div>
+    <button type="submit" class="btn btn-primary">Filtrar</button>
+  </form>
+
+  <div class="card" style="border:1px solid var(--border); border-radius:10px;">
+    <div class="overflow-x-auto">
+      <table class="table-dense">
+        <thead><tr><th>Fecha y hora</th><th>Usuario</th><th>Acción</th><th>Cliente (OP)</th><th>Detalle</th></tr></thead>
+        <tbody>
+          {% for r in registros %}
+            <tr>
+              <td style="font-variant-numeric:tabular-nums; color:var(--text-muted)">{{ r.timestamp|date:"d-m-Y H:i:s" }}</td>
+              <td style="font-weight:600">{{ r.user.username|default:"—" }}</td>
+              <td>{{ r.get_action_type_display }}</td>
+              <td class="op">{{ r.lead_op|default:"—" }}</td>
+              <td class="muted">{{ r.detail|default:"—" }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="5" class="muted" style="text-align:center; padding:16px;">Sin registros para el filtro elegido.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -9,4 +9,5 @@ urlpatterns = [
     path('usuarios-permisos/', views.UsuariosPermisosView.as_view(), name='usuarios_permisos'),
     path('equipo/', views.EquipoView.as_view(), name='equipo'),
     path('retencion/', views.RetencionDatosView.as_view(), name='retencion'),
+    path('registros/', views.RegistrosAccionesView.as_view(), name='registros'),
 ]
