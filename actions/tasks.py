@@ -30,6 +30,14 @@ RETRY_DB = dict(
 # transaccion gigante).
 CHUNK = 500
 
+# Piso legal de retencion de gestiones de cobranza. La Ley 21.320 (art. 37 de la Ley 19.496)
+# obliga a "registrar, almacenar y mantener disponible el tipo y frecuencia de las gestiones que
+# realicen por cada deudor por un plazo de AL MENOS DOS ANIOS, contado desde su realizacion".
+# Es un minimo legal, NO una preferencia: aunque Retencion de datos configure un plazo menor,
+# ninguna gestion se purga antes de 2 anios. Como Zona Sur es la "empresa de cobranza" del art.
+# 37, aplica de lleno.
+RETENCION_GESTIONES_DIAS = 730
+
 
 def _safe_part(value):
     value = str(value or '').strip()
@@ -267,6 +275,13 @@ def purgar_gestiones_ciclo_vida():
     purge_expired_recordings). La demografia (telefonos/correos adquiridos) NO se toca todavia:
     depende de la marca de procedencia (dato del credito vs adquirido) que es fase 3.
 
+    PISO LEGAL (Ley 21.320, art. 37): las gestiones de cobranza deben conservarse >= 2 anios desde
+    su realizacion, aunque la config ponga un plazo menor. Como un lead terminado/desasignado ya no
+    recibe gestiones nuevas (no es gestionable), basta exigir 2 anios desde el evento del ciclo de
+    vida para garantizar que TODA gestion suya supere los 2 anios; ademas se filtra por created_at
+    al borrar, como resguardo explicito. Las notas internas (LeadNote) NO son gestiones de cobranza
+    -- son recordatorios del equipo, no contacto con el deudor -- asi que no les aplica el piso.
+
     Idempotente y acotada: solo mira leads con datos_purgados_at nulo, y lo setea al purgar.
     """
     import calendar
@@ -275,22 +290,28 @@ def purgar_gestiones_ciclo_vida():
 
     cfg = _retention_settings()
     hoy = timezone.now().date()
+    # Piso legal (Ley 21.320): ninguna gestion se purga antes de 2 anios desde su realizacion.
+    corte_gestiones = hoy - timedelta(days=RETENCION_GESTIONES_DIAS)
 
     def _fin_de_mes(d):
         return d.replace(day=calendar.monthrange(d.year, d.month)[1])
 
-    # Terminados: elegibles cuando fin_de_mes(terminado_at) + plazo <= hoy. El "fin de mes" varia
-    # por fila, asi que se filtra en Python (el conjunto es acotado: una vez purgado ya no vuelve).
+    # Terminados: elegibles cuando fin_de_mes(terminado_at) + plazo <= hoy Y ademas ya pasaron 2
+    # anios desde terminado_at (piso legal: sus gestiones -- todas <= terminado_at -- superan los
+    # 2 anios). Se filtra en Python porque el "fin de mes" varia por fila.
     terminados = [
         lead.pk
         for lead in Lead.objects.filter(
             activo=Lead.TERMINADO, terminado_at__isnull=False, datos_purgados_at__isnull=True
         ).only('pk', 'terminado_at').iterator(chunk_size=CHUNK)
         if _fin_de_mes(lead.terminado_at) + timedelta(days=cfg.dias_purga_terminado) <= hoy
+        and lead.terminado_at <= corte_gestiones
     ]
 
-    # Desasignados: plazo fijo desde desasignado_at -> se puede filtrar en la consulta.
-    corte_desasignado = hoy - timedelta(days=cfg.dias_purga_desasignado)
+    # Desasignados: plazo fijo desde desasignado_at. El plazo efectivo es el mayor entre el
+    # configurado y el piso legal de 2 anios, para no purgar gestiones de < 2 anios.
+    plazo_desasignado = max(cfg.dias_purga_desasignado, RETENCION_GESTIONES_DIAS)
+    corte_desasignado = hoy - timedelta(days=plazo_desasignado)
     desasignados = list(
         Lead.objects.filter(
             activo=Lead.DESASIGNADO, desasignado_at__isnull=False,
@@ -306,8 +327,10 @@ def purgar_gestiones_ciclo_vida():
     for i in range(0, len(pks), CHUNK):
         chunk = pks[i:i + CHUNK]
         # Borrar Action arrastra su PaymentCommitment (OneToOne CASCADE) y deja CallRecording y
-        # PendingPbxCall con action=NULL (SET_NULL): la grabacion sobrevive.
-        Action.objects.filter(lead_id__in=chunk).delete()
+        # PendingPbxCall con action=NULL (SET_NULL): la grabacion sobrevive. El filtro por
+        # created_at es el resguardo explicito del piso legal de 2 anios (Ley 21.320): en la
+        # practica la elegibilidad ya lo garantiza, pero asi ninguna gestion reciente se pierde.
+        Action.objects.filter(lead_id__in=chunk, created_at__date__lte=corte_gestiones).delete()
         LeadNote.objects.filter(lead_id__in=chunk).delete()
         Lead.objects.filter(pk__in=chunk).update(datos_purgados_at=hoy)
 

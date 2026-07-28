@@ -12,12 +12,15 @@ class RetentionSettings(models.Model):
     dias_purga_terminado = models.PositiveIntegerField(
         default=15,
         help_text='Dias despues del fin del mes en que se declaro "al dia" para purgar las '
-                  'gestiones de un lead terminado (se conservan las grabaciones).',
+                  'gestiones de un lead terminado (se conservan las grabaciones). Sujeto a un '
+                  'piso legal: las gestiones nunca se purgan antes de 2 anios desde su '
+                  'realizacion (Ley 21.320), aunque aqui se ponga menos.',
     )
     dias_purga_desasignado = models.PositiveIntegerField(
         default=90,
         help_text='Dias desde que el lead quedo desasignado para purgar sus gestiones '
-                  '(se conservan las grabaciones).',
+                  '(se conservan las grabaciones). Sujeto al mismo piso legal de 2 anios '
+                  'sobre las gestiones (Ley 21.320).',
     )
     dias_retencion_statuslog = models.PositiveIntegerField(
         default=90,
