@@ -10,12 +10,12 @@ from lead.permissions import leads_visibles, scope_por_lead
 
 def index(request):
     if request.user.is_authenticated:
-        return redirect('dashboard:dashboard')
+        return redirect('dashboard:index')
     return render(request, 'core/index.html')
 
 def about(request):
     if request.user.is_authenticated:
-        return redirect('dashboard:dashboard')
+        return redirect('dashboard:index')
 
     # Datos de About (sin login): datos globales del sistema, no por usuario
     today = localdate()
