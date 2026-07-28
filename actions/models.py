@@ -334,6 +334,13 @@ class CallRecording(models.Model):
     audio_file = models.FileField(upload_to='call_recordings/%Y/%m/')
     # Ley: solo se retienen 2 años las llamadas con contacto efectivo con el cliente.
     retention_until = models.DateField(null=True, blank=True)
+    # Copia (snapshot) de OP / nombre / cartera del lead al momento de la grabacion. Como la
+    # grabacion sobrevive al borrado del lead o de toda su cartera (SET_NULL, por retencion legal),
+    # sin esta copia la fila quedaria sin identificacion. Se llenan solos en save() mientras el lead
+    # exista, y siguen ahi cuando el lead se va.
+    op_snapshot = models.CharField(max_length=32, blank=True)
+    lead_name_snapshot = models.CharField(max_length=255, blank=True)
+    cartera_snapshot = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -344,10 +351,15 @@ class CallRecording(models.Model):
         if not self.retention_until:
             base_date = (self.call_date or timezone.now()).date()
             self.retention_until = base_date + timedelta(days=730)
+        # Mientras el lead exista, mantener la copia de identificacion al dia.
+        if self.lead_id:
+            self.op_snapshot = self.lead.op
+            self.lead_name_snapshot = self.lead.name
+            self.cartera_snapshot = self.lead.subcartera.cartera.nombre
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"Grabación {self.cdr_id} - {self.lead.op}"
+        return f"Grabación {self.cdr_id} - {self.lead.op if self.lead_id else self.op_snapshot}"
 
 
 class Payment(models.Model):

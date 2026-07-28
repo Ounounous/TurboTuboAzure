@@ -38,6 +38,11 @@
                   <td class="op"><a href="{% url 'leads:detail' rec.lead.pk %}" class="link">{{ rec.lead.op }}</a></td>
                   <td style="font-weight:600">{{ rec.lead.name }}</td>
                   <td>{{ rec.lead.subcartera.cartera.nombre }}</td>
+                {% elif rec.op_snapshot or rec.cartera_snapshot %}
+                  {# Lead/cartera eliminados: se conserva la copia de identificacion (retencion legal). #}
+                  <td class="op muted" title="El lead y su cartera fueron eliminados; la grabación se conserva por su retención legal.">{{ rec.op_snapshot|default:"-" }}</td>
+                  <td class="muted" style="font-weight:600">{{ rec.lead_name_snapshot|default:"-" }}</td>
+                  <td class="muted">{{ rec.cartera_snapshot|default:"-" }} <span style="font-size:11px;">(eliminada)</span></td>
                 {% else %}
                   <td class="op muted" colspan="3" title="El lead y su cartera fueron eliminados; la grabación se conserva por su retención legal.">(cartera eliminada)</td>
                 {% endif %}
