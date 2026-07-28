@@ -92,8 +92,17 @@ class Command(BaseCommand):
         resultados_creados, resultados_actualizados = 0, 0
         for (nombre, tipo_contacto), info in resultados_info.items():
             con_contacto = info['con_contacto']
-            crea_compromiso = 'COMPROMISO DE PAGO' in nombre.upper()
-            requiere_fecha = crea_compromiso or 'PAGO' in nombre.upper()
+            # Crea un compromiso de pago (con fecha) cuando el resultado es un compromiso o una
+            # intencion de pago. OJO: "SIN INTENCION DE PAGO" contiene "INTENCION DE PAGO" como
+            # substring, hay que excluirlo. requiere_fecha va de la mano: solo se pide fecha cuando
+            # hay un compromiso que fechar (antes se pedia fecha a cualquier nombre con "PAGO",
+            # incluido "SIN INTENCION DE PAGO", que no la necesita).
+            nombre_up = nombre.upper()
+            crea_compromiso = (
+                'COMPROMISO DE PAGO' in nombre_up
+                or ('INTENCION DE PAGO' in nombre_up and 'SIN INTENCION' not in nombre_up)
+            )
+            requiere_fecha = crea_compromiso
             # Nuevo Capital no reporta pagos por gestion; "paga tercero (o aval)" es la unica
             # excepcion acordada para llegar a Pagando sin pasar por el formulario de Pagos.
             efecto_pago = Resultado.EFECTO_PAGANDO if 'PAGA TERCERO' in nombre.upper() else ''

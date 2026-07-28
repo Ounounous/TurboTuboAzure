@@ -69,7 +69,7 @@
           <thead>
             <tr>
               <th>Cartera</th><th>Subcartera</th><th>ID</th><th>Cliente</th><th>Fecha compromiso</th>
-              <th class="num">Monto</th><th>Comentario</th><th>Ejecutivo</th>
+              <th class="num">Monto</th><th>Fecha creación</th><th>Comentario</th><th>Ejecutivo</th>
             </tr>
           </thead>
           <tbody>
@@ -81,6 +81,7 @@
                 <td style="font-weight:600">{{ c.lead.name }}</td>
                 <td style="font-variant-numeric:tabular-nums">{{ c.fecha_compromiso|date:"d-m-Y" }}</td>
                 <td class="num">{{ c.monto|clp }}</td>
+                <td style="font-variant-numeric:tabular-nums; color:var(--text-muted)">{{ c.created_at|date:"d-m-Y H:i" }}</td>
                 <td>{{ c.comentario|default:"-"|truncatechars:60 }}</td>
                 <td>{{ c.created_by.username|default:"-" }}</td>
               </tr>
