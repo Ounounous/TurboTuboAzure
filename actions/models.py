@@ -212,7 +212,8 @@ class Action(models.Model):
             if self.lead:
                 self.op = self.lead.op
                 self.subcartera = self.lead.subcartera
-                self.team = self.lead.team
+                # Usa el equipo activo del usuario (respeta cambios de equipo), con fallback al del lead.
+                self.team = self.user.userprofile.active_team or self.lead.team
             # Automatically set target if phone or email is selected and target is not set
             if not self.target:
                 if self.phone:
