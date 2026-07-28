@@ -33,20 +33,15 @@
 
   <div class="card p-4 mb-4">
     <h2 class="mb-1 text-lg font-bold">Central telefónica (pbxip.cl)</h2>
-    <p class="mb-3 text-sm">
+    <p class="mb-0 text-sm">
       Estado:
       {% if userprofile.has_pbx_credentials %}
         <span class="dot-st"><span class="d st-green"></span>Conectado</span>
       {% else %}
         <span class="dot-st"><span class="d st-slate"></span>No configurado</span>
       {% endif %}
+      <br><span class="muted">Las credenciales las configura un supervisor o admin desde Configuración → Usuarios.</span>
     </p>
-    <form method="post">
-      {% csrf_token %}
-      <input type="hidden" name="form" value="pbx_credentials">
-      {{ pbx_form.as_p }}
-      <button type="submit" class="btn btn-primary mt-2">Guardar credenciales PBX</button>
-    </form>
   </div>
 
   <form method="post" action="{% url 'logout' %}">

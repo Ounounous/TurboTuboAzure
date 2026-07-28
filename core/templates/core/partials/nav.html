@@ -14,9 +14,12 @@
             {% if request.user.userprofile.user_type in 'admin,owner,supervisor' %}
             <a href="{% url 'actions:recordings_list' %}" class="nav-link">Grabaciones</a>
             <a href="{% url 'suspensiones:index' %}" class="nav-link">Suspensiones</a>
-            {% endif %}
             <a href="{% url 'demographics:index' %}" class="nav-link">Demografía</a>
+            {% endif %}
             <a href="{% url 'leads:status-changes' 'day' %}" class="nav-link">Cambios de estado</a>
+            {% if request.user.userprofile.user_type == 'supervisor' %}
+            <a href="{% url 'configuracion:usuarios_permisos' %}" class="nav-link">👥 Usuarios</a>
+            {% endif %}
             {% if request.user.userprofile.user_type in 'admin,owner' %}
             <a href="{% url 'configuracion:index' %}" class="nav-link">⚙️ Configuración</a>
             {% endif %}

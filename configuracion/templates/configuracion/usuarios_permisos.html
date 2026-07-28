@@ -4,9 +4,15 @@
 
 {% block content %}
 <div class="py-6 px-6">
-  <h1 class="text-xl mb-1">Configuración</h1>
-  {% include 'configuracion/_subnav.html' with active='usuarios' %}
+  {% if es_admin %}
+    <h1 class="text-xl mb-1">Configuración</h1>
+    {% include 'configuracion/_subnav.html' with active='usuarios' %}
+  {% else %}
+    <h1 class="text-xl mb-1">Usuarios de mi equipo</h1>
+    <p class="muted mb-4" style="font-size:12.5px;">Podés editar RUT, correo, teléfono y credenciales SIP de los usuarios de tu equipo.</p>
+  {% endif %}
 
+  {% if es_admin %}
   <h2 class="text-lg font-bold mb-2">Carteras por supervisor</h2>
   <p class="muted mb-3" style="font-size:12.5px;">
     Un supervisor solo ve y gestiona las carteras donde está asignado acá (admin/owner ven todas siempre).
@@ -57,22 +63,41 @@
       <button type="submit" class="btn btn-primary mt-2" style="grid-column: 1 / -1; justify-self: start;">Crear usuario</button>
     </form>
   </div>
+  {% endif %}
 
   <h2 class="text-lg font-bold mb-2">Usuarios</h2>
   <p class="muted mb-3" style="font-size:12.5px;">
-    Rol y equipo de cada usuario. admin/owner ven todo; supervisor solo sus carteras (arriba); cobrador solo sus clientes asignados.
+    {% if es_admin %}Rol y equipo de cada usuario. admin/owner ven todo; supervisor solo sus carteras (arriba); cobrador solo sus clientes asignados. Correo, teléfono y SIP editables acá.
+    {% else %}Solo los usuarios de tu equipo. El rol y el equipo los cambia un admin.{% endif %}
   </p>
   <div class="card mb-6" style="border:1px solid var(--border); border-radius:10px;">
     <div class="overflow-x-auto">
       <table class="table-dense">
-        <thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Equipo</th></tr></thead>
+        <thead><tr>
+          <th>Usuario</th><th>Nombre</th><th>RUT</th><th>Rol</th><th>Equipo</th>
+          <th>Correo / Teléfono</th><th>SIP (usuario · anexo)</th><th>Configurar SIP</th>
+        </tr></thead>
         <tbody>
           {% for u in usuarios %}
             <tr>
               <td class="op">{{ u.username }}</td>
               <td>{{ u.get_full_name|default:"—" }}</td>
+
+              {# RUT — editable por supervisor+admin #}
               <td>
-                <form method="post" action="{% url 'configuracion:usuarios_permisos' %}" style="display:flex; gap:8px; align-items:center;">
+                <form method="post" action="{% url 'configuracion:usuarios_permisos' %}" style="display:flex; gap:4px; align-items:center;">
+                  {% csrf_token %}
+                  <input type="hidden" name="accion" value="editar_contacto">
+                  <input type="hidden" name="user_id" value="{{ u.id }}">
+                  <input type="text" name="rut" value="{{ u.userprofile.rut }}" placeholder="RUT" style="width:100px; font-size:12px;">
+                  <button type="submit" class="btn btn-secondary" style="font-size:11px; padding:3px 7px;">✓</button>
+                </form>
+              </td>
+
+              {# Rol — solo admin edita #}
+              <td>
+                {% if es_admin %}
+                <form method="post" action="{% url 'configuracion:usuarios_permisos' %}" style="display:flex; gap:6px; align-items:center;">
                   {% csrf_token %}
                   <input type="hidden" name="accion" value="cambiar_tipo">
                   <input type="hidden" name="user_id" value="{{ u.id }}">
@@ -81,11 +106,17 @@
                       <option value="{{ val }}" {% if u.userprofile.user_type == val %}selected{% endif %}>{{ label }}</option>
                     {% endfor %}
                   </select>
-                  <button type="submit" class="btn btn-secondary" style="font-size:11.5px; padding:4px 10px;">Guardar</button>
+                  <button type="submit" class="btn btn-secondary" style="font-size:11px; padding:3px 7px;">✓</button>
                 </form>
+                {% else %}
+                  <span>{{ u.userprofile.get_user_type_display }}</span>
+                {% endif %}
               </td>
+
+              {# Equipo — solo admin edita #}
               <td>
-                <form method="post" action="{% url 'configuracion:usuarios_permisos' %}" style="display:flex; gap:8px; align-items:center;">
+                {% if es_admin %}
+                <form method="post" action="{% url 'configuracion:usuarios_permisos' %}" style="display:flex; gap:6px; align-items:center;">
                   {% csrf_token %}
                   <input type="hidden" name="accion" value="cambiar_equipo">
                   <input type="hidden" name="user_id" value="{{ u.id }}">
@@ -95,10 +126,61 @@
                       <option value="{{ eq.id }}" {% if u.userprofile.active_team_id == eq.id %}selected{% endif %}>{{ eq.name }}</option>
                     {% endfor %}
                   </select>
-                  <button type="submit" class="btn btn-secondary" style="font-size:11.5px; padding:4px 10px;">Guardar</button>
+                  <button type="submit" class="btn btn-secondary" style="font-size:11px; padding:3px 7px;">✓</button>
+                </form>
+                {% else %}
+                  <span>{{ u.userprofile.active_team.name|default:"— sin equipo —" }}</span>
+                {% endif %}
+              </td>
+
+              {# Correo + Teléfono — editable por supervisor+admin #}
+              <td>
+                <form method="post" action="{% url 'configuracion:usuarios_permisos' %}" style="display:flex; flex-direction:column; gap:4px;">
+                  {% csrf_token %}
+                  <input type="hidden" name="accion" value="editar_contacto">
+                  <input type="hidden" name="user_id" value="{{ u.id }}">
+                  <input type="email" name="email" value="{{ u.email }}" placeholder="correo" style="width:180px; font-size:12px;">
+                  <div style="display:flex; gap:4px; align-items:center;">
+                    <input type="text" name="telefono" value="{{ u.userprofile.telefono }}" placeholder="teléfono" style="width:140px; font-size:12px;">
+                    <button type="submit" class="btn btn-secondary" style="font-size:11px; padding:3px 7px;">Guardar</button>
+                  </div>
                 </form>
               </td>
+
+              {# SIP display #}
+              <td style="font-size:12px;">
+                {% if u.userprofile.pbx_email %}
+                  {{ u.userprofile.pbx_email }} · {{ u.userprofile.pbx_extension|default:"—" }}
+                  {% if u.userprofile.has_pbx_credentials %}<span class="dot-st" style="margin-left:4px;"><span class="d st-green"></span></span>{% endif %}
+                {% else %}
+                  <span class="muted">no configurado</span>
+                {% endif %}
+              </td>
+
+              {# Botón Configurar SIP — abre el formulario SIP #}
+              <td>
+                <details>
+                  <summary class="cursor-pointer" style="font-size:12px; font-weight:600; color:var(--text-muted);">⚙️ Configurar</summary>
+                  <form method="post" action="{% url 'configuracion:usuarios_permisos' %}" style="display:flex; flex-direction:column; gap:5px; margin-top:8px; min-width:220px;">
+                    {% csrf_token %}
+                    <input type="hidden" name="accion" value="configurar_sip">
+                    <input type="hidden" name="user_id" value="{{ u.id }}">
+                    <label style="font-size:11px;">Usuario/email pbxip.cl
+                      <input type="text" name="pbx_email" value="{{ u.userprofile.pbx_email }}" style="width:100%; font-size:12px;">
+                    </label>
+                    <label style="font-size:11px;">Contraseña <span class="muted">(en blanco = mantener)</span>
+                      <input type="password" name="pbx_password" autocomplete="new-password" style="width:100%; font-size:12px;">
+                    </label>
+                    <label style="font-size:11px;">Anexo/extensión
+                      <input type="text" name="pbx_extension" value="{{ u.userprofile.pbx_extension }}" style="width:100%; font-size:12px;">
+                    </label>
+                    <button type="submit" class="btn btn-primary" style="font-size:11px; padding:4px 10px;">Guardar SIP</button>
+                  </form>
+                </details>
+              </td>
             </tr>
+          {% empty %}
+            <tr><td colspan="8" class="muted" style="text-align:center; padding:16px;">No hay usuarios en tu equipo.</td></tr>
           {% endfor %}
         </tbody>
       </table>

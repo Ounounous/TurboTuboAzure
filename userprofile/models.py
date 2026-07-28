@@ -27,6 +27,9 @@ class Userprofile(models.Model):
     # RUT sin guion, sin puntos y sin digito verificador -- algunos reportes de cartera (ej.
     # Tanner) exigen el RUT del ejecutivo que hizo la gestion.
     rut = models.CharField(max_length=15, blank=True)
+    # Datos de contacto del cobrador (editables por supervisor/admin desde Configuracion ->
+    # Usuarios). El correo del cobrador vive en User.email; aca solo el telefono.
+    telefono = models.CharField(max_length=30, blank=True)
 
     # Credenciales del usuario en la central telefonica (pbxip.cl), usadas para originar
     # llamadas y descargar grabaciones a nombre de este usuario.

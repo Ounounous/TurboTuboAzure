@@ -3,7 +3,7 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect
 from django.contrib.auth.models import User
 
-from .forms import SignupForm, PbxCredentialsForm, ProfileDataForm
+from .forms import SignupForm, ProfileDataForm
 from .models import Userprofile
 
 from team.models import Team
@@ -45,15 +45,8 @@ def myaccount(request):
     userprofile = get_userprofile(user)
     leads = Lead.objects.filter(assigned_to=user)
 
-    if request.method == 'POST' and request.POST.get('form') == 'pbx_credentials':
-        pbx_form = PbxCredentialsForm(request.POST, userprofile=userprofile)
-        if pbx_form.is_valid():
-            pbx_form.save()
-            messages.success(request, 'Credenciales de la central telefónica guardadas.')
-            return redirect('userprofile:myaccount')
-    else:
-        pbx_form = PbxCredentialsForm(userprofile=userprofile)
-
+    # Las credenciales de la central (SIP/PBX) ya NO se editan aca: las configura un supervisor o
+    # admin desde Configuracion -> Usuarios. Aca solo quedan los datos personales (RUT).
     if request.method == 'POST' and request.POST.get('form') == 'profile_data':
         profile_form = ProfileDataForm(request.POST, userprofile=userprofile)
         if profile_form.is_valid():
@@ -66,6 +59,5 @@ def myaccount(request):
     return render(request, 'userprofile/myaccount.html', {
         'userprofile': userprofile,
         'leads': leads,
-        'pbx_form': pbx_form,
         'profile_form': profile_form,
     })

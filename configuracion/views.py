@@ -6,10 +6,11 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 
 from cartera.models import Cartera
-from lead.permissions import es_admin_owner
+from lead.permissions import es_admin_owner, es_supervisor
 from suspensiones.models import RetentionSettings
 from team.forms import TeamForm
 from team.models import Team
+from userprofile.forms import PbxCredentialsForm
 from userprofile.models import Userprofile
 
 from .forms import CrearUsuarioForm
@@ -23,6 +24,15 @@ class ConfiguracionRequiredMixin(LoginRequiredMixin):
         return super().dispatch(request, *args, **kwargs)
 
 
+def _en_alcance(actor, target_user):
+    """Un admin/owner puede editar a cualquiera; un supervisor solo a los de su propio equipo."""
+    if es_admin_owner(actor):
+        return True
+    team = getattr(actor.userprofile, 'active_team', None)
+    target_profile = getattr(target_user, 'userprofile', None)
+    return bool(team and target_profile and target_profile.active_team_id == team.id)
+
+
 class ConfiguracionHomeView(ConfiguracionRequiredMixin, View):
     template_name = 'configuracion/index.html'
 
@@ -30,26 +40,80 @@ class ConfiguracionHomeView(ConfiguracionRequiredMixin, View):
         return render(request, self.template_name)
 
 
-class UsuariosPermisosView(ConfiguracionRequiredMixin, View):
+class UsuariosPermisosView(LoginRequiredMixin, View):
+    """Gestion de usuarios. admin/owner: todo (roles, equipos, crear, supervisores por cartera,
+    y datos de contacto/SIP de cualquier usuario). supervisor: solo datos de contacto (RUT, correo,
+    telefono) y credenciales SIP de los usuarios de su propio equipo. cobrador: sin acceso."""
     template_name = 'configuracion/usuarios_permisos.html'
 
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated or not es_supervisor(request.user):
+            raise PermissionDenied
+        return super().dispatch(request, *args, **kwargs)
+
     def get(self, request, *args, **kwargs):
-        usuarios = User.objects.select_related('userprofile').order_by('username')
-        carteras = Cartera.objects.prefetch_related('supervisores').order_by('nombre')
-        supervisores_disponibles = User.objects.filter(
-            userprofile__user_type__in=('supervisor', 'admin', 'owner')
-        ).order_by('username')
-        return render(request, self.template_name, {
+        es_admin = es_admin_owner(request.user)
+        if es_admin:
+            usuarios = User.objects.select_related('userprofile').order_by('username')
+        else:
+            # supervisor: solo los miembros de su equipo activo.
+            team = getattr(request.user.userprofile, 'active_team', None)
+            usuarios = (
+                team.members.select_related('userprofile').order_by('username')
+                if team else User.objects.none()
+            )
+        contexto = {
             'usuarios': usuarios,
-            'carteras': carteras,
-            'supervisores_disponibles': supervisores_disponibles,
             'tipos': Userprofile.USER_TYPES,
-            'equipos': Team.objects.order_by('name'),
-            'crear_usuario_form': CrearUsuarioForm(),
-        })
+            'es_admin': es_admin,
+        }
+        if es_admin:
+            contexto.update({
+                'carteras': Cartera.objects.prefetch_related('supervisores').order_by('nombre'),
+                'supervisores_disponibles': User.objects.filter(
+                    userprofile__user_type__in=('supervisor', 'admin', 'owner')
+                ).order_by('username'),
+                'equipos': Team.objects.order_by('name'),
+                'crear_usuario_form': CrearUsuarioForm(),
+            })
+        return render(request, self.template_name, contexto)
 
     def post(self, request, *args, **kwargs):
         accion = request.POST.get('accion')
+        es_admin = es_admin_owner(request.user)
+
+        # Acciones de contacto y SIP: disponibles para supervisor+ (acotadas a su equipo).
+        if accion in ('editar_contacto', 'configurar_sip'):
+            user = get_object_or_404(User, pk=request.POST.get('user_id'))
+            if not _en_alcance(request.user, user):
+                raise PermissionDenied
+            userprofile, _ = Userprofile.objects.get_or_create(user=user)
+
+            if accion == 'editar_contacto':
+                # Actualiza solo los campos presentes en el POST (permite formularios separados).
+                if 'email' in request.POST:
+                    user.email = request.POST.get('email', '').strip()
+                    user.save(update_fields=['email'])
+                if 'rut' in request.POST:
+                    userprofile.rut = request.POST.get('rut', '').strip()
+                if 'telefono' in request.POST:
+                    userprofile.telefono = request.POST.get('telefono', '').strip()
+                userprofile.save()
+                messages.success(request, f'Datos de contacto de {user.username} actualizados.')
+            else:  # configurar_sip
+                form = PbxCredentialsForm(request.POST, userprofile=userprofile)
+                if form.is_valid():
+                    form.save()
+                    messages.success(request, f'Credenciales SIP de {user.username} guardadas.')
+                else:
+                    for field, errores in form.errors.items():
+                        for error in errores:
+                            messages.error(request, f'SIP {field}: {error}')
+            return redirect('configuracion:usuarios_permisos')
+
+        # El resto de las acciones son solo de admin/owner.
+        if not es_admin:
+            raise PermissionDenied
 
         if accion == 'crear_usuario':
             form = CrearUsuarioForm(request.POST)

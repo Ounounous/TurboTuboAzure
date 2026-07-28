@@ -82,7 +82,7 @@ TEMPLATE_SPECS = {
 }
 
 
-class DownloadTemplateView(LoginRequiredMixin, View):
+class DownloadTemplateView(SupervisorRequiredMixin, View):
     def get(self, request, *args, **kwargs):
         spec = TEMPLATE_SPECS.get(kwargs.get('form_type'))
         if not spec:
@@ -125,7 +125,7 @@ def find_lead(cartera, subcartera, op):
     ).first()
 
 
-class DemographicsIndexView(LoginRequiredMixin, View):
+class DemographicsIndexView(SupervisorRequiredMixin, View):
     def get(self, request, *args, **kwargs):
         form_type = request.GET.get('form_type', None)
         return render(request, 'demographics/demographics_index.html', {'form_type': form_type})
