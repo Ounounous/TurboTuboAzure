@@ -32,6 +32,12 @@ class RetentionSettings(models.Model):
         help_text='Dias que se conserva el registro de accesos a datos de deudores '
                   '(Configuracion -> Registros de acciones) antes de purgarlo.',
     )
+    dias_retencion_asignaciones = models.PositiveIntegerField(
+        default=180,
+        help_text='Dias que se conserva el historial de (re)asignaciones de leads a cobradores '
+                  '(LeadAssignment) antes de purgarlo. La asignacion ACTUAL vive en Lead.assigned_to, '
+                  'no se pierde; esto es solo el rastro historico.',
+    )
     updated_at = models.DateTimeField(auto_now=True)
     updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
 

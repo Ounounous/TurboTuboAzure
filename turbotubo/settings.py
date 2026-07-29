@@ -103,7 +103,12 @@ PBX_MASTER_EMAIL = os.environ.get('PBX_MASTER_EMAIL', '')
 PBX_MASTER_PASSWORD = os.environ.get('PBX_MASTER_PASSWORD', '')
 
 CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0')
-CELERY_RESULT_BACKEND = CELERY_BROKER_URL
+# Sin backend de resultados: el codigo nunca lee el retorno/estado de una tarea (no hay
+# AsyncResult.get()/.ready()/.state en ningun lado), asi que guardarlos era puro overhead que
+# ocupaba memoria del nodo Redis (el mas caro por MB de la arquitectura). task_ignore_result
+# evita ademas que las tareas intenten escribir un resultado que nadie va a consultar.
+CELERY_RESULT_BACKEND = None
+CELERY_TASK_IGNORE_RESULT = True
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 CELERY_TIMEZONE = 'America/Santiago'
 

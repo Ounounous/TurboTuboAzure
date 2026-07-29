@@ -262,12 +262,14 @@ class RetencionDatosView(ConfiguracionRequiredMixin, View):
             config.dias_purga_desasignado = int(request.POST.get('dias_purga_desasignado'))
             config.dias_retencion_statuslog = int(request.POST.get('dias_retencion_statuslog'))
             config.dias_retencion_accesos = int(request.POST.get('dias_retencion_accesos'))
+            config.dias_retencion_asignaciones = int(request.POST.get('dias_retencion_asignaciones'))
         except (TypeError, ValueError):
             messages.error(request, 'Los plazos deben ser números enteros.')
             return redirect('configuracion:retencion')
 
         if min(config.dias_purga_terminado, config.dias_purga_desasignado,
-               config.dias_retencion_statuslog, config.dias_retencion_accesos) < 1:
+               config.dias_retencion_statuslog, config.dias_retencion_accesos,
+               config.dias_retencion_asignaciones) < 1:
             messages.error(request, 'Los plazos deben ser mayores a 0.')
             return redirect('configuracion:retencion')
 

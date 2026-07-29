@@ -521,6 +521,28 @@ def purgar_access_log(dias=None):
     return borrados
 
 
+@shared_task(**RETRY_DB)
+def purgar_asignaciones(dias=None):
+    """
+    Acota el crecimiento de LeadAssignment (una fila por cada (re)asignacion de un lead a un
+    cobrador): borra las mas viejas que `dias`. La asignacion ACTUAL vive en Lead.assigned_to, no
+    aca, asi que purgar el rastro historico no pierde a quien esta asignado cada lead hoy. El plazo
+    sale de RetentionSettings.dias_retencion_asignaciones (editable en Configuracion -> Retencion).
+    """
+    from lead.models import LeadAssignment
+
+    if dias is None:
+        try:
+            from suspensiones.models import RetentionSettings
+            dias = RetentionSettings.get_solo().dias_retencion_asignaciones
+        except Exception:
+            dias = 180
+    corte = timezone.now() - timedelta(days=dias)
+    borrados, _ = LeadAssignment.objects.filter(assigned_at__lt=corte).delete()
+    logger.info(f"purgar_asignaciones: {borrados} asignacion(es) mas viejas que {dias} dias eliminadas")
+    return borrados
+
+
 # Ventana maxima (en dias) que puede pasar sin que cada tarea programada corra, antes de avisar.
 HEARTBEAT_MAX_DIAS = {
     'actions.tasks.reset_status_mensual': 32,
@@ -534,6 +556,7 @@ HEARTBEAT_MAX_DIAS = {
     'actions.tasks.purge_status_change_log': 8,
     'actions.tasks.purgar_gestiones_ciclo_vida': 2,
     'actions.tasks.purgar_access_log': 8,
+    'actions.tasks.purgar_asignaciones': 8,
     'mlmetadata.tasks.exportar_metadata_ml': 8,
 }
 
