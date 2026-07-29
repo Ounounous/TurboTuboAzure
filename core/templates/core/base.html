@@ -42,13 +42,25 @@
         {% include 'core/partials/footer.html' %}
 
         <div class="theme-switcher" role="group" aria-label="Elegir paleta">
-            <span class="theme-switcher-label">Paleta</span>
-            <button type="button" class="theme-swatch" data-theme-choice="azul-claro" style="--sw:#1E6FBE" aria-label="Azul claro" title="Azul claro"></button>
-            <button type="button" class="theme-swatch" data-theme-choice="azul-oscuro" style="--sw:#0E2038" aria-label="Azul oscuro" title="Azul oscuro"></button>
-            <button type="button" class="theme-swatch" data-theme-choice="oliva-claro" style="--sw:#5C7A2E" aria-label="Verde oliva claro" title="Verde oliva claro"></button>
-            <button type="button" class="theme-swatch" data-theme-choice="oliva-oscuro" style="--sw:#262E1F" aria-label="Verde oliva oscuro" title="Verde oliva oscuro"></button>
-            <button type="button" class="theme-swatch" data-theme-choice="rosado" style="--sw:#C2447A" aria-label="Rosado" title="Rosado"></button>
-            <button type="button" class="theme-swatch" data-theme-choice="gris" style="--sw:#8C8C8C" aria-label="Escala de grises" title="Escala de grises"></button>
+            <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Elegir paleta" aria-expanded="false" title="Paleta">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="13.5" cy="6.5" r=".8" fill="currentColor" stroke="none"></circle>
+                    <circle cx="17.5" cy="10.5" r=".8" fill="currentColor" stroke="none"></circle>
+                    <circle cx="8.5" cy="7.5" r=".8" fill="currentColor" stroke="none"></circle>
+                    <circle cx="6.5" cy="12.5" r=".8" fill="currentColor" stroke="none"></circle>
+                    <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.9 0 1.7-.7 1.7-1.6 0-.4-.2-.8-.5-1.1-.3-.3-.5-.7-.5-1.1 0-.9.7-1.6 1.6-1.6H16c3.3 0 6-2.7 6-6 0-4.9-4.5-8.6-10-8.6z"></path>
+                </svg>
+            </button>
+            <div class="theme-options" id="theme-options">
+                <button type="button" class="theme-swatch" data-theme-choice="azul-claro" style="--sw:#1E6FBE" aria-label="Azul claro" title="Azul claro"></button>
+                <button type="button" class="theme-swatch" data-theme-choice="azul-oscuro" style="--sw:#0E2038" aria-label="Azul oscuro" title="Azul oscuro"></button>
+                <button type="button" class="theme-swatch" data-theme-choice="oliva-claro" style="--sw:#5C7A2E" aria-label="Verde oliva claro" title="Verde oliva claro"></button>
+                <button type="button" class="theme-swatch" data-theme-choice="oliva-oscuro" style="--sw:#262E1F" aria-label="Verde oliva oscuro" title="Verde oliva oscuro"></button>
+                <button type="button" class="theme-swatch" data-theme-choice="rosado" style="--sw:#C2447A" aria-label="Rosado" title="Rosado"></button>
+                <button type="button" class="theme-swatch" data-theme-choice="rosado-oscuro" style="--sw:#2B1620" aria-label="Rosado oscuro" title="Rosado oscuro"></button>
+                <button type="button" class="theme-swatch" data-theme-choice="gris" style="--sw:#8C8C8C" aria-label="Escala de grises" title="Escala de grises"></button>
+                <button type="button" class="theme-swatch" data-theme-choice="gris-oscuro" style="--sw:#1C1C1C" aria-label="Gris oscuro" title="Gris oscuro"></button>
+            </div>
         </div>
 
         <dialog id="gestion-dialog" class="rounded-xl p-0 w-11/12" style="max-width: 56.7rem;">
@@ -75,11 +87,23 @@
 
             (function () {
                 var KEY = 'tt-palette';
+                var switcher = document.querySelector('.theme-switcher');
+                var toggle = document.getElementById('theme-toggle');
                 var buttons = document.querySelectorAll('[data-theme-choice]');
                 function sync() {
                     var current = document.documentElement.getAttribute('data-theme') || 'azul-claro';
                     buttons.forEach(function (b) {
                         b.setAttribute('aria-pressed', b.dataset.themeChoice === current ? 'true' : 'false');
+                    });
+                }
+                function abrir(v) {
+                    switcher.classList.toggle('open', v);
+                    if (toggle) toggle.setAttribute('aria-expanded', v ? 'true' : 'false');
+                }
+                if (toggle) {
+                    toggle.addEventListener('click', function (e) {
+                        e.stopPropagation();
+                        abrir(!switcher.classList.contains('open'));
                     });
                 }
                 buttons.forEach(function (b) {
@@ -88,7 +112,12 @@
                         document.documentElement.setAttribute('data-theme', choice);
                         try { localStorage.setItem(KEY, choice); } catch (e) {}
                         sync();
+                        abrir(false);   // elegir una paleta cierra el menu
                     });
+                });
+                // Click fuera del switcher lo cierra.
+                document.addEventListener('click', function (e) {
+                    if (switcher && !switcher.contains(e.target)) abrir(false);
                 });
                 sync();
             })();

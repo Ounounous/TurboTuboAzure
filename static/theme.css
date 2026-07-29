@@ -178,6 +178,65 @@ html[data-theme="gris"] {
   --success-hover: #166139;
 }
 
+html[data-theme="rosado-oscuro"] {
+  --bg-page: #2B1620;
+  --surface: #3A1E2A;
+  --surface-alt: #472634;
+  --surface-alt-hover: #5A2F42;
+  --border: rgba(255, 255, 255, 0.12);
+  --text: #FBEEF2;
+  --text-muted: #C79AA9;
+  --accent: #E86A9C;
+  --accent-contrast: #2B1620;
+  --accent-hover: #F186B0;
+  --field-bg: #FFFFFF;
+  --field-text: #3F1E28;
+  --field-border: #D8B7C2;
+  --field-placeholder: #A5788A;
+  --field-label: var(--text);
+  --nav-bg: #3A1E2A;
+  --nav-text: #FBEEF2;
+  --nav-text-muted: #C79AA9;
+  --nav-active-bg: #5A2F42;
+  /* danger/success cromaticos ajustados a fondo oscuro (mismos que las otras paletas oscuras). */
+  --danger: #E56B5A;
+  --danger-contrast: #34120C;
+  --danger-hover: #EF8B7C;
+  --success: #6FCF97;
+  --success-contrast: #0B2E1B;
+  --success-hover: #8FE0AF;
+}
+
+html[data-theme="gris-oscuro"] {
+  --bg-page: #1C1C1C;
+  --surface: #262626;
+  --surface-alt: #303030;
+  --surface-alt-hover: #3D3D3D;
+  --border: rgba(255, 255, 255, 0.12);
+  --text: #F1F1F1;
+  --text-muted: #A8A8A8;
+  --accent: #E0E0E0;
+  --accent-contrast: #1C1C1C;
+  --accent-hover: #FFFFFF;
+  --field-bg: #FFFFFF;
+  --field-text: #1F1F1F;
+  --field-border: #CCCCCC;
+  --field-placeholder: #999999;
+  --field-label: var(--text);
+  --nav-bg: #262626;
+  --nav-text: #F1F1F1;
+  --nav-text-muted: #A8A8A8;
+  --nav-active-bg: #3D3D3D;
+  /* escala de grises hasta el acento, pero danger/success cromaticos (un error/exito en gris
+     puro no se distingue de un dato normal). */
+  --danger: #E56B5A;
+  --danger-contrast: #34120C;
+  --danger-hover: #EF8B7C;
+  --success: #6FCF97;
+  --success-contrast: #0B2E1B;
+  --success-hover: #8FE0AF;
+}
+
 /* ---------------- base ---------------- */
 html, body { height: 100%; }
 body {
@@ -401,21 +460,47 @@ label { color: var(--field-label); }
   gap: 6px;
   background: var(--surface);
   border: 1px solid var(--border);
-  padding: 8px 10px;
+  padding: 6px;
   border-radius: 999px;
   box-shadow: 0 8px 24px -12px rgba(0, 0, 0, 0.35);
 }
-.theme-switcher-label {
-  font-size: 10.5px;
-  font-weight: 700;
+/* Boton-icono de paleta: siempre visible. Al abrir, las opciones se despliegan a la derecha. */
+.theme-toggle {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
   color: var(--text-muted);
-  margin-right: 2px;
-  text-transform: uppercase;
-  letter-spacing: .06em;
+  cursor: pointer;
+  padding: 0;
+}
+.theme-toggle:hover { color: var(--accent); background: var(--surface-alt); }
+.theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Contenedor de opciones: colapsado (ancho 0) hasta que se abre; se revela de izq a der. */
+.theme-options {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-width .28s ease, opacity .2s ease, margin-left .28s ease;
+  margin-left: 0;
+}
+.theme-switcher.open .theme-options {
+  max-width: 360px;   /* holgado para las 8 pastillas; el transition anima el reveal */
+  opacity: 1;
+  margin-left: 2px;
 }
 .theme-swatch {
   width: 22px;
   height: 22px;
+  flex: none;
   border-radius: 50%;
   border: 2px solid transparent;
   background: var(--sw);
