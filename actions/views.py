@@ -235,7 +235,13 @@ class ActionDetailView(LoginRequiredMixin, DetailView):
     template_name = 'actions/action_detail.html'
     context_object_name = 'action'
 
-class MultiStepActionView(View):
+class MultiStepActionView(LoginRequiredMixin, View):
+    def _get_lead(self, request, lead_id):
+        """Trae el lead SOLO si esta dentro del alcance del usuario (cobrador: suyos; supervisor:
+        sus carteras; admin/owner: todo). Fuera de alcance -> 404, no se distingue de inexistente.
+        Sin esto, cualquiera podia ver/gestionar un lead ajeno pasando su id en la URL/sesion."""
+        return get_object_or_404(leads_visibles(request.user), id=lead_id)
+
     def _blocked_response(self, request, lead, step):
         """Un lead suspendido/terminado no admite gestiones (si notas). Muestra el motivo."""
         return render(request, 'actions/multistep_form.html', {
@@ -258,7 +264,7 @@ class MultiStepActionView(View):
 
     def get(self, request, step=1, lead_id=None):
         if lead_id:
-            lead = get_object_or_404(Lead, id=lead_id)
+            lead = self._get_lead(request, lead_id)
             request.session['selected_lead_id'] = lead.id
             return redirect('actions:multistep_step', step=2)
 
@@ -270,12 +276,12 @@ class MultiStepActionView(View):
                 'form': form, 'step': step
             })
         elif step == 2 and lead_id:
-            lead = get_object_or_404(Lead, id=lead_id)
+            lead = self._get_lead(request, lead_id)
             if not lead.es_gestionable:
                 return self._blocked_response(request, lead, step)
             return render(request, 'actions/multistep_form.html', self._step2_context(lead))
         elif step == 3 and lead_id:
-            lead = get_object_or_404(Lead, id=lead_id)
+            lead = self._get_lead(request, lead_id)
             if not lead.es_gestionable:
                 return self._blocked_response(request, lead, step)
             selected_phone_id = request.session.get('selected_phone')
@@ -298,7 +304,7 @@ class MultiStepActionView(View):
 
     def post(self, request, step):
         lead_id = request.session.get('selected_lead_id')
-        lead = get_object_or_404(Lead, id=lead_id)
+        lead = self._get_lead(request, lead_id)
         if not lead.es_gestionable:
             return self._blocked_response(request, lead, step)
         if step == 2:
@@ -1185,12 +1191,14 @@ class PaymentCreateView(LoginRequiredMixin, View):
     template_name = 'actions/payment_form.html'
 
     def get(self, request, lead_id, *args, **kwargs):
-        lead = get_object_or_404(Lead, id=lead_id)
+        # Sin esto, cualquier usuario autenticado podia registrar un pago sobre CUALQUIER lead
+        # pasando su id -- fuera de alcance -> 404, mismo criterio que el resto de la app.
+        lead = get_object_or_404(leads_visibles(request.user), id=lead_id)
         form = PaymentForm(initial={'fecha': timezone.localdate()})
         return render(request, self.template_name, {'lead': lead, 'form': form})
 
     def post(self, request, lead_id, *args, **kwargs):
-        lead = get_object_or_404(Lead, id=lead_id)
+        lead = get_object_or_404(leads_visibles(request.user), id=lead_id)
         form = PaymentForm(request.POST, request.FILES)
         if form.is_valid():
             pago = form.save(commit=False)
