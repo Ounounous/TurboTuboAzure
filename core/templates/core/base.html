@@ -6,8 +6,7 @@
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        {# Favicon (icono de la pestana): SVG inline como data URI, sin archivo binario. Evita
-           que el navegador pida /favicon.ico y reciba un 404 en cada pestana nueva. #}
+        {# Favicon SVG inline (data URI, sin archivo binario): evita el 404 a /favicon.ico #}
         <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230E4A3B'/%3E%3Ctext x='16' y='23' font-size='19' fill='white' text-anchor='middle' font-family='Arial,sans-serif' font-weight='bold'%3ET%3C/text%3E%3C/svg%3E">
         <script>
             (function () {
@@ -96,14 +95,18 @@
                         b.setAttribute('aria-pressed', b.dataset.themeChoice === current ? 'true' : 'false');
                     });
                 }
+                var autoCierre = null;
                 function abrir(v) {
                     switcher.classList.toggle('open', v);
                     if (toggle) toggle.setAttribute('aria-expanded', v ? 'true' : 'false');
+                    // Auto-cierre a los 5s de abierto (se reinicia si se vuelve a abrir).
+                    if (autoCierre) { clearTimeout(autoCierre); autoCierre = null; }
+                    if (v) autoCierre = setTimeout(function () { abrir(false); }, 5000);
                 }
                 if (toggle) {
                     toggle.addEventListener('click', function (e) {
                         e.stopPropagation();
-                        abrir(!switcher.classList.contains('open'));
+                        abrir(!switcher.classList.contains('open'));  // click de nuevo -> cierra
                     });
                 }
                 buttons.forEach(function (b) {
