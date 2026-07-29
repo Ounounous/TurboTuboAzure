@@ -9,7 +9,7 @@
 
   <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
     <div class="card p-4">
-      <p class="muted text-sm mb-1">Clientes activos</p>
+      <p class="muted text-sm mb-1">Clientes activos{% if desglose_subcarteras %} (total){% endif %}</p>
       <p class="text-2xl font-bold">{{ n_clientes }}</p>
     </div>
     <div class="card p-4">
@@ -17,11 +17,39 @@
       <p class="text-2xl font-bold">{{ saldo_total|clp }}</p>
     </div>
     <div class="card p-4">
-      <p class="muted text-sm mb-1">% Contactabilidad (mes)</p>
+      <p class="muted text-sm mb-1">% Contactabilidad (mes){% if desglose_subcarteras %} (total){% endif %}</p>
       <p class="text-2xl font-bold">{{ contactabilidad_pct }}%</p>
       <p class="muted text-sm">{{ total_gestiones_mes }} gestión(es) este mes</p>
     </div>
   </div>
+
+  {% if desglose_subcarteras %}
+    <h2 class="mb-3 text-lg font-bold">Desglose por subcartera</h2>
+    <div class="card mb-8" style="border:1px solid var(--border); border-radius:10px;">
+      <div class="overflow-x-auto">
+        <table class="table-dense">
+          <thead>
+            <tr>
+              <th>Subcartera</th><th class="num">Clientes activos</th>
+              <th class="num">Saldo insoluto</th><th class="num">% Contactabilidad (mes)</th>
+              <th class="num">Gestiones (mes)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for fila in desglose_subcarteras %}
+              <tr>
+                <td style="font-weight:600">{{ fila.subcartera.cartera.nombre }} / {{ fila.subcartera.nombre }}</td>
+                <td class="num">{{ fila.n_clientes }}</td>
+                <td class="num">{{ fila.saldo_total|clp }}</td>
+                <td class="num">{{ fila.contactabilidad_pct }}%</td>
+                <td class="num">{{ fila.total_gestiones_mes }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endif %}
 
   <h2 class="mb-3 text-lg font-bold">Próximos compromisos de pago</h2>
   {% if compromisos %}
