@@ -1,4 +1,5 @@
 from django.contrib import messages
+from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
 from django.db.models import Count, F, Max, Q
@@ -297,15 +298,21 @@ class MarcarAlDiaView(LoginRequiredMixin, View):
         if user_type not in ('admin', 'owner', 'supervisor'):
             raise PermissionDenied
 
-        lead = get_object_or_404(Lead, pk=pk)
+        # leads_visibles acota al supervisor a sus carteras (admin/owner sin restriccion) --
+        # antes cualquier supervisor podia marcar "al dia" un lead de una cartera ajena por pk.
+        from .permissions import leads_visibles
+        lead = get_object_or_404(leads_visibles(request.user), pk=pk)
         from actions.status_logic import apply_status
         apply_status(lead, Lead.AL_DIA, changed_by=request.user)
         messages.success(request, f'{lead.op} marcado como al día.')
         return redirect('leads:detail', pk=lead.pk)
 
+@login_required
 def status_changes_by_date(request, period='day'):
     # Fecha de inicio en la zona horaria local (evita perder cambios de las últimas horas
     # por el desfase UTC: usamos localdate + el lookup __date que compara por día local).
+    from .permissions import scope_por_lead
+
     today = localdate()
     start_date = today.replace(day=1) if period == 'month' else today
 
@@ -314,7 +321,11 @@ def status_changes_by_date(request, period='day'):
     ).select_related('lead', 'changed_by').order_by('-timestamp')
 
     user_type = getattr(request.user.userprofile, 'user_type', '')
-    if user_type not in ('admin', 'owner', 'supervisor'):
+    if user_type == 'supervisor':
+        # Supervisor: solo su(s) cartera(s) -- antes veia cambios de TODAS las carteras.
+        logs = scope_por_lead(logs, request.user)
+    elif user_type not in ('admin', 'owner'):
+        # Cobrador: solo lo que el mismo cambio (ya acotado, sin tocar mas).
         logs = logs.filter(changed_by=request.user)
 
     return render(request, 'lead/status_changes_list.html', {'logs': logs, 'period': period})
@@ -569,11 +580,11 @@ class AddFileView(LoginRequiredMixin, View):
         return redirect('leads:detail', pk=pk)
 
 def _puede_ver_lead(user, lead):
-    """Un usuario puede ver/anotar un lead si es suyo (asignado/creado) o es supervisor+."""
-    profile = getattr(user, 'userprofile', None)
-    if profile and profile.user_type in ('admin', 'owner', 'supervisor'):
-        return True
-    return lead.assigned_to_id == user.pk or lead.created_by_id == user.pk
+    """Un usuario puede ver/anotar un lead si esta dentro de su alcance (mismo criterio que el
+    resto de la app): cobrador -> suyos; supervisor -> sus carteras (antes CUALQUIER supervisor
+    pasaba, incluso de una cartera ajena); admin/owner -> todo."""
+    from .permissions import leads_visibles
+    return leads_visibles(user).filter(pk=lead.pk).exists()
 
 
 class ToggleFavoriteView(LoginRequiredMixin, View):

@@ -438,7 +438,11 @@ class PhoneStatusView(SupervisorRequiredMixin, View):
         })
 
     def post(self, request, *args, **kwargs):
-        phone = get_object_or_404(Phone, pk=request.POST.get('phone_id'))
+        # scope_por_lead acota al supervisor a sus carteras -- antes cualquier supervisor podia
+        # cambiar el estado de un telefono de un lead de una cartera ajena por phone_id.
+        phone = get_object_or_404(
+            scope_por_lead(Phone.objects.all(), request.user), pk=request.POST.get('phone_id')
+        )
         nuevo = _norm_status(request.POST.get('status'))
         if not nuevo:
             messages.error(request, 'Estado inválido.')
@@ -560,13 +564,18 @@ class EmailStatusView(SupervisorRequiredMixin, View):
             messages.error(request, 'Estado inválido.')
             return redirect(request.POST.get('next') or 'demographics:email_status')
         from actions.status_logic import recompute_inubicable
+        # scope_por_lead acota al supervisor a sus carteras -- antes cualquier supervisor podia
+        # cambiar el estado de un correo de un lead de una cartera ajena por pk.
         if kind == 'principal':
-            d = get_object_or_404(IDDemographics, pk=pk)
+            d = get_object_or_404(scope_por_lead(IDDemographics.objects.all(), request.user), pk=pk)
             d.principal_email_status = nuevo
             d.save(update_fields=['principal_email_status'])
             lead = d.lead
         else:
-            a = get_object_or_404(AvalDemographics, pk=pk)
+            a = get_object_or_404(
+                scope_por_lead(AvalDemographics.objects.all(), request.user, lead_field='id_demographics__lead'),
+                pk=pk,
+            )
             a.aval_email_status = nuevo
             a.save(update_fields=['aval_email_status'])
             lead = a.id_demographics.lead
