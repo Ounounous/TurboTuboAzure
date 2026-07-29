@@ -115,7 +115,8 @@
                         document.documentElement.setAttribute('data-theme', choice);
                         try { localStorage.setItem(KEY, choice); } catch (e) {}
                         sync();
-                        abrir(false);   // elegir una paleta cierra el menu
+                        // Elegir una paleta NO cierra el menu: se sigue viendo el resultado hasta
+                        // que el usuario aprieta el icono de nuevo o pasan los 5s.
                     });
                 });
                 // Click fuera del switcher lo cierra.
