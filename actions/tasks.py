@@ -79,7 +79,7 @@ def sync_pbx_recordings():
     return user_ids
 
 
-@shared_task(**RETRY_DB)
+@shared_task(rate_limit='30/m', **RETRY_DB)
 def sync_pbx_recordings_user(user_id):
     """Procesa las grabaciones pendientes de UN usuario (aislado del resto)."""
     cutoff_new_enough = timezone.now() - timedelta(seconds=MIN_AGE_SECONDS)

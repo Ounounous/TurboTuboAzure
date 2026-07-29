@@ -646,9 +646,11 @@ class RecordingListView(SupervisorRequiredMixin, ListView):
 
 class SyncRecordingsNowView(LoginRequiredMixin, View):
     """Botón de admin en Grabaciones para disparar la sincronización a mano (sin esperar el
-    cron de cada 5 min). Corre inline (no via Celery) para dar feedback inmediato: recorre las
-    llamadas pendientes y baja de pbxip.cl las que correspondan, usando las credenciales de cada
-    usuario que originó la llamada."""
+    cron de cada 5 min). Despacha por Celery (.delay), NO inline: con muchos usuarios con
+    llamadas pendientes, consultar/descargar de pbxip.cl uno por uno dentro del request puede
+    superar el timeout de Azure (~230s) y dejar la pagina colgada. Al ir por Celery ademas
+    respeta el rate_limit de sync_pbx_recordings_user (ver tasks.py), necesario cuando la cuenta
+    MAESTRA (PBX_MASTER_EMAIL) es la que hace todas las consultas por todos los usuarios."""
     def post(self, request, *args, **kwargs):
         if not es_admin_owner(request.user):
             raise PermissionDenied
@@ -659,17 +661,13 @@ class SyncRecordingsNowView(LoginRequiredMixin, View):
                 resolved=False, requested_at__lte=cutoff, attempts__lt=MAX_ATTEMPTS
             ).order_by('user_id').values_list('user_id', flat=True).distinct()
         )
-        nuevas = 0
         for uid in user_ids:
-            try:
-                nuevas += sync_pbx_recordings_user(uid) or 0
-            except Exception as exc:
-                logger.warning(f'SyncRecordingsNowView: fallo al sincronizar usuario {uid}: {exc}')
+            sync_pbx_recordings_user.delay(uid)
         if user_ids:
             messages.success(
                 request,
-                f'Sincronización ejecutada: {nuevas} grabación(es) nueva(s) sobre '
-                f'{len(user_ids)} usuario(s) con llamadas pendientes.'
+                f'Sincronización en curso sobre {len(user_ids)} usuario(s) con llamadas pendientes. '
+                'Las grabaciones nuevas aparecerán en el listado en los próximos minutos.'
             )
         else:
             messages.info(request, 'No había llamadas pendientes de sincronizar.')
