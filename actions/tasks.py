@@ -291,28 +291,87 @@ def check_compromisos_rotos():
 @shared_task(**RETRY_DB)
 def reconciliar_estados():
     """
-    AUTORECUPERACION. Recorre todos los leads (por lotes) y recalcula los campos DERIVADOS que
-    pudieron quedar desincronizados si un save fallo a medias, una tarea no corrio, o una carga
-    no recomputo: (1) inubicable segun la demografia actual, y (2) el acople al dia -> terminado.
-    Es idempotente: en un sistema sano no cambia nada (recompute solo escribe si algo difiere),
-    asi que puede correr cada noche sin costo ni ruido, y sana solo cualquier deriva.
+    AUTORECUPERACION. Recalcula los campos DERIVADOS que pudieron quedar desincronizados si un
+    save fallo a medias, una tarea no corrio, o una carga no recomputo: (1) inubicable segun la
+    demografia actual, y (2) el acople al dia -> terminado. Es idempotente: en un sistema sano no
+    cambia nada, asi que puede correr cada noche sin costo ni ruido, y sana solo cualquier deriva.
+
+    Antes recorria TODOS los leads uno por uno, con una query de "tiene contacto activo" POR
+    LEAD -- a escala (100k+ leads) es un full-scan nocturno con una query por fila. Ahora:
+      - Primero se acota a los leads que REALMENTE pueden necesitar el cambio (mismo filtro que
+        ya aplicaba recompute_inubicable puertas adentro: al_dia+activo para el acople, y
+        recien_asignado/no_contactado/inubicable para lo demografico) -- el resto de la tabla ni
+        se toca, ni se consulta.
+      - Dentro de esos candidatos, "tiene contacto activo" se calcula en UNA query por chunk de
+        500 (no una por lead), y solo se escribe (UPDATE + StatusChangeLog) lo que efectivamente
+        cambia de estado -- se compara antes de guardar, nunca se pisa lo que ya estaba bien.
     """
-    from lead.models import Lead
+    from django.db.models import Exists, OuterRef, Q
+    from demographics.models import Phone, IDDemographics, AvalDemographics, Email, CONTACT_ACTIVE
+    from lead.models import Lead, StatusChangeLog
     from lead.lifecycle import terminar
-    from .status_logic import recompute_inubicable
 
     revisados, corregidos = 0, 0
-    for lead in Lead.objects.all().iterator(chunk_size=CHUNK):
-        antes = (lead.status, lead.status_historico, lead.activo)
-        # Acople al dia -> terminado que pudo perderse.
-        if lead.status == Lead.AL_DIA and lead.activo == Lead.ACTIVO:
-            terminar(lead)
-        # Inubicable segun la demografia actual (solo mueve no_contactado/recien_asignado).
-        recompute_inubicable(lead)
-        revisados += 1
-        if (lead.status, lead.status_historico, lead.activo) != antes:
-            corregidos += 1
-    logger.info(f"reconciliar_estados: {revisados} revisado(s), {corregidos} corregido(s)")
+
+    # 1) Acople al dia -> terminado que pudo perderse: filtro directo (suele ser un puñado de
+    #    filas), no hace falta pasar por el resto de la logica de abajo.
+    for lead in Lead.objects.filter(status=Lead.AL_DIA, activo=Lead.ACTIVO).iterator(chunk_size=CHUNK):
+        terminar(lead)
+        corregidos += 1
+
+    # 2) Inubicable segun demografia: candidatos = mismos 3 status que ya filtraba
+    #    recompute_inubicable adentro (recien_asignado/no_contactado/inubicable). INUBICABLE y
+    #    NO_CONTACTADO son los 2 rangos mas bajos de Lead.STATUS_RANK (0 y 1): moverse entre
+    #    ellos nunca sube status_historico, asi que aca no hace falta tocarlo (recompute_inubicable
+    #    tampoco lo hubiera subido en estos 2 casos -- ver apply_status).
+    candidatos_ids = list(
+        Lead.objects.filter(status__in=[Lead.RECIEN_ASIGNADO, Lead.NO_CONTACTADO, Lead.INUBICABLE])
+        .values_list('pk', flat=True).iterator(chunk_size=CHUNK)
+    )
+    revisados = len(candidatos_ids)
+
+    for i in range(0, len(candidatos_ids), CHUNK):
+        chunk_ids = candidatos_ids[i:i + CHUNK]
+
+        # Una sola query para TODO el chunk: que leads de este chunk tienen algun dato de
+        # contacto activo (mismo criterio que _tiene_contacto_activo, aplicado en bloque).
+        con_contacto = set(
+            Lead.objects.filter(pk__in=chunk_ids).annotate(
+                _tel=Exists(Phone.objects.filter(lead=OuterRef('pk'), phone_number_status=CONTACT_ACTIVE)),
+                _mail=Exists(IDDemographics.objects.filter(
+                    lead=OuterRef('pk'), principal_email_status=CONTACT_ACTIVE).exclude(principal_email='')),
+                _mail2=Exists(Email.objects.filter(lead=OuterRef('pk'), email_status=CONTACT_ACTIVE)),
+                _aval=Exists(AvalDemographics.objects.filter(
+                    id_demographics__lead=OuterRef('pk'), aval_email_status=CONTACT_ACTIVE,
+                ).exclude(aval_email='').exclude(aval_email__isnull=True)),
+            ).filter(Q(_tel=True) | Q(_mail=True) | Q(_mail2=True) | Q(_aval=True))
+            .values_list('pk', flat=True)
+        )
+        status_actual = dict(Lead.objects.filter(pk__in=chunk_ids).values_list('pk', 'status'))
+
+        a_marcar_inubicable = [
+            pk for pk in chunk_ids
+            if pk not in con_contacto and status_actual[pk] in (Lead.RECIEN_ASIGNADO, Lead.NO_CONTACTADO)
+        ]
+        a_desmarcar = [
+            pk for pk in chunk_ids
+            if pk in con_contacto and status_actual[pk] == Lead.INUBICABLE
+        ]
+
+        if a_marcar_inubicable:
+            Lead.objects.filter(pk__in=a_marcar_inubicable).update(status=Lead.INUBICABLE)
+            StatusChangeLog.objects.bulk_create(
+                StatusChangeLog(lead_id=pk, new_status=Lead.INUBICABLE) for pk in a_marcar_inubicable
+            )
+            corregidos += len(a_marcar_inubicable)
+        if a_desmarcar:
+            Lead.objects.filter(pk__in=a_desmarcar).update(status=Lead.NO_CONTACTADO)
+            StatusChangeLog.objects.bulk_create(
+                StatusChangeLog(lead_id=pk, new_status=Lead.NO_CONTACTADO) for pk in a_desmarcar
+            )
+            corregidos += len(a_desmarcar)
+
+    logger.info(f"reconciliar_estados: {revisados} candidato(s) revisado(s), {corregidos} corregido(s)")
     return corregidos
 
 
