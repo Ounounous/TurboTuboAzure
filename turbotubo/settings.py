@@ -77,6 +77,10 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # Comprime el HTML dinamico (~70% mas liviano). Va arriba para comprimir la respuesta ya
+    # armada. Salta lo que ya viene comprimido (estaticos de WhiteNoise) y los binarios. El
+    # riesgo teorico BREACH (gzip+HTTPS) lo mitiga el token CSRF enmascarado de Django.
+    'django.middleware.gzip.GZipMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
