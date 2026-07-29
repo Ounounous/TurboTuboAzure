@@ -51,6 +51,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'userprofile.middleware.ForcePasswordChangeMiddleware',
+    'core.middleware.NoStoreAuthenticatedMiddleware',
 ]
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
