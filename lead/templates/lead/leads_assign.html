@@ -20,52 +20,9 @@
     </form>
   </div>
 
-  <div class="card p-4">
-    <h2 class="mb-3 text-lg font-bold">Asignar manualmente</h2>
-    <form method="post" enctype="multipart/form-data" id="assign_form">
-      {% csrf_token %}
-
-      <div class="mb-4">
-        <label class="block mb-2 font-semibold">{{ form.search.label }}</label>
-        {{ form.search }}
-        <small class="text-gray-500">Escribe para filtrar la lista de clientes</small>
-      </div>
-
-      <div class="mb-4">
-        <label class="block mb-2 font-semibold">{{ form.collector.label }}</label>
-        {{ form.collector }}
-        {% if form.collector.errors %}<span class="text-red-600 text-sm">{{ form.collector.errors.0 }}</span>{% endif %}
-      </div>
-
-      <div class="mb-4">
-        <label class="block mb-2 font-semibold">Clientes a asignar</label>
-        <div style="max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 6px; padding: 10px;">
-          {{ form.leads }}
-        </div>
-        {% if form.leads.errors %}<span class="text-red-600 text-sm">{{ form.leads.errors.0 }}</span>{% endif %}
-      </div>
-
-      <button type="submit" class="btn btn-primary">Asignar clientes</button>
-    </form>
-  </div>
-
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      const searchInput = document.querySelector('input[name="search"]');
-      const leadCheckboxes = document.querySelectorAll('input[name="leads"]');
-
-      searchInput.addEventListener('input', function() {
-        const query = this.value.toLowerCase();
-        leadCheckboxes.forEach(checkbox => {
-          const label = checkbox.nextElementSibling;
-          if (label && label.tagName === 'LABEL') {
-            const text = label.textContent.toLowerCase();
-            checkbox.closest('label').style.display =
-              query === '' || text.includes(query) ? '' : 'none';
-          }
-        });
-      });
-    });
-  </script>
+  <p class="muted" style="font-size:12.5px;">
+    ¿Necesitas asignar un solo cliente? Hazlo desde el detalle del cliente (botón "Asignar"),
+    donde puedes reasignarlo a cualquier cobrador de tu equipo.
+  </p>
 </div>
 {% endblock %}

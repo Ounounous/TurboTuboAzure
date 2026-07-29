@@ -1,4 +1,5 @@
 from django.contrib.auth.models import User
+from django.core.validators import FileExtensionValidator
 from django.db import models
 from django.apps import apps
 
@@ -212,9 +213,15 @@ class StatusChangeLog(models.Model):
         return f"Lead {self.lead.id} status changed to {self.new_status} by {quien}"
 
 class LeadFile(models.Model):
+    # Tope de archivos por lead y de tamano por archivo. Se validan en la vista/form; se dejan
+    # aca como fuente unica de verdad.
+    MAX_POR_LEAD = 3
+    MAX_BYTES = 10 * 1024 * 1024  # 10 MB
+    EXTENSIONES = ['png', 'jpg', 'jpeg', 'pdf', 'mp3']
+
     team = models.ForeignKey(Team, related_name='lead_files', on_delete=models.CASCADE)
     lead = models.ForeignKey(Lead, related_name='files', on_delete=models.CASCADE)
-    file = models.FileField(upload_to='leadfiles/')
+    file = models.FileField(upload_to='leadfiles/', validators=[FileExtensionValidator(EXTENSIONES)])
     created_by = models.ForeignKey(User, related_name='lead_files', on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
 

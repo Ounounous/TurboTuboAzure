@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 
 from openpyxl import load_workbook
 
-from .forms import AddFileForm, AddLeadForm, UploadExcelFileForm, AssignLeadsForm, UploadAssignmentFileForm, QuickAssignForm
-from .models import Lead, LeadAssignment, LeadNote, User
+from .forms import AddFileForm, AddLeadForm, UploadExcelFileForm, UploadAssignmentFileForm, QuickAssignForm
+from .models import Lead, LeadAssignment, LeadFile, LeadNote, User
 from cartera.models import Cartera, Subcartera
 from demographics.models import IDDemographics, AvalDemographics, IDItem, Phone
 
@@ -565,19 +565,29 @@ class DownloadExcelView(_SupervisorGate, View):
 
 class AddFileView(LoginRequiredMixin, View):
     def post(self, request, *args, **kwargs):
-        pk = kwargs.get('pk')
+        from .permissions import leads_visibles
+        # Alcance: solo se puede adjuntar a un lead dentro del alcance del usuario (antes se
+        # aceptaba cualquier pk).
+        lead = get_object_or_404(leads_visibles(request.user), pk=kwargs.get('pk'))
+
+        # Tope de archivos por lead.
+        if LeadFile.objects.filter(lead=lead).count() >= LeadFile.MAX_POR_LEAD:
+            messages.error(request, f'Máximo {LeadFile.MAX_POR_LEAD} archivos por cliente.')
+            return redirect('leads:detail', pk=lead.pk)
 
         form = AddFileForm(request.POST, request.FILES)
-
         if form.is_valid():
-            team = self.request.user.userprofile.active_team
             file = form.save(commit=False)
-            file.team = team
-            file.lead_id = pk
+            file.team = request.user.userprofile.active_team
+            file.lead = lead
             file.created_by = request.user
             file.save()
-
-        return redirect('leads:detail', pk=pk)
+            messages.success(request, 'Archivo adjuntado.')
+        else:
+            for errores in form.errors.values():
+                for error in errores:
+                    messages.error(request, error)
+        return redirect('leads:detail', pk=lead.pk)
 
 def _puede_ver_lead(user, lead):
     """Un usuario puede ver/anotar un lead si esta dentro de su alcance (mismo criterio que el
@@ -679,10 +689,11 @@ class AssignLeadsView(LoginRequiredMixin, View):
         if not es_supervisor(request.user):
             raise PermissionDenied
 
-        team = request.user.userprofile.active_team
-        form = AssignLeadsForm(team=team, user=request.user)
+        # La asignacion una-a-una (checkboxes) se quito a proposito: con 10.000 leads esa lista
+        # se vuelve inusable, y la asignacion individual ya vive en el detalle del cliente
+        # (reasignar a cualquier cobrador del equipo). Aca queda solo la asignacion masiva por Excel.
         upload_form = UploadAssignmentFileForm()
-        return render(request, self.template_name, {'form': form, 'upload_form': upload_form})
+        return render(request, self.template_name, {'upload_form': upload_form})
 
     def post(self, request, *args, **kwargs):
         from .permissions import es_supervisor, leads_visibles
@@ -690,29 +701,7 @@ class AssignLeadsView(LoginRequiredMixin, View):
             raise PermissionDenied
 
         team = request.user.userprofile.active_team
-        form = AssignLeadsForm(request.POST, team=team, user=request.user)
         upload_form = UploadAssignmentFileForm(request.POST, request.FILES)
-
-        if form.is_valid():
-            collector = form.cleaned_data['collector']
-            leads = form.cleaned_data['leads']
-
-            for lead in leads:
-                lead.assigned_to = collector
-                # Reasignar saca al lead del limbo "desasignado" (no toca suspendido/terminado,
-                # que son bloqueos deliberados).
-                if lead.activo == Lead.DESASIGNADO:
-                    lead.activo = Lead.ACTIVO
-                    lead.desasignado_at = None
-                lead.save()
-                LeadAssignment.objects.create(
-                    lead=lead,
-                    user=collector,
-                    assigned_by=request.user
-                )
-
-            messages.success(request, 'Leads assigned successfully')
-            return redirect('leads:list')
 
         if upload_form.is_valid():
             from core.bulk_upload import procesar_carga
@@ -786,4 +775,4 @@ class AssignLeadsView(LoginRequiredMixin, View):
             messages.success(request, f"{len(resultado.filas)} lead(s) asignado(s) correctamente.")
             return redirect('leads:list')
 
-        return render(request, self.template_name, {'form': form, 'upload_form': upload_form})
+        return render(request, self.template_name, {'upload_form': upload_form})
