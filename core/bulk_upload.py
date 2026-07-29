@@ -16,6 +16,11 @@ ERROR_FILL = PatternFill('solid', fgColor='F1D6D6')
 HEADER_FILL = PatternFill('solid', fgColor='C0392B')
 HEADER_FONT = Font(bold=True, color='FFFFFF')
 
+# Tope de tamano del Excel subido. openpyxl carga el libro entero en memoria; sin este limite un
+# archivo enorme (por error o malicia) puede tumbar el worker por OOM. 10MB alcanza de sobra
+# (un xlsx de decenas de miles de filas pesa mucho menos que eso).
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+
 
 class CargaMasivaResult:
     """`filas`: lista de dicts limpios, listos para guardar (dentro de un transaction.atomic()).
@@ -55,6 +60,16 @@ def procesar_carga(excel_file, alias_map, columnas_requeridas, validar_fila, nom
     Devuelve CargaMasivaResult. Nunca escribe nada en la base -- eso es responsabilidad de quien
     llama, dentro de un transaction.atomic(), y solo si `resultado.ok`.
     """
+    if excel_file is None:
+        return CargaMasivaResult(respuesta_error=_error_simple('No se recibió ningún archivo.'))
+    # Tope de tamano ANTES de cargar el libro en memoria (evita OOM con un archivo enorme).
+    tamano = getattr(excel_file, 'size', None)
+    if tamano is not None and tamano > MAX_UPLOAD_BYTES:
+        mb = MAX_UPLOAD_BYTES // (1024 * 1024)
+        return CargaMasivaResult(respuesta_error=_error_simple(
+            f'El archivo supera el máximo de {mb} MB.'
+        ))
+
     try:
         wb = openpyxl.load_workbook(excel_file, data_only=True)
     except Exception:

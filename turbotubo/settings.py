@@ -124,6 +124,11 @@ CACHES = {
 # purgar el log no pierde informacion de negocio. Politica definida: 3 meses.
 STATUSLOG_RETENTION_DAYS = int(os.environ.get('STATUSLOG_RETENTION_DAYS', '90'))
 
+# Tope del cuerpo NO-archivo de un request (campos de formulario). Django excluye los archivos
+# multipart de este conteo, asi que el tope real de los Excel de carga vive en core.bulk_upload
+# (MAX_UPLOAD_BYTES) y el de los adjuntos en lead.models.LeadFile. Esto cubre el resto del body.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024   # 10 MB
+
 ROOT_URLCONF = 'turbotubo.urls'
 
 TEMPLATES = [

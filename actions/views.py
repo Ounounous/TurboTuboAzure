@@ -1,4 +1,6 @@
 import datetime
+import shutil
+import tempfile
 import zipfile
 
 from django.contrib import messages
@@ -12,7 +14,7 @@ from django.utils import timezone
 from django.views.generic import CreateView, DetailView, ListView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import JsonResponse
-from django.http import HttpResponse
+from django.http import HttpResponse, FileResponse
 from django.views import View
 from django.utils.dateparse import parse_date
 from openpyxl import load_workbook
@@ -514,21 +516,31 @@ class ActionDownloadExcelView(LoginRequiredMixin, View):
         # Optional cartera filter (each cartera can pull its own report)
         cartera_id = request.GET.get('cartera')
 
-        # Parse optional date range from GET request
+        # Rango de fechas OBLIGATORIO: sin el, este export barria toda la historia del equipo a un
+        # workbook en memoria (a 2-3 anios de datos, riesgo de OOM en el B1). Se exige start+end y
+        # se acota la ventana a un maximo (por defecto 366 dias) para que un rango absurdo no lo
+        # vuelva a abrir sin querer.
         start_date = request.GET.get('start_date')
         end_date = request.GET.get('end_date')
-
+        if not start_date or not end_date:
+            return JsonResponse(
+                {"error": "Debes indicar el rango de fechas (start_date y end_date, YYYY-MM-DD)."},
+                status=400,
+            )
         try:
-            if start_date:
-                start_date = parse_date(start_date)
-            if end_date:
-                end_date = parse_date(end_date)
+            start_date = parse_date(start_date)
+            end_date = parse_date(end_date)
         except ValueError:
-            return JsonResponse({"error": "Invalid date format. Use YYYY-MM-DD."}, status=400)
-
-        # Validate the start-end date range
-        if start_date and end_date and start_date > end_date:
-            return JsonResponse({"error": "Start date cannot be later than end date."}, status=400)
+            return JsonResponse({"error": "Formato de fecha inválido. Usa YYYY-MM-DD."}, status=400)
+        if not start_date or not end_date:
+            return JsonResponse({"error": "Formato de fecha inválido. Usa YYYY-MM-DD."}, status=400)
+        if start_date > end_date:
+            return JsonResponse({"error": "La fecha inicial no puede ser posterior a la final."}, status=400)
+        if (end_date - start_date).days > 366:
+            return JsonResponse(
+                {"error": "El rango no puede superar 366 días. Descarga por tramos más cortos."},
+                status=400,
+            )
 
         # Fetch actions based on the scope
         if scope == 'team':
@@ -695,6 +707,10 @@ class SyncRecordingsNowView(LoginRequiredMixin, View):
 
 
 class RecordingsExportZipView(SupervisorRequiredMixin, View):
+    # Tope de grabaciones por export: acota una operacion que si no es potencialmente ilimitada
+    # (un Excel con muchos OP podria pedir miles de audios). Con el tope, se pide acotar el Excel.
+    MAX_GRABACIONES = 500
+
     def post(self, request, *args, **kwargs):
         excel_file = request.FILES.get('excel_file')
         if not excel_file:
@@ -704,13 +720,19 @@ class RecordingsExportZipView(SupervisorRequiredMixin, View):
         wb = load_workbook(excel_file)
         sheet = wb.active
 
-        buffer = BytesIO()
+        # El ZIP se arma en un archivo temporal que se vuelca a DISCO pasado un umbral (no se
+        # queda entero en RAM como el BytesIO anterior) y cada audio se copia en streaming, no
+        # leyendolo completo a memoria -- clave para no tumbar el worker del B1 con un export grande.
+        spool = tempfile.SpooledTemporaryFile(max_size=8 * 1024 * 1024)
         errors = []
-        found_any = False
+        total = 0
+        excedido = False
 
-        with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+        with zipfile.ZipFile(spool, 'w', zipfile.ZIP_DEFLATED) as zf:
             used_names = set()
             for row_number, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
+                if excedido:
+                    break
                 cartera, subcartera, op, fecha = (list(row) + [None] * 4)[:4]
                 if not cartera or not subcartera or not op:
                     errors.append(f"Fila {row_number}: faltan cartera, subcartera u OP.")
@@ -721,7 +743,9 @@ class RecordingsExportZipView(SupervisorRequiredMixin, View):
                     errors.append(f"Fila {row_number}: no se encontró lead OP={op} en Cartera={cartera}, Subcartera={subcartera}.")
                     continue
 
-                recordings = CallRecording.objects.filter(lead=lead)
+                # Alcance: solo grabaciones de leads visibles para el usuario (antes se exportaba
+                # cualquier lead que find_lead encontrara, sin mirar la cartera del supervisor).
+                recordings = scope_por_lead(CallRecording.objects.filter(lead=lead), request.user)
 
                 if fecha:
                     parsed_date = None
@@ -736,32 +760,43 @@ class RecordingsExportZipView(SupervisorRequiredMixin, View):
                     else:
                         errors.append(f"Fila {row_number}: no se pudo interpretar la fecha '{fecha}', se ignoró el filtro.")
 
-                for recording in recordings:
+                for recording in recordings.iterator():
                     if not recording.audio_file:
                         continue
+                    if total >= self.MAX_GRABACIONES:
+                        excedido = True
+                        break
                     name = recording.audio_file.name.rsplit('/', 1)[-1]
                     while name in used_names:
                         name = f"dup_{name}"
                     used_names.add(name)
-                    recording.audio_file.open('rb')
-                    zf.writestr(name, recording.audio_file.read())
-                    recording.audio_file.close()
-                    found_any = True
+                    # Streaming: se copia el audio en bloques hacia el ZIP, sin cargarlo entero.
+                    with recording.audio_file.open('rb') as src, zf.open(name, 'w') as dst:
+                        shutil.copyfileobj(src, dst, length=64 * 1024)
+                    total += 1
 
+            if excedido:
+                errors.append(
+                    f"Se alcanzó el máximo de {self.MAX_GRABACIONES} grabaciones por descarga. "
+                    "Acota el Excel (menos OP o un rango de fechas) y descarga por tramos."
+                )
             if errors:
                 zf.writestr('errores.txt', '\n'.join(errors))
 
-        if not found_any:
+        if total == 0:
+            spool.close()
             messages.error(request, 'No se encontraron grabaciones para las filas del Excel subido.')
             for error in errors:
                 messages.error(request, error)
             return redirect('actions:recordings_list')
 
-        buffer.seek(0)
-        response = HttpResponse(buffer.read(), content_type='application/zip')
-        response['Content-Disposition'] = 'attachment; filename=grabaciones.zip'
+        spool.seek(0)
         from configuracion.models import AccessLog, registrar_acceso
-        registrar_acceso(request.user, AccessLog.DESCARGAR_GRABACIONES, detail='ZIP de grabaciones')
+        registrar_acceso(request.user, AccessLog.DESCARGAR_GRABACIONES, detail=f'ZIP de {total} grabación(es)')
+        # FileResponse transmite desde el temporal en disco (no lo re-lee entero a memoria) y lo
+        # cierra al terminar.
+        response = FileResponse(spool, as_attachment=True, filename='grabaciones.zip',
+                                content_type='application/zip')
         return response
 
 
