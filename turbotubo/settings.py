@@ -104,6 +104,18 @@ CELERY_RESULT_BACKEND = CELERY_BROKER_URL
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 CELERY_TIMEZONE = 'America/Santiago'
 
+# Cache compartido entre workers (Redis, mismo host que Celery pero DB distinta para no mezclar
+# claves con la cola). Necesario para que el throttle de login (userprofile/forms.py) funcione
+# de verdad en produccion: con el cache en memoria por-proceso (default de Django) cada worker de
+# gunicorn lleva su propio contador y el limite se evade solo repartiendo requests entre workers.
+_redis_base = CELERY_BROKER_URL.rsplit('/', 1)[0]
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        'LOCATION': os.environ.get('CACHE_REDIS_URL', f'{_redis_base}/1'),
+    }
+}
+
 # Cuantos dias se conserva el detalle de StatusChangeLog antes de purgarlo (tarea
 # purge_status_change_log). El "mejor status" NO vive aca (es un campo del lead), asi que
 # purgar el log no pierde informacion de negocio. Politica definida: 3 meses.

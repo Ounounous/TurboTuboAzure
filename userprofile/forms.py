@@ -1,10 +1,26 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from django.contrib.auth.models import User
+from django.core.cache import cache
 
 from .models import Userprofile
 
 INPUT_CLASS = 'w-full my-4 py-4 px-6 rounded-xl bg-gray-100'
+
+# Proteccion basica contra fuerza bruta / credential stuffing en el login.
+LOGIN_THROTTLE_MAX_ATTEMPTS = 5
+LOGIN_THROTTLE_WINDOW_SECONDS = 5 * 60
+LOGIN_THROTTLE_LOCKOUT_SECONDS = 15 * 60
+
+
+def _client_ip(request):
+    """IP real del cliente. Azure App Service termina TLS en el proxy y reenvia el origen en
+    X-Forwarded-For -- REMOTE_ADDR ahi es la IP interna del proxy, no la del visitante."""
+    forwarded = request.META.get('HTTP_X_FORWARDED_FOR')
+    if forwarded:
+        return forwarded.split(',')[0].strip()
+    return request.META.get('REMOTE_ADDR', 'unknown')
+
 
 class LoginForm(AuthenticationForm):
     username = forms.CharField(widget=forms.TextInput(attrs={
@@ -15,6 +31,32 @@ class LoginForm(AuthenticationForm):
         'placeholder': 'Your password',
         'class': INPUT_CLASS
     }))
+
+    def clean(self):
+        # Se bloquea por IP, NO por usuario: bloquear por usuario dejaria que cualquiera tumbe
+        # la cuenta de otra persona a proposito fallando el password repetidas veces. Se revisa
+        # el lockout ANTES de autenticar (un intento bloqueado no gasta llamada real a la BD de
+        # auth), y se cuenta DESPUES, solo si las credenciales fallaron.
+        ip = _client_ip(self.request) if self.request else 'unknown'
+        lock_key = f'login_lockout:{ip}'
+        if cache.get(lock_key):
+            raise forms.ValidationError(
+                'Demasiados intentos fallidos desde esta conexión. Intenta de nuevo en unos minutos.',
+                code='throttled',
+            )
+
+        attempts_key = f'login_attempts:{ip}'
+        try:
+            cleaned_data = super().clean()
+        except forms.ValidationError:
+            attempts = cache.get(attempts_key, 0) + 1
+            cache.set(attempts_key, attempts, LOGIN_THROTTLE_WINDOW_SECONDS)
+            if attempts >= LOGIN_THROTTLE_MAX_ATTEMPTS:
+                cache.set(lock_key, True, LOGIN_THROTTLE_LOCKOUT_SECONDS)
+                cache.delete(attempts_key)
+            raise
+        cache.delete(attempts_key)  # login exitoso: resetea el contador de esta IP
+        return cleaned_data
 
 class SignupForm(UserCreationForm):
     class Meta:
