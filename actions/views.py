@@ -522,6 +522,10 @@ class ActionDownloadExcelView(LoginRequiredMixin, View):
         else:
             return JsonResponse({"error": "Invalid scope provided. Allowed scopes: 'team', 'user'."}, status=400)
 
+        # El loop de mas abajo accede a lead, phone, medio, resultado y user de cada Action:
+        # sin esto son 5 queries extra POR FILA (N+1) en vez de un solo join.
+        actions = actions.select_related('lead', 'phone', 'medio', 'resultado', 'user')
+
         # Apply additional filters (by created_at date, and by cartera)
         if start_date:
             actions = actions.filter(created_at__gte=start_date)
