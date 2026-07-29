@@ -17,6 +17,13 @@ logger = logging.getLogger(__name__)
 MAX_ATTEMPTS = 20
 MIN_AGE_SECONDS = 60  # give the call a minute to actually happen before we look for it
 GIVE_UP_AFTER_HOURS = 24
+# Tras esta cantidad de intentos SIN conseguir el audio (list_cdr falla, el CDR nunca aparece, o
+# aparece pero la descarga falla), se deja de reintentar y se crea un CallRecording sin archivo
+# (ver _crear_placeholder) para que el supervisor sepa buscarla a mano en pbxip.cl. Con el cron
+# corriendo cada pocos minutos, 2 intentos son ~10-15 min -- una grabacion que en pbxip.cl tarda
+# mas que eso en aparecer puede generar un placeholder "sin match" aunque hubiera llegado igual
+# un poco despues. Si eso pasa seguido en produccion, subir este numero (no toca nada mas).
+PLACEHOLDER_MAX_ATTEMPTS = 2
 
 # Reintentos con backoff exponencial ante errores transitorios de BD (conexion caida/reinicio).
 # Junto con CONN_HEALTH_CHECKS en settings, una tarea no muere por un hipo de la base: reintenta.
@@ -138,12 +145,17 @@ def sync_pbx_recordings_user(user_id):
 
     for call in actionable:
         call.attempts += 1
+        dar_por_vencido = call.attempts >= PLACEHOLDER_MAX_ATTEMPTS or call.requested_at < give_up_before
 
         try:
             cdr_rows = client.list_cdr(month=month, destination=call.destination, since=call.requested_at)
         except PbxError as exc:
             logger.warning(f"sync_pbx_recordings_user: could not list CDR for user {user_id}: {exc}")
-            call.save(update_fields=['attempts'])
+            if dar_por_vencido:
+                _crear_placeholder(call, CallRecording.SIN_AUDIO_ERROR_API, detalle=str(exc))
+                call.resolved = True
+                call.resolved_at = timezone.now()
+            call.save(update_fields=['attempts', 'resolved', 'resolved_at'])
             continue
 
         match = find_matching_cdr(
@@ -165,18 +177,48 @@ def sync_pbx_recordings_user(user_id):
                     recording.audio_file.save(filename, ContentFile(audio_bytes), save=True)
                 except PbxError as exc:
                     logger.warning(f"sync_pbx_recordings_user: could not download recording {call_id}: {exc}")
-                    call.save(update_fields=['attempts'])
+                    if dar_por_vencido:
+                        # Se encontro el CDR (sabemos el cdr_id exacto) pero la descarga del
+                        # audio fallo las veces que se reintento: se deja el placeholder CON el
+                        # cdr_id, para que el supervisor lo busque directo por ese id en pbxip.cl.
+                        _crear_placeholder(
+                            call, CallRecording.SIN_AUDIO_DESCARGA_FALLIDA, detalle=str(exc),
+                            cdr_id_val=call_id, month=month,
+                            call_date=parse_cdr_call_date(match), duration_seconds=cdr_duration(match),
+                        )
+                        call.resolved = True
+                        call.resolved_at = timezone.now()
+                    call.save(update_fields=['attempts', 'resolved', 'resolved_at'])
                     continue
             call.resolved = True
             call.resolved_at = timezone.now()
             resueltas += 1
-        elif call.requested_at < give_up_before:
+        elif dar_por_vencido:
+            # Nunca aparecio un CDR que calzara con esta llamada (ni tras los reintentos, ni
+            # dentro del plazo maximo de espera): se avisa igual, sin cdr_id, para que el
+            # supervisor sepa que la llamada existio y la busque a mano por destino/fecha.
+            _crear_placeholder(call, CallRecording.SIN_AUDIO_SIN_MATCH, month=month)
             call.resolved = True
             call.resolved_at = timezone.now()
 
         call.save(update_fields=['attempts', 'resolved', 'resolved_at'])
 
     return resueltas
+
+
+def _crear_placeholder(call, motivo, detalle='', cdr_id_val=None, month='', call_date=None, duration_seconds=None):
+    """Deja un CallRecording SIN audio_file cuando no se pudo conseguir el audio ni tras los
+    reintentos -- para que la llamada quede visible en el listado en vez de desaparecer en
+    silencio, con el motivo y (si se llego a encontrar) el cdr_id exacto para buscarla a mano."""
+    if CallRecording.objects.filter(pending_call=call).exists():
+        return  # ya se dejo un placeholder (o una grabacion real) para esta llamada
+    recording = CallRecording(
+        pending_call=call, lead=call.lead, action=call.action, user=call.user,
+        cdr_id=cdr_id_val, month=month, destination=call.destination,
+        call_date=call_date, duration_seconds=duration_seconds,
+        sin_audio_motivo=motivo, sin_audio_detalle=detalle[:2000],
+    )
+    recording.save()
 
 
 @shared_task(**RETRY_DB)

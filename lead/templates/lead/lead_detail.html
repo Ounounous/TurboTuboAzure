@@ -248,9 +248,15 @@
                   <strong>{{ rec.user.username|default:"-" }}</strong> · {{ rec.call_date|date:"d-m-Y H:i"|default:rec.created_at|date:"d-m-Y H:i" }}
                   {% if rec.duration_seconds %} · {{ rec.duration_seconds }}s{% endif %}
                 </p>
-                <audio controls style="width:300px; max-width:100%; height:34px;">
-                  <source src="{{ rec.audio_file.url }}" type="audio/mpeg">
-                </audio>
+                {% if rec.audio_file %}
+                  <audio controls style="width:300px; max-width:100%; height:34px;">
+                    <source src="{{ rec.audio_file.url }}" type="audio/mpeg">
+                  </audio>
+                {% else %}
+                  {# No se pudo conseguir el audio tras los reintentos -- ver Grabaciones para
+                     mas detalle (motivo, y el ID de pbxip.cl si se llego a encontrar). #}
+                  <p class="muted text-sm">⚠️ Sin audio — {{ rec.get_sin_audio_motivo_display|default:"no disponible" }}</p>
+                {% endif %}
               </div>
             {% endfor %}
           </div>

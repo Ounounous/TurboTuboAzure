@@ -56,14 +56,32 @@
                 <td class="num">{% if rec.duration_seconds %}{{ rec.duration_seconds }}s{% else %}-{% endif %}</td>
                 <td>{{ rec.user.username|default:"-" }}</td>
                 <td>
-                  <audio controls preload="none" style="width: 220px; max-width: 100%; height: 30px;">
-                    <source src="{{ rec.audio_file.url }}" type="audio/mpeg">
-                  </audio>
+                  {% if rec.audio_file %}
+                    <audio controls preload="none" style="width: 220px; max-width: 100%; height: 30px;">
+                      <source src="{{ rec.audio_file.url }}" type="audio/mpeg">
+                    </audio>
+                  {% else %}
+                    {# No se pudo conseguir el audio tras los reintentos (ver actions/tasks.py) --
+                       se deja la guia para buscarla directo en pbxip.cl. #}
+                    <span class="muted" style="font-size:11.5px; line-height:1.4; display:block;" title="{{ rec.sin_audio_detalle }}">
+                      ⚠️ Sin audio — {{ rec.get_sin_audio_motivo_display|default:"no disponible" }}<br>
+                      {% if rec.cdr_id %}
+                        Buscar en pbxip.cl, ID: <code>{{ rec.cdr_id }}</code> (mes {{ rec.month }})
+                      {% else %}
+                        Buscar en pbxip.cl: destino {{ rec.destination|default:"-" }},
+                        {{ rec.call_date|date:"d-m-Y H:i"|default:rec.created_at|date:"d-m-Y H:i" }}
+                      {% endif %}
+                    </span>
+                  {% endif %}
                 </td>
                 <td class="muted" style="font-variant-numeric:tabular-nums">{{ rec.retention_until|date:"d-m-Y"|default:"-" }}</td>
                 <td>
                   <span class="row-actions">
-                    <a href="{{ rec.audio_file.url }}" download title="Descargar">⬇️</a>
+                    {% if rec.audio_file %}
+                      <a href="{{ rec.audio_file.url }}" download title="Descargar">⬇️</a>
+                    {% else %}
+                      <span class="muted">—</span>
+                    {% endif %}
                   </span>
                 </td>
               </tr>

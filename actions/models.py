@@ -322,6 +322,20 @@ class PendingPbxCall(models.Model):
 
 
 class CallRecording(models.Model):
+    # Cuando pbxip.cl no entrega el audio (API caida, descarga fallida, o nunca aparecio un CDR
+    # que calzara) tras los reintentos, se deja igual una fila SIN audio_file: queda visible en
+    # el listado con el motivo, para que el supervisor sepa que existio la llamada y pueda ir a
+    # buscarla a mano en pbxip.cl (con el cdr_id si se llego a encontrar, o con destino/fecha si
+    # no). Sin esto, una llamada que fallo al sincronizar desaparecia sin dejar rastro.
+    SIN_AUDIO_DESCARGA_FALLIDA = 'descarga_fallida'
+    SIN_AUDIO_SIN_MATCH = 'sin_match'
+    SIN_AUDIO_ERROR_API = 'error_api'
+    CHOICES_SIN_AUDIO = [
+        (SIN_AUDIO_DESCARGA_FALLIDA, 'Se encontró el registro en pbxip.cl pero no se pudo descargar el audio'),
+        (SIN_AUDIO_SIN_MATCH, 'No se encontró un registro de llamada que coincida'),
+        (SIN_AUDIO_ERROR_API, 'La central telefónica no respondió'),
+    ]
+
     pending_call = models.ForeignKey(PendingPbxCall, on_delete=models.SET_NULL, null=True, blank=True, related_name='recordings')
     # SET_NULL (no CASCADE): la grabacion tiene retencion legal propia de 2 anios (ver
     # retention_until abajo) que no depende de que el lead o la cartera sigan existiendo --
@@ -330,12 +344,17 @@ class CallRecording(models.Model):
     lead = models.ForeignKey(Lead, on_delete=models.SET_NULL, null=True, blank=True, related_name='call_recordings')
     action = models.ForeignKey(Action, on_delete=models.SET_NULL, null=True, blank=True, related_name='call_recordings')
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
-    cdr_id = models.CharField(max_length=100)
+    # Nullable: un placeholder "sin match" nunca llego a encontrar un cdr_id. NULL (no '') para
+    # que unique_together con `month` no choque entre varios placeholders del mismo mes --
+    # Postgres no considera dos NULL iguales, pero si consideraria iguales dos strings vacios.
+    cdr_id = models.CharField(max_length=100, null=True, blank=True)
     month = models.CharField(max_length=6)
     destination = models.CharField(max_length=20, blank=True)
     call_date = models.DateTimeField(null=True, blank=True)
     duration_seconds = models.PositiveIntegerField(null=True, blank=True)
-    audio_file = models.FileField(upload_to='call_recordings/%Y/%m/')
+    audio_file = models.FileField(upload_to='call_recordings/%Y/%m/', blank=True)
+    sin_audio_motivo = models.CharField(max_length=20, choices=CHOICES_SIN_AUDIO, blank=True)
+    sin_audio_detalle = models.TextField(blank=True)
     # Ley: solo se retienen 2 años las llamadas con contacto efectivo con el cliente.
     retention_until = models.DateField(null=True, blank=True)
     # Copia (snapshot) de OP / nombre / cartera del lead al momento de la grabacion. Como la
