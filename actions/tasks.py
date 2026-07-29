@@ -7,6 +7,7 @@ from django.core.files.base import ContentFile
 from django.db import InterfaceError, OperationalError
 from django.utils import timezone
 
+from .audio_compress import transcode_to_opus
 from .models import PendingPbxCall, CallRecording
 from .pbx_client import PbxClient, PbxError, get_pbx_master_client
 from .pbx_matching import find_matching_cdr, cdr_id, parse_cdr_call_date, cdr_duration
@@ -46,7 +47,7 @@ def _safe_part(value):
     return value or '-'
 
 
-def build_recording_filename(action):
+def build_recording_filename(action, ext='mp3'):
     lead = action.lead
     fecha = timezone.localtime(action.created_at).strftime('%d-%m-%Y_%H%M')
     parts = [
@@ -57,7 +58,7 @@ def build_recording_filename(action):
         _safe_part(lead.subcartera.nombre),
         _safe_part(action.user.username if action.user else ''),
     ]
-    return '_'.join(parts) + '.mp3'
+    return '_'.join(parts) + f'.{ext}'
 
 
 @shared_task(**RETRY_DB)
@@ -154,7 +155,8 @@ def sync_pbx_recordings_user(user_id):
             if not CallRecording.objects.filter(cdr_id=call_id, month=month).exists():
                 try:
                     audio_bytes = client.download_recording(month, call_id)
-                    filename = build_recording_filename(call.action)
+                    audio_bytes, ext = transcode_to_opus(audio_bytes)
+                    filename = build_recording_filename(call.action, ext=ext)
                     recording = CallRecording(
                         pending_call=call, lead=call.lead, action=call.action, user=call.user,
                         cdr_id=call_id, month=month, destination=call.destination,
