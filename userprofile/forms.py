@@ -1,6 +1,4 @@
 import logging
-import random
-import secrets
 
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm
@@ -12,16 +10,11 @@ logger = logging.getLogger(__name__)
 
 INPUT_CLASS = 'w-full my-4 py-4 px-6 rounded-xl bg-gray-100'
 
-# Proteccion basica contra fuerza bruta / credential stuffing en el login.
+# Proteccion contra fuerza bruta desde el BACKEND (sin captcha que moleste al cobrador que olvida
+# su clave): a los N fallos, esta IP queda bloqueada un rato. Se bloquea por IP, no por usuario.
 LOGIN_THROTTLE_MAX_ATTEMPTS = 5          # a los 5 fallos, lockout temporal de esta IP
 LOGIN_THROTTLE_WINDOW_SECONDS = 5 * 60
 LOGIN_THROTTLE_LOCKOUT_SECONDS = 15 * 60
-LOGIN_CAPTCHA_AFTER_ATTEMPTS = 2         # desde el 3er intento, se exige el desafio
-
-# Numeros escritos en palabras: un scraper trivial que busca digitos no los ve. No es
-# CAPTCHA-grade (para eso haria falta imagen/servicio externo), es un rompe-velocidad sobre el
-# throttle, sin dependencias ni tablas nuevas.
-_PALABRA = ['cero', 'uno', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve', 'diez']
 
 
 def _client_ip(request):
@@ -82,21 +75,6 @@ class LoginForm(AuthenticationForm):
         'class': INPUT_CLASS,
     }))
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # El desafio NO es un campo del form: se renderiza a mano en el template (ver login.html)
-        # y se lee del POST en clean(). Asi el re-intento tras un fallo muestra una pregunta NUEVA
-        # (se genera en cada __init__), sin arrastrar el token ya consumido.
-        ip = _client_ip(self.request) if self.request else 'unknown'
-        self.requiere_captcha = _cache_get(f'login_attempts:{ip}', 0) >= LOGIN_CAPTCHA_AFTER_ATTEMPTS
-        self.captcha_token = ''
-        self.captcha_question = ''
-        if self.requiere_captcha:
-            a, b = random.randint(1, 9), random.randint(1, 9)
-            self.captcha_token = secrets.token_urlsafe(12)
-            _cache_set(f'login_captcha:{self.captcha_token}', a + b, 300)
-            self.captcha_question = f'¿Cuánto es {_PALABRA[a]} más {_PALABRA[b]}?'
-
     def clean(self):
         # Se bloquea por IP, NO por usuario: bloquear por usuario dejaria que cualquiera tumbe
         # la cuenta de otra persona a proposito fallando el password repetidas veces. Se revisa
@@ -113,21 +91,6 @@ class LoginForm(AuthenticationForm):
             )
 
         attempts_key = f'login_attempts:{ip}'
-
-        # Desafio: si esta IP ya acumulo intentos, hay que resolverlo ANTES de gastar una consulta
-        # de autenticacion. Un desafio mal respondido cuenta como intento fallido igual.
-        if self.requiere_captcha:
-            token = self.data.get('captcha_token', '')
-            esperado = _cache_get(f'login_captcha:{token}') if token else None
-            respuesta = (self.data.get('captcha_answer') or '').strip()
-            if esperado is None or respuesta != str(esperado):
-                _cache_delete(f'login_captcha:{token}')
-                self._contar_fallo(attempts_key, lock_key)
-                raise forms.ValidationError(
-                    'Respuesta de la pregunta de seguridad incorrecta.', code='captcha',
-                )
-            _cache_delete(f'login_captcha:{token}')  # un solo uso
-
         try:
             cleaned_data = super().clean()
         except forms.ValidationError:
