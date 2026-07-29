@@ -486,6 +486,11 @@ class ActionDownloadExcelView(LoginRequiredMixin, View):
                     status=404
                 )
 
+            # admin/owner pueden descargar cualquier equipo; el resto solo el suyo (evita que
+            # un cobrador/supervisor baje gestiones de otro equipo cambiando el team_id en la URL).
+            if not es_admin_owner(request.user) and not team.members.filter(pk=request.user.pk).exists():
+                raise PermissionDenied
+
         # Handle user-specific download request (if scope == 'user')
         if scope == 'user':
             logger.debug("Downloading actions for user scope.")
