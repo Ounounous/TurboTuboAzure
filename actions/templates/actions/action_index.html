@@ -227,11 +227,29 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div class="card p-4">
             <h3 class="font-bold mb-1">Reporte Tanner</h3>
-            <p class="muted mb-3" style="font-size:12.5px;">Formato oficial (.txt), un día.</p>
+            <p class="muted mb-3" style="font-size:12.5px;">Formato oficial (.txt), un día. Combina todas las subcarteras de Tanner.</p>
             <form method="GET" action="{% url 'actions:tanner_report' %}" class="flex flex-wrap gap-3 items-end">
               <div><label class="font-semibold block mb-1" for="fecha_tanner">Fecha</label><input type="date" id="fecha_tanner" name="fecha" required></div>
               <button type="submit" class="btn btn-primary">Descargar .txt</button>
             </form>
+            {% if tanner_subcarteras %}
+              <hr class="my-3">
+              <p class="font-semibold mb-1" style="font-size:12.5px;">Mi subcartera Tanner</p>
+              <p class="muted mb-3" style="font-size:12.5px;">Mismo formato, solo tu(s) subcartera(s).</p>
+              <form method="GET" action="{% url 'actions:tanner_report' %}" class="flex flex-wrap gap-3 items-end">
+                <div><label class="font-semibold block mb-1" for="fecha_tanner_sub">Fecha</label><input type="date" id="fecha_tanner_sub" name="fecha" required></div>
+                {% if tanner_subcarteras|length > 1 %}
+                  <div><label class="font-semibold block mb-1" for="subcartera_tanner">Subcartera</label>
+                    <select id="subcartera_tanner" name="subcartera" required>
+                      {% for sub in tanner_subcarteras %}<option value="{{ sub.id }}">{{ sub.nombre }}</option>{% endfor %}
+                    </select>
+                  </div>
+                {% else %}
+                  <input type="hidden" name="subcartera" value="{{ tanner_subcarteras.0.id }}">
+                {% endif %}
+                <button type="submit" class="btn btn-secondary">Descargar .txt</button>
+              </form>
+            {% endif %}
           </div>
           <div class="card p-4">
             <h3 class="font-bold mb-1">Reporte Nuevo Capital</h3>

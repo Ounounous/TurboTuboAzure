@@ -19,9 +19,11 @@ from openpyxl import load_workbook
 from .models import Action, Medio, Resultado, PendingPbxCall, CallRecording, PaymentCommitment, Payment
 from .pbx_client import PbxClient, PbxError, get_pbx_master_client
 from lead.models import Lead
-from lead.permissions import carteras_visibles, es_admin_owner, es_supervisor, leads_visibles, scope_por_lead
+from lead.permissions import (
+    carteras_visibles, es_admin_owner, es_supervisor, leads_visibles, scope_por_lead, subcarteras_visibles,
+)
 from team.models import Team
-from cartera.models import Cartera
+from cartera.models import Cartera, Subcartera
 from demographics.models import CONTACT_ACTIVE, IDDemographics, Phone
 from demographics.views import find_lead, _normalize_header
 from .forms import ActionForm, AddEmailQuickForm, AddPhoneQuickForm, LeadSearchForm, DemographicSelectionForm, PaymentForm
@@ -170,12 +172,20 @@ class ActionIndexView(LoginRequiredMixin, View):
         for a in listado:
             a.lead.is_fav = a.lead_id in fav_ids
 
+        # Subcarteras de Tanner que el usuario supervisa (para el boton "por subcartera" del
+        # reporte Tanner). Vacio para casi todo el mundo -- solo aplica si Tanner existe y el
+        # usuario tiene 1+ subcartera propia ahi.
+        tanner_subcarteras = subcarteras_visibles(request.user).filter(
+            cartera__nombre__iexact='Tanner'
+        ).select_related('cartera')
+
         return render(
             request,
             'actions/action_index.html',
             {
                 'all_teams': Team.objects.all(),
                 'all_carteras': all_carteras,
+                'tanner_subcarteras': tanner_subcarteras,
                 'usuarios_tabla': usuarios_tabla,
                 'resultados_tabla': resultados_tabla,
                 'compromisos_periodo': compromisos_periodo,
@@ -777,6 +787,12 @@ class TannerReportView(SupervisorRequiredMixin, View):
     14 columnas separadas por '|', sin encabezado, un solo dia por archivo, formato
     FechaGestiones_BaseGestiones2_40.txt. Se envia manualmente por correo a
     gestionescobranza@tanner.cl (no se automatiza el envio, solo se genera el archivo).
+
+    Sin el parametro `subcartera`, es el reporte OFICIAL (todo Tanner junto) -- para admin/owner
+    (sin restriccion) sigue siendo el archivo completo de siempre; para un supervisor ya viene
+    acotado por scope_por_lead a sus propias subcarteras. Con `subcartera` (opcional, un id),
+    un supervisor puede bajar SOLO esa subcartera suya -- util cuando supervisa 2+ y quiere
+    revisar una por separado en el mismo formato, sin tener que esperar al archivo combinado.
     """
 
     def get(self, request, *args, **kwargs):
@@ -797,6 +813,13 @@ class TannerReportView(SupervisorRequiredMixin, View):
             created_at__gte=start,
             created_at__lte=end,
         ).select_related('lead', 'medio', 'resultado', 'user__userprofile', 'phone'), request.user)
+
+        subcartera_id = request.GET.get('subcartera')
+        if subcartera_id:
+            # scope_por_lead ya acoto `actions` al alcance del usuario -- este filtro solo puede
+            # ACHICARLO mas (nunca ampliarlo), asi que no hace falta validar el id por separado:
+            # si no es una subcartera suya, la interseccion queda vacia y responde 404 mas abajo.
+            actions = actions.filter(subcartera_id=subcartera_id)
 
         if not actions.exists():
             return JsonResponse({'error': 'No hay gestiones de Tanner para esa fecha.'}, status=404)
@@ -831,7 +854,14 @@ class TannerReportView(SupervisorRequiredMixin, View):
             lines.append('|'.join(str(value) for value in row))
 
         content = '\r\n'.join(lines) + '\r\n'
-        filename = f"{fecha.strftime('%Y%m%d')}_BaseGestiones2_{TANNER_GESTOR_CODIGO}.txt"
+        # Sufijo _subcartera solo cuando se filtra: el archivo SIN filtrar (el combinado, oficial)
+        # mantiene el nombre exacto que exige el instructivo de Tanner -- no se le agrega nada.
+        sufijo = ""
+        if subcartera_id:
+            sub = Subcartera.objects.filter(pk=subcartera_id).first()
+            if sub:
+                sufijo = f"_{re.sub(r'[^A-Za-z0-9]+', '', sub.nombre)}"
+        filename = f"{fecha.strftime('%Y%m%d')}_BaseGestiones2_{TANNER_GESTOR_CODIGO}{sufijo}.txt"
 
         response = HttpResponse(content, content_type='text/plain; charset=utf-8')
         response['Content-Disposition'] = f'attachment; filename={filename}'
