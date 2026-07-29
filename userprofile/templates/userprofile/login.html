@@ -7,7 +7,7 @@
     <div class="card p-6" style="width:100%; max-width:400px;">
       <h1 class="mb-1 text-xl font-bold">Iniciar sesión</h1>
       <p class="muted mb-5" style="font-size:13px;">Ingresa tus credenciales para continuar.</p>
-      <form method="post" action=".">
+      <form method="post" action="." id="login_form">
         {% csrf_token %}
         {{ form.as_p }}
         {% if form.requiere_captcha %}
@@ -22,8 +22,23 @@
                    placeholder="Escribe el resultado en números">
           </div>
         {% endif %}
-        <button class="btn btn-primary mt-4" style="width:100%;">Ingresar</button>
+        <button class="btn btn-primary mt-4" id="login_submit" style="width:100%;">Ingresar</button>
       </form>
     </div>
   </div>
+  <script>
+    // Deshabilita el boton al enviar: evita el doble-clic / doble-envio del honesto. NO es una
+    // medida de seguridad (un atacante scriptea el endpoint directo, sin pasar por el boton): la
+    // proteccion real es server-side (throttle por IP + desafio + bloqueo temporal).
+    (function () {
+      var form = document.getElementById('login_form');
+      var btn = document.getElementById('login_submit');
+      if (form && btn) {
+        form.addEventListener('submit', function () {
+          btn.disabled = true;
+          btn.textContent = 'Ingresando…';
+        });
+      }
+    })();
+  </script>
 {% endblock %}

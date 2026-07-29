@@ -66,13 +66,20 @@ def _cache_delete(key):
 
 
 class LoginForm(AuthenticationForm):
-    username = forms.CharField(widget=forms.TextInput(attrs={
-        'placeholder': 'Your username',
-        'class': INPUT_CLASS
+    # Mensajes de error en espanol. 'invalid_login' no distingue cual campo fallo (mejor UX y no
+    # le confirma a un atacante si el usuario existe).
+    error_messages = {
+        'invalid_login': 'Usuario o contraseña incorrectos.',
+        'inactive': 'Esta cuenta está inactiva.',
+    }
+
+    username = forms.CharField(label='Usuario', widget=forms.TextInput(attrs={
+        'placeholder': 'Usuario',
+        'class': INPUT_CLASS,
     }))
-    password = forms.CharField(widget=forms.PasswordInput(attrs={
-        'placeholder': 'Your password',
-        'class': INPUT_CLASS
+    password = forms.CharField(label='Contraseña', widget=forms.PasswordInput(attrs={
+        'placeholder': 'Contraseña',
+        'class': INPUT_CLASS,
     }))
 
     def __init__(self, *args, **kwargs):
@@ -98,8 +105,10 @@ class LoginForm(AuthenticationForm):
         ip = _client_ip(self.request) if self.request else 'unknown'
         lock_key = f'login_lockout:{ip}'
         if _cache_get(lock_key):
+            minutos = LOGIN_THROTTLE_LOCKOUT_SECONDS // 60
             raise forms.ValidationError(
-                'Demasiados intentos fallidos desde esta conexión. Intenta de nuevo en unos minutos.',
+                f'Demasiados intentos fallidos desde esta conexión. Intenta de nuevo en '
+                f'{minutos} minutos.',
                 code='throttled',
             )
 
