@@ -10,6 +10,18 @@
       <form method="post" action=".">
         {% csrf_token %}
         {{ form.as_p }}
+        {% if form.requiere_captcha %}
+          {# Desafio anti-fuerza-bruta: aparece desde el 3er intento fallido de esta conexion.
+             Se renderiza a mano (no es un campo del form) para mostrar una pregunta nueva en cada
+             intento; la respuesta esperada vive en cache ligada al captcha_token. #}
+          <div class="mt-2">
+            <label class="font-semibold block mb-1" for="captcha_answer">{{ form.captcha_question }}</label>
+            <input type="hidden" name="captcha_token" value="{{ form.captcha_token }}">
+            <input type="text" name="captcha_answer" id="captcha_answer" autocomplete="off"
+                   class="{{ form.username.field.widget.attrs.class }}"
+                   placeholder="Escribe el resultado en números">
+          </div>
+        {% endif %}
         <button class="btn btn-primary mt-4" style="width:100%;">Ingresar</button>
       </form>
     </div>

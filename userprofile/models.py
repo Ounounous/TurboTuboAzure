@@ -37,6 +37,11 @@ class Userprofile(models.Model):
     pbx_password_encrypted = models.CharField(max_length=500, blank=True)
     pbx_extension = models.CharField(max_length=20, blank=True)
 
+    # True cuando un admin creo el usuario con una clave TEMPORAL: en su primer ingreso, el
+    # middleware ForcePasswordChange lo obliga a definir una clave propia antes de usar la app.
+    # Se apaga solo al cambiarla (userprofile.views.cambiar_password).
+    must_change_password = models.BooleanField(default=False)
+
     def __str__(self):
         return f"{self.user.username} - {self.get_user_type_display()}"
 

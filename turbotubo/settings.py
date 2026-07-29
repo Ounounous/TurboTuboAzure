@@ -83,6 +83,9 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # Obliga a cambiar la clave temporal en el primer ingreso (va DESPUES de Authentication,
+    # que es quien pone request.user).
+    'userprofile.middleware.ForcePasswordChangeMiddleware',
 ]
 
 # Allow same-origin framing so the "crear accion" popup (iframe inside a <dialog>) can load.

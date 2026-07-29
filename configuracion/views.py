@@ -128,10 +128,14 @@ class UsuariosPermisosView(LoginRequiredMixin, View):
                 userprofile, _ = Userprofile.objects.get_or_create(user=user)
                 userprofile.active_team = team
                 userprofile.user_type = form.cleaned_data['user_type']
-                userprofile.save(update_fields=['active_team', 'user_type'])
+                # La clave que puso el admin es TEMPORAL: el usuario debera cambiarla en su primer
+                # ingreso (ForcePasswordChangeMiddleware lo obliga).
+                userprofile.must_change_password = True
+                userprofile.save(update_fields=['active_team', 'user_type', 'must_change_password'])
                 messages.success(
                     request,
-                    f'Usuario "{user.username}" creado como {dict(Userprofile.USER_TYPES)[userprofile.user_type]}.'
+                    f'Usuario "{user.username}" creado como {dict(Userprofile.USER_TYPES)[userprofile.user_type]}. '
+                    'Entrégale la contraseña temporal; se le pedirá cambiarla en su primer ingreso.'
                 )
             else:
                 for field, errores in form.errors.items():
