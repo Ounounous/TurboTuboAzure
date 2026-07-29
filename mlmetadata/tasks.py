@@ -1,12 +1,17 @@
 """
 Export periodico de la metadata anonimizada a JSONL, un archivo por corrida, al storage de
 mlmetadata/storage.py (Azure Blob en un contenedor separado en produccion, disco local en dev).
-Marca cada fila exportada (exportado_at) para no repetirla en la siguiente corrida -- las filas
-no se borran de Postgres, el export es aditivo/incremental.
+Una vez que el archivo quedo escrito en el blob, las filas exportadas se BORRAN de Postgres
+(no solo se marcan): a 4500 gestiones/dia esta tabla crece ~1.5-2GB cada 2 anios si nunca se
+purga, y esa informacion ya vive, integra, en el JSONL del blob -- no hace falta duplicarla
+indefinidamente en la base transaccional. exportado_at se sigue seteando primero (paso
+intermedio) por si el borrado fallara a mitad de camino: nunca se pierde una fila sin que su
+export haya quedado confirmado en el blob primero.
 
 Programacion real (cron) via /admin -> Periodic Tasks (django-celery-beat), igual que el resto
 de tareas periodicas de este proyecto.
 """
+import gzip
 import json
 import logging
 import uuid
@@ -75,15 +80,24 @@ def exportar_metadata_ml():
             resumen[nombre] = 0
             continue
 
+        # Gzip: JSONL es texto muy repetitivo (mismos nombres de campo en cada linea), asi que
+        # comprime ~10x -- a 4500 gestiones/dia serian ~1.8GB/2 anios sin comprimir vs ~0.2GB
+        # comprimido en Blob Storage, por el mismo costo de CPU casi nulo.
         buf = BytesIO()
-        for obj in pendientes.iterator():
-            buf.write(json.dumps(_fila(obj, campos), ensure_ascii=False).encode('utf-8'))
-            buf.write(b'\n')
+        with gzip.GzipFile(fileobj=buf, mode='wb') as gz:
+            for obj in pendientes.iterator():
+                gz.write(json.dumps(_fila(obj, campos), ensure_ascii=False).encode('utf-8'))
+                gz.write(b'\n')
         buf.seek(0)
 
-        path = storage.save(f'{nombre}/{sello}.jsonl', buf)
+        path = storage.save(f'{nombre}/{sello}.jsonl.gz', buf)
+        # Primero se marca (si el borrado de abajo fallara a mitad de camino, la fila queda
+        # identificable como "ya exportada, pendiente de limpieza" en vez de perderse sin rastro).
         modelo.objects.filter(pk__in=ids).update(exportado_at=ahora)
+        # El JSONL en el blob ya tiene esta fila completa: se borra de Postgres para no duplicar
+        # el dato indefinidamente en la base transaccional (ver docstring del modulo).
+        modelo.objects.filter(pk__in=ids).delete()
         resumen[nombre] = len(ids)
-        logger.info('mlmetadata: exportadas %s filas de %s a %s', len(ids), nombre, path)
+        logger.info('mlmetadata: exportadas y purgadas %s filas de %s a %s', len(ids), nombre, path)
 
     return resumen
