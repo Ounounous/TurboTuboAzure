@@ -223,21 +223,33 @@ MEDIA_URL = "media/"
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# Nivel INFO en produccion (DEBUG en local via .env): a nivel DEBUG cada query/request queda
+# en el log y en Azure (disco acotado del App Service) un FileHandler sin rotacion llena el
+# disco y tumba la app. RotatingFileHandler limita el tamano total a 5 archivos x 10MB (50MB).
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'handlers': {
         'file': {
-            'level': 'DEBUG',
-            'class': 'logging.FileHandler',
-            'filename': BASE_DIR / 'django_debug.log',  # Path for log file
+            'level': 'DEBUG' if DEBUG else 'INFO',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': BASE_DIR / 'django_debug.log',
+            'maxBytes': 10 * 1024 * 1024,  # 10 MB
+            'backupCount': 5,
         },
     },
     'loggers': {
         'django': {
             'handlers': ['file'],
-            'level': 'DEBUG',  # Log all messages at DEBUG level and higher
-            'propagate': True,
+            'level': 'DEBUG' if DEBUG else 'INFO',
+            'propagate': False,  # sin esto, duplica cada linea via el logger raiz de abajo
+        },
+        # Logger raiz: cubre los loggers propios del proyecto (actions.tasks, actions.views,
+        # mlmetadata.tasks, etc., todos con logging.getLogger(__name__)), que sin esto solo
+        # imprimian WARNING+ a stderr y nunca quedaban en el archivo.
+        '': {
+            'handlers': ['file'],
+            'level': 'DEBUG' if DEBUG else 'INFO',
         },
     },
 }
