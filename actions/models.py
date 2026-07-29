@@ -213,7 +213,10 @@ class Action(models.Model):
                 self.op = self.lead.op
                 self.subcartera = self.lead.subcartera
                 # Usa el equipo activo del usuario (respeta cambios de equipo), con fallback al del lead.
-                self.team = self.user.userprofile.active_team or self.lead.team
+                # getattr defensivo: un User sin Userprofile (ej. createsuperuser) o sin user
+                # asignado (SET_NULL) no debe tumbar el guardado de la gestion.
+                userprofile = getattr(self.user, 'userprofile', None)
+                self.team = (userprofile.active_team if userprofile else None) or self.lead.team
             # Automatically set target if phone or email is selected and target is not set
             if not self.target:
                 if self.phone:
