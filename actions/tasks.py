@@ -19,11 +19,14 @@ MIN_AGE_SECONDS = 60  # give the call a minute to actually happen before we look
 GIVE_UP_AFTER_HOURS = 24
 # Tras esta cantidad de intentos SIN conseguir el audio (list_cdr falla, el CDR nunca aparece, o
 # aparece pero la descarga falla), se deja de reintentar y se crea un CallRecording sin archivo
-# (ver _crear_placeholder) para que el supervisor sepa buscarla a mano en pbxip.cl. Con el cron
-# corriendo cada pocos minutos, 2 intentos son ~10-15 min -- una grabacion que en pbxip.cl tarda
-# mas que eso en aparecer puede generar un placeholder "sin match" aunque hubiera llegado igual
-# un poco despues. Si eso pasa seguido en produccion, subir este numero (no toca nada mas).
-PLACEHOLDER_MAX_ATTEMPTS = 2
+# (ver _crear_placeholder) para que el supervisor sepa buscarla a mano en pbxip.cl. Los intentos
+# se espacian por tiempo REAL (PLACEHOLDER_RETRY_SPACING_MINUTES, via last_attempt_at), no por
+# cuantas veces corrio el cron -- con 3 intentos separados 20 min, el plazo total antes de
+# rendirse es ~40-60 min. Si en produccion pbxip.cl tarda mas que eso en publicar el CDR (mas
+# placeholders "sin match" de los esperados), subir cualquiera de las dos constantes, no toca
+# nada mas.
+PLACEHOLDER_MAX_ATTEMPTS = 3
+PLACEHOLDER_RETRY_SPACING_MINUTES = 20
 
 # Reintentos con backoff exponencial ante errores transitorios de BD (conexion caida/reinicio).
 # Junto con CONN_HEALTH_CHECKS en settings, una tarea no muere por un hipo de la base: reintenta.
@@ -143,8 +146,17 @@ def sync_pbx_recordings_user(user_id):
     month = timezone.now().strftime('%Y%m')
     resueltas = 0
 
+    retry_spacing = timedelta(minutes=PLACEHOLDER_RETRY_SPACING_MINUTES)
+
     for call in actionable:
+        # Espaciado real: si ya se consulto esta llamada hace menos de 20 min, se salta este
+        # ciclo del cron entero -- "3 intentos" tiene que significar 3 intentos de verdad
+        # separados en el tiempo, no 3 pasadas del cron (que puede correr cada pocos minutos).
+        if call.last_attempt_at and timezone.now() - call.last_attempt_at < retry_spacing:
+            continue
+
         call.attempts += 1
+        call.last_attempt_at = timezone.now()
         dar_por_vencido = call.attempts >= PLACEHOLDER_MAX_ATTEMPTS or call.requested_at < give_up_before
 
         try:
@@ -155,7 +167,7 @@ def sync_pbx_recordings_user(user_id):
                 _crear_placeholder(call, CallRecording.SIN_AUDIO_ERROR_API, detalle=str(exc))
                 call.resolved = True
                 call.resolved_at = timezone.now()
-            call.save(update_fields=['attempts', 'resolved', 'resolved_at'])
+            call.save(update_fields=['attempts', 'last_attempt_at', 'resolved', 'resolved_at'])
             continue
 
         match = find_matching_cdr(
@@ -188,7 +200,7 @@ def sync_pbx_recordings_user(user_id):
                         )
                         call.resolved = True
                         call.resolved_at = timezone.now()
-                    call.save(update_fields=['attempts', 'resolved', 'resolved_at'])
+                    call.save(update_fields=['attempts', 'last_attempt_at', 'resolved', 'resolved_at'])
                     continue
             call.resolved = True
             call.resolved_at = timezone.now()
@@ -201,7 +213,7 @@ def sync_pbx_recordings_user(user_id):
             call.resolved = True
             call.resolved_at = timezone.now()
 
-        call.save(update_fields=['attempts', 'resolved', 'resolved_at'])
+        call.save(update_fields=['attempts', 'last_attempt_at', 'resolved', 'resolved_at'])
 
     return resueltas
 

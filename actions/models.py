@@ -313,6 +313,11 @@ class PendingPbxCall(models.Model):
     resolved = models.BooleanField(default=False)
     resolved_at = models.DateTimeField(null=True, blank=True)
     attempts = models.PositiveIntegerField(default=0)
+    # Cuando se consulto pbxip.cl por ULTIMA VEZ para esta llamada especifica. Los intentos de
+    # bajar el audio se espacian en el tiempo real (ver PLACEHOLDER_RETRY_SPACING_MINUTES en
+    # actions/tasks.py), no por cuantas veces corrio el cron -- sin esto, "3 intentos" podia
+    # significar 15 minutos o 3 horas segun que tan seguido esta programada la tarea periodica.
+    last_attempt_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ['-requested_at']
