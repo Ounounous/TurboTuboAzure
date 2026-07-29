@@ -13,28 +13,30 @@
   {% endif %}
 
   {% if es_admin %}
-  <h2 class="text-lg font-bold mb-2">Carteras por supervisor</h2>
+  <h2 class="text-lg font-bold mb-2">Subcarteras por supervisor</h2>
   <p class="muted mb-3" style="font-size:12.5px;">
-    Un supervisor solo ve y gestiona las carteras donde está asignado acá (admin/owner ven todas siempre).
-    Una cartera puede tener más de un supervisor.
+    Un supervisor solo ve y gestiona las SUBcarteras donde está asignado acá (admin/owner ven todas siempre).
+    Varios supervisores pueden compartir una misma cartera (ej. "Tanner" con una subcartera por
+    supervisor) sin verse los clientes entre sí — cada uno solo ve su(s) subcartera(s).
+    Una subcartera puede tener más de un supervisor.
   </p>
   <div class="card mb-8" style="border:1px solid var(--border); border-radius:10px;">
     <div class="overflow-x-auto">
       <table class="table-dense">
-        <thead><tr><th>Cartera</th><th>Supervisores asignados</th><th>Guardar</th></tr></thead>
+        <thead><tr><th>Cartera / Subcartera</th><th>Supervisores asignados</th><th>Guardar</th></tr></thead>
         <tbody>
-          {% for cartera in carteras %}
+          {% for subcartera in subcarteras %}
             <tr>
-              <td class="op">{{ cartera.nombre }}</td>
+              <td class="op">{{ subcartera.cartera.nombre }} / {{ subcartera.nombre }}</td>
               <td colspan="2">
                 <form method="post" action="{% url 'configuracion:usuarios_permisos' %}">
                   {% csrf_token %}
                   <input type="hidden" name="accion" value="asignar_supervisores">
-                  <input type="hidden" name="cartera_id" value="{{ cartera.id }}">
+                  <input type="hidden" name="subcartera_id" value="{{ subcartera.id }}">
                   <div style="display:flex; flex-wrap:wrap; gap:5px 16px; margin-bottom:8px;">
                     {% for u in supervisores_disponibles %}
                       <label style="display:inline-flex; align-items:center; gap:5px; font-size:12.5px; font-weight:500; white-space:nowrap; cursor:pointer;">
-                        <input type="checkbox" name="supervisores" value="{{ u.id }}" {% if u in cartera.supervisores.all %}checked{% endif %}>
+                        <input type="checkbox" name="supervisores" value="{{ u.id }}" {% if u in subcartera.supervisores.all %}checked{% endif %}>
                         {{ u.username }} ({{ u.userprofile.get_user_type_display }})
                       </label>
                     {% empty %}
@@ -67,7 +69,7 @@
 
   <h2 class="text-lg font-bold mb-2">Usuarios</h2>
   <p class="muted mb-3" style="font-size:12.5px;">
-    {% if es_admin %}Rol y equipo de cada usuario. admin/owner ven todo; supervisor solo sus carteras (arriba); cobrador solo sus clientes asignados. Correo, teléfono y SIP editables acá.
+    {% if es_admin %}Rol y equipo de cada usuario. admin/owner ven todo; supervisor solo sus subcarteras (arriba); cobrador solo sus clientes asignados. Correo, teléfono y SIP editables acá.
     {% else %}Solo los usuarios de tu equipo. El rol y el equipo los cambia un admin.{% endif %}
   </p>
   <div class="card mb-6" style="border:1px solid var(--border); border-radius:10px;">

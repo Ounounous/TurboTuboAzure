@@ -11,12 +11,6 @@ class Cartera(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
         null=True, blank=True, related_name='carteras_creadas'
     )
-    # Supervisores que pueden ver y gestionar esta cartera. M2M: una cartera puede tener 1 o
-    # varios. Un supervisor solo ve las carteras donde esta aca (admin/owner ven todas). La
-    # asignacion la hace el admin (Django admin hoy, dashboard de configuracion despues).
-    supervisores = models.ManyToManyField(
-        settings.AUTH_USER_MODEL, related_name='carteras_supervisadas', blank=True,
-    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -43,6 +37,15 @@ class Subcartera(models.Model):
     nombre = models.CharField(max_length=255)
     slug = models.SlugField(max_length=255, blank=True)
     es_default = models.BooleanField(default=False)
+    # Supervisores que pueden ver y gestionar ESTA subcartera (no toda la cartera). Una cartera
+    # con varias subcarteras -- ej. una por supervisor, todas bajo el mismo nombre comercial
+    # "Tanner" para que el reporte regulatorio (que busca la cartera por nombre) siga viendo todo
+    # junto -- separa asi lo que ve cada supervisor sin tener que partir la cartera. M2M: una
+    # subcartera puede tener 1 o varios supervisores. La asignacion la hace el admin (Django
+    # admin o Configuracion -> Usuarios y permisos).
+    supervisores = models.ManyToManyField(
+        settings.AUTH_USER_MODEL, related_name='subcarteras_supervisadas', blank=True,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

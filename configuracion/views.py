@@ -5,7 +5,7 @@ from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 
-from cartera.models import Cartera
+from cartera.models import Subcartera
 from lead.permissions import es_admin_owner, es_supervisor
 from suspensiones.models import RetentionSettings
 from team.forms import TeamForm
@@ -41,7 +41,7 @@ class ConfiguracionHomeView(ConfiguracionRequiredMixin, View):
 
 
 class UsuariosPermisosView(LoginRequiredMixin, View):
-    """Gestion de usuarios. admin/owner: todo (roles, equipos, crear, supervisores por cartera,
+    """Gestion de usuarios. admin/owner: todo (roles, equipos, crear, supervisores por subcartera,
     y datos de contacto/SIP de cualquier usuario). supervisor: solo datos de contacto (RUT, correo,
     telefono) y credenciales SIP de los usuarios de su propio equipo. cobrador: sin acceso."""
     template_name = 'configuracion/usuarios_permisos.html'
@@ -69,7 +69,8 @@ class UsuariosPermisosView(LoginRequiredMixin, View):
         }
         if es_admin:
             contexto.update({
-                'carteras': Cartera.objects.prefetch_related('supervisores').order_by('nombre'),
+                'subcarteras': Subcartera.objects.select_related('cartera').prefetch_related('supervisores')
+                    .order_by('cartera__nombre', 'nombre'),
                 'supervisores_disponibles': User.objects.filter(
                     userprofile__user_type__in=('supervisor', 'admin', 'owner')
                 ).order_by('username'),
@@ -173,15 +174,16 @@ class UsuariosPermisosView(LoginRequiredMixin, View):
                 messages.success(request, f'{user.username} ahora pertenece al equipo "{nuevo_equipo.name}".')
 
         elif accion == 'asignar_supervisores':
-            cartera = get_object_or_404(Cartera, pk=request.POST.get('cartera_id'))
+            subcartera = get_object_or_404(Subcartera, pk=request.POST.get('subcartera_id'))
             ids = request.POST.getlist('supervisores')
             usuarios_validos = User.objects.filter(
                 pk__in=ids, userprofile__user_type__in=('supervisor', 'admin', 'owner')
             )
-            cartera.supervisores.set(usuarios_validos)
+            subcartera.supervisores.set(usuarios_validos)
             messages.success(
                 request,
-                f'{cartera.nombre}: {usuarios_validos.count()} supervisor(es) asignado(s).'
+                f'{subcartera.cartera.nombre} / {subcartera.nombre}: '
+                f'{usuarios_validos.count()} supervisor(es) asignado(s).'
             )
 
         else:

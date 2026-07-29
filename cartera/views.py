@@ -1,13 +1,13 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
-from django.db.models import Count, Sum
+from django.db.models import Count, Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.views import View
 from django.views.generic import ListView, DetailView, CreateView
 
-from lead.permissions import carteras_visibles, es_admin_owner, es_supervisor
+from lead.permissions import carteras_visibles, es_admin_owner, es_supervisor, subcarteras_visibles
 from .forms import CarteraForm, SubcarteraForm
 from .models import Cartera, Subcartera
 from .services import eliminar_cartera
@@ -44,11 +44,14 @@ class CarteraListView(CarteraViewRequiredMixin, ListView):
     context_object_name = 'carteras'
 
     def get_queryset(self):
-        # Un supervisor solo ve sus carteras; admin/owner todas. Los totales van en el mismo
-        # query (un solo join subcarteras->leads, sin fan-out entre Sum y Count).
+        # Un supervisor solo ve sus carteras; admin/owner todas. Los totales se filtran a SOLO
+        # las subcarteras visibles del usuario: sin el filter=, una cartera con varias
+        # subcarteras (ej. Tanner con una por supervisor) mostraria el total combinado de TODAS
+        # a cualquier supervisor que viera la fila, aunque solo la vea porque supervisa una.
+        visibles = subcarteras_visibles(self.request.user)
         return carteras_visibles(self.request.user).annotate(
-            total_saldo_insoluto=Sum('subcarteras__leads__saldo_insoluto'),
-            n_leads=Count('subcarteras__leads', distinct=True),
+            total_saldo_insoluto=Sum('subcarteras__leads__saldo_insoluto', filter=Q(subcarteras__in=visibles)),
+            n_leads=Count('subcarteras__leads', filter=Q(subcarteras__in=visibles), distinct=True),
         )
 
 
@@ -62,7 +65,10 @@ class CarteraDetailView(CarteraViewRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         from actions.models import Resultado, Medio
         context = super().get_context_data(**kwargs)
-        context['subcarteras'] = self.object.subcarteras.all()
+        # Solo las subcarteras que el usuario supervisa dentro de esta cartera (admin/owner: todas).
+        # Una cartera con varias subcarteras (ej. Tanner con una por supervisor) no debe mostrarle
+        # a un supervisor las subcarteras -- y sus clientes -- de otro.
+        context['subcarteras'] = subcarteras_visibles(self.request.user).filter(cartera=self.object)
         context['subcartera_form'] = SubcarteraForm()
         context['puede_eliminar'] = _puede_eliminar_cartera(self.request.user, self.object)
 
