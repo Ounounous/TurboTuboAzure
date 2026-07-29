@@ -238,6 +238,11 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Nivel INFO en produccion (DEBUG en local via .env): a nivel DEBUG cada query/request queda
 # en el log y en Azure (disco acotado del App Service) un FileHandler sin rotacion llena el
 # disco y tumba la app. RotatingFileHandler limita el tamano total a 5 archivos x 10MB (50MB).
+#
+# 'console' (stdout) ademas del archivo: el disco de un App Service Linux es efimero (se pierde
+# en cada deploy/restart/scale-out) y el Log Stream / Application Insights de Azure capturan
+# stdout/stderr del proceso, NO un archivo en ese disco -- sin esto, un error en produccion
+# quedaba en un archivo que nadie llega a ver hasta entrar por SSH al contenedor.
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -249,10 +254,15 @@ LOGGING = {
             'maxBytes': 10 * 1024 * 1024,  # 10 MB
             'backupCount': 5,
         },
+        'console': {
+            'level': 'DEBUG' if DEBUG else 'INFO',
+            'class': 'logging.StreamHandler',
+            'stream': 'ext://sys.stdout',
+        },
     },
     'loggers': {
         'django': {
-            'handlers': ['file'],
+            'handlers': ['file', 'console'],
             'level': 'DEBUG' if DEBUG else 'INFO',
             'propagate': False,  # sin esto, duplica cada linea via el logger raiz de abajo
         },
@@ -260,7 +270,7 @@ LOGGING = {
         # mlmetadata.tasks, etc., todos con logging.getLogger(__name__)), que sin esto solo
         # imprimian WARNING+ a stderr y nunca quedaban en el archivo.
         '': {
-            'handlers': ['file'],
+            'handlers': ['file', 'console'],
             'level': 'DEBUG' if DEBUG else 'INFO',
         },
     },
