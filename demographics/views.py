@@ -365,7 +365,9 @@ class UploadAvalDemographicsView(SupervisorRequiredMixin, View):
             errores = []
             nombre = str(fila.get('aval_name') or '').strip()
             rut = str(fila.get('aval_rut') or '').strip()
-            dv = str(fila.get('aval_dv') or '').strip()
+            # OJO: no "fila.get('aval_dv') or ''" -- 0 es un DV valido pero falsy en Python.
+            dv_valor = fila.get('aval_dv')
+            dv = '' if dv_valor is None else str(dv_valor).strip()
             email = str(fila.get('aval_email') or '').strip()
             direccion = str(fila.get('aval_address') or '').strip()
             if not nombre:

@@ -482,9 +482,12 @@ class UploadExcelFileView(_SupervisorGate, View):
                 errores.append('nombre: vacío')
 
             rut = _parse_entero(fila.get('rut'), 'rut', errores, minimo=1)
-            dv = str(fila.get('dv') or '').strip().upper()
+            # OJO: no usar "fila.get('dv') or ''" -- 0 es un DV valido pero es falsy en Python,
+            # asi que "0 or ''" da '' y un DV=0 legitimo se reportaba como invalido.
+            dv_valor = fila.get('dv')
+            dv = '' if dv_valor is None else str(dv_valor).strip().upper()
             if not dv or len(dv) > 1:
-                errores.append(f'dv: "{fila.get("dv")}" inválido (un dígito o K)')
+                errores.append(f'dv: "{dv_valor}" inválido (un dígito o K)')
 
             saldo_insoluto = _parse_entero(fila.get('saldo_insoluto'), 'saldo_insoluto', errores)
             saldo_deuda = _parse_entero(fila.get('saldo_deuda'), 'saldo_deuda', errores)
