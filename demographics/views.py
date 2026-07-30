@@ -79,6 +79,11 @@ TEMPLATE_SPECS = {
         'headers': ['cartera', 'subcartera', 'op', 'item_type', 'patente', 'marca', 'modelo', 'año'],
         'example': ['CARTERA-EJEMPLO', 'SUBCARTERA-EJEMPLO', 'OP-EJEMPLO', 'auto', 'AB1234', 'Toyota', 'Yaris', 2020],
     },
+    'aval_demographics': {
+        'filename': 'plantilla_aval.xlsx',
+        'headers': ['cartera', 'subcartera', 'op', 'aval_name', 'aval_rut', 'aval_dv', 'aval_email', 'aval_address'],
+        'example': ['CARTERA-EJEMPLO', 'SUBCARTERA-EJEMPLO', 'OP-EJEMPLO', 'María González', '87654321', '0', 'aval@correo.com', 'Av. Siempre Viva 742'],
+    },
 }
 
 

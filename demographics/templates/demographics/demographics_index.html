@@ -13,9 +13,10 @@
     <a href="?form_type=iddemographics" class="chip {% if form_type == 'iddemographics' %}active{% endif %}">✉️ Email</a>
     <a href="?form_type=address" class="chip {% if form_type == 'address' %}active{% endif %}">📍 Dirección</a>
     <a href="?form_type=iditem" class="chip {% if form_type == 'iditem' %}active{% endif %}">🚗 Bienes</a>
+    <a href="?form_type=aval_demographics" class="chip {% if form_type == 'aval_demographics' %}active{% endif %}">🧑‍🤝‍🧑 Aval</a>
   </div>
 
-  <div id="upload-forms" class="mt-6">
+  <div id="upload-forms" class="mt-6" style="max-width:720px;">
       {% if form_type == 'phone' %}
       <div id="upload-phone-form">
           <h3 class="text-lg mb-2">Teléfonos</h3>
@@ -25,6 +26,15 @@
               <input type="file" name="excel_file" required>
               <button type="submit" class="btn btn-primary mt-2">Subir</button>
           </form>
+          <div class="card p-4 mt-4">
+            <h4 class="font-bold mb-2" style="font-size:13px;">Columnas</h4>
+            <ul class="list-disc list-inside space-y-1" style="font-size:13px;">
+              <li><strong>cartera</strong>, <strong>subcartera</strong>, <strong>op</strong> — identifican al cliente. Obligatorias.</li>
+              <li><strong>phone_number</strong> — el número, con código de país (ej. 56912345678). Obligatoria.</li>
+              <li><strong>phone_type</strong> — <code>principal</code> o <code>aval</code>. Opcional (por defecto: principal).</li>
+              <li><strong>phone_status</strong> — <code>active</code>, <code>non-existent</code>, <code>out of service</code> o <code>blacklisted</code>. Opcional (por defecto: active).</li>
+            </ul>
+          </div>
       </div>
       {% elif form_type == 'iddemographics' %}
       <div id="upload-iddemographics-form">
@@ -35,6 +45,14 @@
               <input type="file" name="excel_file" required>
               <button type="submit" class="btn btn-primary mt-2">Subir</button>
           </form>
+          <div class="card p-4 mt-4">
+            <h4 class="font-bold mb-2" style="font-size:13px;">Columnas</h4>
+            <ul class="list-disc list-inside space-y-1" style="font-size:13px;">
+              <li><strong>cartera</strong>, <strong>subcartera</strong>, <strong>op</strong> — identifican al cliente. Obligatorias.</li>
+              <li><strong>principal_email</strong> — el correo principal del cliente. Obligatoria.</li>
+            </ul>
+            <p class="muted mt-2" style="font-size:12px;">Esta es la demografía "base" del cliente: para poder subir Avales (pestaña 🧑‍🤝‍🧑) primero tiene que existir este registro.</p>
+          </div>
       </div>
       {% elif form_type == 'address' %}
       <div id="upload-address-form">
@@ -45,6 +63,13 @@
               <input type="file" name="excel_file" required>
               <button type="submit" class="btn btn-primary mt-2">Subir</button>
           </form>
+          <div class="card p-4 mt-4">
+            <h4 class="font-bold mb-2" style="font-size:13px;">Columnas</h4>
+            <ul class="list-disc list-inside space-y-1" style="font-size:13px;">
+              <li><strong>cartera</strong>, <strong>subcartera</strong>, <strong>op</strong> — identifican al cliente. Obligatorias.</li>
+              <li><strong>principal_address</strong> — la dirección del cliente, texto libre. Obligatoria.</li>
+            </ul>
+          </div>
       </div>
       {% elif form_type == 'iditem' %}
       <div id="upload-iditem-form">
@@ -55,6 +80,39 @@
               <input type="file" name="excel_file" required>
               <button type="submit" class="btn btn-primary mt-2">Subir</button>
           </form>
+          <div class="card p-4 mt-4">
+            <h4 class="font-bold mb-2" style="font-size:13px;">Columnas</h4>
+            <ul class="list-disc list-inside space-y-1" style="font-size:13px;">
+              <li><strong>cartera</strong>, <strong>subcartera</strong>, <strong>op</strong> — identifican al cliente. Obligatorias.</li>
+              <li><strong>item_type</strong> — <code>auto</code>, <code>moto</code>, <code>inmueble</code> u <code>otro</code>. Opcional (por defecto: auto).</li>
+              <li><strong>patente</strong>, <strong>marca</strong>, <strong>modelo</strong> — texto libre. Opcionales.</li>
+              <li><strong>año</strong> — número (ej. 2020). Opcional.</li>
+            </ul>
+          </div>
+      </div>
+      {% elif form_type == 'aval_demographics' %}
+      <div id="upload-aval-form">
+          <h3 class="text-lg mb-2">Aval</h3>
+          <a href="{% url 'demographics:download_template' 'aval_demographics' %}" class="btn btn-primary mb-4">Descargar planilla de ejemplo</a>
+          <form method="post" enctype="multipart/form-data" action="{% url 'demographics:upload_aval_demographics' %}">
+              {% csrf_token %}
+              <input type="file" name="excel_file" required>
+              <button type="submit" class="btn btn-primary mt-2">Subir</button>
+          </form>
+          <div class="card p-4 mt-4">
+            <h4 class="font-bold mb-2" style="font-size:13px;">Columnas</h4>
+            <ul class="list-disc list-inside space-y-1" style="font-size:13px;">
+              <li><strong>cartera</strong>, <strong>subcartera</strong>, <strong>op</strong> — identifican al cliente. Obligatorias.</li>
+              <li><strong>aval_name</strong> — nombre del aval. Obligatoria.</li>
+              <li><strong>aval_rut</strong>, <strong>aval_dv</strong> — RUT del aval sin puntos ni guion, y su dígito verificador aparte. Obligatorias.</li>
+              <li><strong>aval_email</strong> — correo del aval. Obligatoria.</li>
+              <li><strong>aval_address</strong> — dirección del aval. Obligatoria.</li>
+            </ul>
+            <p class="muted mt-2" style="font-size:12px;">
+              ⚠ El cliente tiene que tener ya cargado su correo (pestaña ✉️ Email) antes de poder
+              subirle un aval — si no, la fila se rechaza con "no tiene demografía principal cargada todavía".
+            </p>
+          </div>
       </div>
       {% endif %}
   </div>
