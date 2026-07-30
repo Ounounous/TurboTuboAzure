@@ -9,6 +9,7 @@ from django.urls import reverse, reverse_lazy
 from django.http import HttpResponse, JsonResponse
 from django.views.generic import ListView, DetailView, DeleteView, UpdateView, CreateView, View
 from django.utils.timezone import now, localtime, localdate
+from datetime import timedelta
 from .models import StatusChangeLog, Team
 import openpyxl
 from io import BytesIO
@@ -59,7 +60,18 @@ class LeadListView(LoginRequiredMixin, ListView):
         'tipo_cobranza': 'tipo_cobranza',
         'tiene_aval': 'tiene_aval',
         'cartera': 'subcartera__cartera__nombre__icontains',
-        'subcartera': 'subcartera__nombre__icontains',
+        # Opciones cerradas (select), no texto libre: el valor es el id de la subcartera, no el
+        # nombre -- evita ambiguedad si dos carteras distintas tienen una subcartera con el mismo
+        # nombre (ej. "ZONA SUR" en mas de una cartera).
+        'subcartera': 'subcartera_id',
+    }
+
+    # Columnas numericas con filtro de rango (parametros "<clave>_min"/"<clave>_max" en la URL).
+    RANGE_FILTERS = {
+        'insoluto': 'saldo_insoluto',
+        'deuda': 'saldo_deuda',
+        'cuota': 'valor_cuota',
+        'atrasadas': 'cuotas_atrasadas',
     }
 
     # Columnas ordenables: clave del parámetro ?sort= -> campo del modelo.
@@ -105,6 +117,39 @@ class LeadListView(LoginRequiredMixin, ListView):
             value = self.request.GET.get(param, '').strip()
             if value:
                 queryset = queryset.filter(**{lookup: value})
+
+        # Rangos min/max sobre las columnas de plata y cuotas atrasadas.
+        for param, field in self.RANGE_FILTERS.items():
+            min_raw = self.request.GET.get(f'{param}_min', '').strip()
+            max_raw = self.request.GET.get(f'{param}_max', '').strip()
+            if min_raw:
+                try:
+                    queryset = queryset.filter(**{f'{field}__gte': int(min_raw)})
+                except ValueError:
+                    pass
+            if max_raw:
+                try:
+                    queryset = queryset.filter(**{f'{field}__lte': int(max_raw)})
+                except ValueError:
+                    pass
+
+        # "Días desde última gestión": min = al menos N días sin gestionar (incluye los que
+        # NUNCA se han gestionado, ya que tambien califican como "al menos N dias"); max = como
+        # maximo N dias (excluye los nunca gestionados, que no tienen una gestion "reciente").
+        dias_min = self.request.GET.get('dias_min', '').strip()
+        dias_max = self.request.GET.get('dias_max', '').strip()
+        if dias_min:
+            try:
+                corte = localdate() - timedelta(days=int(dias_min))
+                queryset = queryset.filter(Q(last_action_at__date__lte=corte) | Q(last_action_at__isnull=True))
+            except ValueError:
+                pass
+        if dias_max:
+            try:
+                corte = localdate() - timedelta(days=int(dias_max))
+                queryset = queryset.filter(last_action_at__date__gte=corte)
+            except ValueError:
+                pass
 
         return self._apply_sort(queryset)
 
@@ -191,7 +236,9 @@ class LeadListView(LoginRequiredMixin, ListView):
         context['only_fav'] = self.request.GET.get('fav') == '1'
         context['sort'] = self.request.GET.get('sort', 'nombre')
         context['dir'] = self.request.GET.get('dir', 'asc')
-        active_filters = {p: self.request.GET.get(p, '') for p in self.COLUMN_FILTERS}
+        range_params = [f'{p}_min' for p in self.RANGE_FILTERS] + [f'{p}_max' for p in self.RANGE_FILTERS]
+        range_params += ['dias_min', 'dias_max']
+        active_filters = {p: self.request.GET.get(p, '') for p in list(self.COLUMN_FILTERS) + range_params}
         context['filters'] = active_filters
         context['advanced_open'] = any(v for k, v in active_filters.items() if k != 'status')
 
@@ -202,7 +249,15 @@ class LeadListView(LoginRequiredMixin, ListView):
         context['tipo_cobranza_choices'] = Lead.CHOICES_TIPO_COBRANZA
         context['aval_choices'] = Lead.CHOICES_AVAL
         from .permissions import es_supervisor
+        from cartera.models import Subcartera
         context['is_supervisor'] = es_supervisor(self.request.user)
+        # Opciones cerradas del filtro Subcartera: las que efectivamente tienen algun cliente
+        # dentro del alcance de ESTE usuario -- no permissions.subcarteras_visibles (esa es la
+        # asignacion de supervision, que para un cobrador da vacio aunque sus leads si tengan
+        # subcartera). Asi el filtro sirve para los 3 roles.
+        context['subcartera_choices'] = Subcartera.objects.filter(
+            leads__in=self._base_scope()
+        ).select_related('cartera').order_by('cartera__nombre', 'nombre').distinct()
         return context
 
 class LeadDetailView(LoginRequiredMixin, DetailView):

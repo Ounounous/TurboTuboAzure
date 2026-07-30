@@ -66,7 +66,50 @@
               {% for val, label in aval_choices %}<option value="{{ val }}" {% if filters.tiene_aval == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
             </select></div>
           <div><label class="block mb-1" for="f_cartera">Cartera</label><input type="text" name="cartera" id="f_cartera" value="{{ filters.cartera }}" class="w-full"></div>
-          <div><label class="block mb-1" for="f_subcartera">Subcartera</label><input type="text" name="subcartera" id="f_subcartera" value="{{ filters.subcartera }}" class="w-full"></div>
+          <div><label class="block mb-1" for="f_subcartera">Subcartera</label>
+            <select name="subcartera" id="f_subcartera" class="w-full"><option value="">--- Todas ---</option>
+              {% for sub in subcartera_choices %}
+                <option value="{{ sub.pk }}" {% if filters.subcartera == sub.pk|stringformat:"s" %}selected{% endif %}>{{ sub.cartera.nombre }} / {{ sub.nombre }}</option>
+              {% endfor %}
+            </select></div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 mt-3">
+          <div>
+            <label class="block mb-1">S. insoluto</label>
+            <div class="flex gap-2">
+              <input type="number" name="insoluto_min" value="{{ filters.insoluto_min }}" placeholder="Mín." class="w-full">
+              <input type="number" name="insoluto_max" value="{{ filters.insoluto_max }}" placeholder="Máx." class="w-full">
+            </div>
+          </div>
+          <div>
+            <label class="block mb-1">S. deuda</label>
+            <div class="flex gap-2">
+              <input type="number" name="deuda_min" value="{{ filters.deuda_min }}" placeholder="Mín." class="w-full">
+              <input type="number" name="deuda_max" value="{{ filters.deuda_max }}" placeholder="Máx." class="w-full">
+            </div>
+          </div>
+          <div>
+            <label class="block mb-1">Cuota</label>
+            <div class="flex gap-2">
+              <input type="number" name="cuota_min" value="{{ filters.cuota_min }}" placeholder="Mín." class="w-full">
+              <input type="number" name="cuota_max" value="{{ filters.cuota_max }}" placeholder="Máx." class="w-full">
+            </div>
+          </div>
+          <div>
+            <label class="block mb-1">Cuotas atrasadas</label>
+            <div class="flex gap-2">
+              <input type="number" name="atrasadas_min" value="{{ filters.atrasadas_min }}" placeholder="Mín." class="w-full">
+              <input type="number" name="atrasadas_max" value="{{ filters.atrasadas_max }}" placeholder="Máx." class="w-full">
+            </div>
+          </div>
+          <div>
+            <label class="block mb-1">Días desde última gestión</label>
+            <div class="flex gap-2">
+              <input type="number" name="dias_min" value="{{ filters.dias_min }}" placeholder="Mín." class="w-full">
+              <input type="number" name="dias_max" value="{{ filters.dias_max }}" placeholder="Máx." class="w-full">
+            </div>
+          </div>
         </div>
       </details>
     </form>
