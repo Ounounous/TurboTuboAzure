@@ -126,8 +126,17 @@ class SuspensionesTemplateView(SupervisorRequiredMixin, View):
 class BulkLifecycleUploadView(SupervisorRequiredMixin, View):
     """Carga masiva: Excel con columnas CARTERA, SUBCARTERA, ID, ACCION, MOTIVO (opcional)."""
 
+    # Campos que toca cada transicion (ver lead/lifecycle.py) -- se snapshotean antes de llamar
+    # a la funcion, porque la mutacion + el save() ya los hace ella misma.
+    CAMPOS_POR_ACCION = {
+        'suspender': ['activo', 'suspendido_at', 'motivo_suspension'],
+        'desasignar': ['activo', 'desasignado_at', 'assigned_to_id'],
+        'reactivar': ['activo', 'suspendido_at', 'desasignado_at', 'terminado_at', 'datos_purgados_at', 'motivo_suspension'],
+    }
+
     def post(self, request, *args, **kwargs):
         from core.bulk_upload import procesar_carga
+        from core.carga_tracking import iniciar_lote, registrar_actualizacion_valores
         from lead.permissions import leads_visibles
 
         def validar_fila(fila, rownum):
@@ -157,14 +166,22 @@ class BulkLifecycleUploadView(SupervisorRequiredMixin, View):
         if not resultado.ok:
             return resultado.respuesta_error
 
+        excel_file = request.FILES.get('excel_file')
         with transaction.atomic():
+            lote = iniciar_lote('suspensiones', request.user, archivo_nombre=getattr(excel_file, 'name', ''), total_filas=len(resultado.filas))
             for f in resultado.filas:
+                lead = f['lead']
+                campos = self.CAMPOS_POR_ACCION[f['accion']]
+                antes = {c: getattr(lead, c) for c in campos}
+
                 if f['accion'] == 'suspender':
-                    suspender(f['lead'], motivo=f['motivo'], changed_by=request.user)
+                    suspender(lead, motivo=f['motivo'], changed_by=request.user)
                 elif f['accion'] == 'desasignar':
-                    desasignar(f['lead'], changed_by=request.user)
+                    desasignar(lead, changed_by=request.user)
                 else:
-                    reactivar(f['lead'], changed_by=request.user)
+                    reactivar(lead, changed_by=request.user)
+
+                registrar_actualizacion_valores(lote, lead, {c: (antes[c], getattr(lead, c)) for c in campos})
 
         messages.success(request, f"Se aplicó la acción a {len(resultado.filas)} lead(s).")
         return redirect('suspensiones:index')

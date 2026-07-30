@@ -504,6 +504,7 @@ class UploadExcelFileView(_SupervisorGate, View):
 
     def post(self, request, *args, **kwargs):
         from core.bulk_upload import procesar_carga
+        from core.carga_tracking import iniciar_lote, registrar_creacion
 
         form = UploadExcelFileForm(request.POST, request.FILES)
         if not form.is_valid():
@@ -612,6 +613,10 @@ class UploadExcelFileView(_SupervisorGate, View):
                 for f in resultado.filas
             ]
             Lead.objects.bulk_create(nuevos, batch_size=500)
+            # bulk_create devuelve los objetos CON pk asignado (Postgres soporta RETURNING id).
+            lote = iniciar_lote('clientes', request.user, archivo_nombre=getattr(excel_file, 'name', ''), total_filas=len(nuevos))
+            for lead_creado in nuevos:
+                registrar_creacion(lote, lead_creado)
 
         messages.success(request, f'{len(resultado.filas)} cliente(s) cargado(s) en {cartera.nombre}.')
         return redirect('leads:list')
@@ -792,6 +797,7 @@ class AssignLeadsView(LoginRequiredMixin, View):
 
         if upload_form.is_valid():
             from core.bulk_upload import procesar_carga
+            from core.carga_tracking import iniciar_lote, registrar_creacion, registrar_actualizacion
 
             def validar_fila(fila, rownum):
                 errores = []
@@ -838,7 +844,9 @@ class AssignLeadsView(LoginRequiredMixin, View):
             if not resultado.ok:
                 return resultado.respuesta_error
 
+            excel_file = upload_form.cleaned_data['file']
             with transaction.atomic():
+                lote = iniciar_lote('asignaciones', request.user, archivo_nombre=getattr(excel_file, 'name', ''), total_filas=len(resultado.filas))
                 for f in resultado.filas:
                     subcartera = Subcartera.objects.filter(
                         cartera=f['cartera'], nombre__iexact=f['subcartera_nombre']
@@ -847,17 +855,24 @@ class AssignLeadsView(LoginRequiredMixin, View):
                         subcartera = Subcartera.objects.create(cartera=f['cartera'], nombre=f['subcartera_nombre'])
 
                     lead = f['lead']
+                    campos_nuevos = {'subcartera_id': subcartera.pk, 'assigned_to_id': f['collector'].pk}
+                    if lead.activo == Lead.DESASIGNADO:
+                        campos_nuevos['activo'] = Lead.ACTIVO
+                        campos_nuevos['desasignado_at'] = None
+                    registrar_actualizacion(lote, lead, campos_nuevos)
+
                     lead.subcartera = subcartera
                     lead.assigned_to = f['collector']
                     if lead.activo == Lead.DESASIGNADO:
                         lead.activo = Lead.ACTIVO
                         lead.desasignado_at = None
                     lead.save()
-                    LeadAssignment.objects.create(
+                    asignacion = LeadAssignment.objects.create(
                         lead=lead,
                         user=f['collector'],
                         assigned_by=request.user,
                     )
+                    registrar_creacion(lote, asignacion)
 
             messages.success(request, f"{len(resultado.filas)} lead(s) asignado(s) correctamente.")
             return redirect('leads:list')

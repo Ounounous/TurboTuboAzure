@@ -148,6 +148,7 @@ ITEM_UPLOAD_ALIASES = {
 class UploadIDItemView(SupervisorRequiredMixin, View):
     def post(self, request, *args, **kwargs):
         from core.bulk_upload import procesar_carga
+        from core.carga_tracking import iniciar_lote, registrar_creacion, registrar_actualizacion
 
         def validar_fila(fila, rownum):
             errores = []
@@ -186,15 +187,25 @@ class UploadIDItemView(SupervisorRequiredMixin, View):
         if not resultado.ok:
             return resultado.respuesta_error
 
+        excel_file = request.FILES.get('excel_file')
         with transaction.atomic():
+            lote = iniciar_lote('bienes', request.user, archivo_nombre=getattr(excel_file, 'name', ''), total_filas=len(resultado.filas))
             for f in resultado.filas:
-                id_item, _ = IDItem.objects.get_or_create(lead=f['lead'])
-                id_item.item_type = f['tipo']
-                id_item.patente = f['patente']
-                id_item.marca = f['marca']
-                id_item.modelo = f['modelo']
-                id_item.año = f['anio']
-                id_item.save()
+                id_item, created = IDItem.objects.get_or_create(lead=f['lead'])
+                campos_nuevos = {
+                    'item_type': f['tipo'], 'patente': f['patente'],
+                    'marca': f['marca'], 'modelo': f['modelo'], 'año': f['anio'],
+                }
+                if created:
+                    for campo, valor in campos_nuevos.items():
+                        setattr(id_item, campo, valor)
+                    id_item.save()
+                    registrar_creacion(lote, id_item)
+                else:
+                    registrar_actualizacion(lote, id_item, campos_nuevos)
+                    for campo, valor in campos_nuevos.items():
+                        setattr(id_item, campo, valor)
+                    id_item.save()
 
         messages.success(request, f"{len(resultado.filas)} bien(es) cargado(s) correctamente.")
         return redirect('demographics:index')
@@ -212,6 +223,7 @@ PHONE_UPLOAD_ALIASES = {
 class UploadPhoneView(SupervisorRequiredMixin, View):
     def post(self, request, *args, **kwargs):
         from core.bulk_upload import procesar_carga
+        from core.carga_tracking import iniciar_lote, registrar_creacion, registrar_actualizacion
 
         def validar_fila(fila, rownum):
             errores = []
@@ -244,13 +256,22 @@ class UploadPhoneView(SupervisorRequiredMixin, View):
         if not resultado.ok:
             return resultado.respuesta_error
 
+        excel_file = request.FILES.get('excel_file')
         leads_tocados = set()
         with transaction.atomic():
+            lote = iniciar_lote('telefonos', request.user, archivo_nombre=getattr(excel_file, 'name', ''), total_filas=len(resultado.filas))
             for f in resultado.filas:
-                phone, _ = Phone.objects.get_or_create(lead=f['lead'], phone_number=f['numero'])
-                phone.phone_type = f['tipo']
-                phone.phone_number_status = f['estado']
-                phone.save()
+                phone, created = Phone.objects.get_or_create(lead=f['lead'], phone_number=f['numero'])
+                if created:
+                    phone.phone_type = f['tipo']
+                    phone.phone_number_status = f['estado']
+                    phone.save()
+                    registrar_creacion(lote, phone)
+                else:
+                    registrar_actualizacion(lote, phone, {'phone_type': f['tipo'], 'phone_number_status': f['estado']})
+                    phone.phone_type = f['tipo']
+                    phone.phone_number_status = f['estado']
+                    phone.save()
                 leads_tocados.add(f['lead'].pk)
             _recompute_inubicable_bulk(leads_tocados, request.user)
 
@@ -269,6 +290,7 @@ EMAIL_UPLOAD_ALIASES = {
 class UploadIDDemographicsView(SupervisorRequiredMixin, View):
     def post(self, request, *args, **kwargs):
         from core.bulk_upload import procesar_carga
+        from core.carga_tracking import iniciar_lote, registrar_creacion, registrar_actualizacion
 
         def validar_fila(fila, rownum):
             errores = []
@@ -292,12 +314,20 @@ class UploadIDDemographicsView(SupervisorRequiredMixin, View):
         if not resultado.ok:
             return resultado.respuesta_error
 
+        excel_file = request.FILES.get('excel_file')
         leads_tocados = set()
         with transaction.atomic():
+            lote = iniciar_lote('email', request.user, archivo_nombre=getattr(excel_file, 'name', ''), total_filas=len(resultado.filas))
             for f in resultado.filas:
-                idd, _ = IDDemographics.objects.get_or_create(lead=f['lead'])
-                idd.principal_email = f['correo']
-                idd.save()
+                idd, created = IDDemographics.objects.get_or_create(lead=f['lead'])
+                if created:
+                    idd.principal_email = f['correo']
+                    idd.save()
+                    registrar_creacion(lote, idd)
+                else:
+                    registrar_actualizacion(lote, idd, {'principal_email': f['correo']})
+                    idd.principal_email = f['correo']
+                    idd.save()
                 leads_tocados.add(f['lead'].pk)
             _recompute_inubicable_bulk(leads_tocados, request.user)
 
@@ -315,6 +345,7 @@ ADDRESS_UPLOAD_ALIASES = {
 class UploadAddressView(SupervisorRequiredMixin, View):
     def post(self, request, *args, **kwargs):
         from core.bulk_upload import procesar_carga
+        from core.carga_tracking import iniciar_lote, registrar_creacion, registrar_actualizacion
 
         def validar_fila(fila, rownum):
             errores = []
@@ -336,11 +367,19 @@ class UploadAddressView(SupervisorRequiredMixin, View):
         if not resultado.ok:
             return resultado.respuesta_error
 
+        excel_file = request.FILES.get('excel_file')
         with transaction.atomic():
+            lote = iniciar_lote('direccion', request.user, archivo_nombre=getattr(excel_file, 'name', ''), total_filas=len(resultado.filas))
             for f in resultado.filas:
-                id_demographics, _ = IDDemographics.objects.get_or_create(lead=f['lead'])
-                id_demographics.principal_address = f['direccion']
-                id_demographics.save()
+                id_demographics, created = IDDemographics.objects.get_or_create(lead=f['lead'])
+                if created:
+                    id_demographics.principal_address = f['direccion']
+                    id_demographics.save()
+                    registrar_creacion(lote, id_demographics)
+                else:
+                    registrar_actualizacion(lote, id_demographics, {'principal_address': f['direccion']})
+                    id_demographics.principal_address = f['direccion']
+                    id_demographics.save()
 
         messages.success(request, f"{len(resultado.filas)} dirección(es) cargada(s) correctamente.")
         return redirect('demographics:index')
@@ -360,6 +399,7 @@ AVAL_UPLOAD_ALIASES = {
 class UploadAvalDemographicsView(SupervisorRequiredMixin, View):
     def post(self, request, *args, **kwargs):
         from core.bulk_upload import procesar_carga
+        from core.carga_tracking import iniciar_lote, registrar_creacion, registrar_actualizacion
 
         def validar_fila(fila, rownum):
             errores = []
@@ -407,16 +447,26 @@ class UploadAvalDemographicsView(SupervisorRequiredMixin, View):
         if not resultado.ok:
             return resultado.respuesta_error
 
+        excel_file = request.FILES.get('excel_file')
         leads_tocados = set()
         with transaction.atomic():
+            lote = iniciar_lote('aval', request.user, archivo_nombre=getattr(excel_file, 'name', ''), total_filas=len(resultado.filas))
             for f in resultado.filas:
-                aval, _ = AvalDemographics.objects.get_or_create(id_demographics=f['idd'])
-                aval.aval_name = f['nombre']
-                aval.aval_rut = f['rut']
-                aval.aval_dv = f['dv']
-                aval.aval_email = f['email']
-                aval.aval_address = f['direccion']
-                aval.save()
+                aval, created = AvalDemographics.objects.get_or_create(id_demographics=f['idd'])
+                campos_nuevos = {
+                    'aval_name': f['nombre'], 'aval_rut': f['rut'], 'aval_dv': f['dv'],
+                    'aval_email': f['email'], 'aval_address': f['direccion'],
+                }
+                if created:
+                    for campo, valor in campos_nuevos.items():
+                        setattr(aval, campo, valor)
+                    aval.save()
+                    registrar_creacion(lote, aval)
+                else:
+                    registrar_actualizacion(lote, aval, campos_nuevos)
+                    for campo, valor in campos_nuevos.items():
+                        setattr(aval, campo, valor)
+                    aval.save()
                 leads_tocados.add(f['lead'].pk)
         _recompute_inubicable_bulk(leads_tocados, request.user)
 

@@ -1101,6 +1101,7 @@ class BulkActionUploadView(SupervisorRequiredMixin, View):
 
     def post(self, request, *args, **kwargs):
         from core.bulk_upload import procesar_carga
+        from core.carga_tracking import iniciar_lote, registrar_creacion
 
         report_tz = datetime.timezone(datetime.timedelta(hours=-4))
         medios_cache, resultados_cache, user_cache = {}, {}, {}
@@ -1200,7 +1201,9 @@ class BulkActionUploadView(SupervisorRequiredMixin, View):
 
         # Todo válido: se guardan las gestiones en una sola transacción (Action.save calcula el
         # status, efecto demográfico, etc., por gestión).
+        excel_file = request.FILES.get('excel_file')
         with transaction.atomic():
+            lote = iniciar_lote('gestiones', request.user, archivo_nombre=getattr(excel_file, 'name', ''), total_filas=len(resultado.filas))
             for f in resultado.filas:
                 action = Action(
                     lead=f['lead'], medio=f['medio'], resultado=f['resultado'], user=f['user'],
@@ -1213,6 +1216,11 @@ class BulkActionUploadView(SupervisorRequiredMixin, View):
                     hora = f['hora_gestion'] or datetime.time(12, 0)
                     dt = datetime.datetime.combine(f['fecha_gestion'], hora, tzinfo=report_tz)
                     Action.objects.filter(pk=action.pk).update(created_at=dt)
+                # Nota: deshacer este lote borra la gestion (y su compromiso de pago en cascada,
+                # PaymentCommitment.action es CASCADE), pero el status ACTUAL del lead -- que
+                # Action.save() ya recalculo -- no se revierte solo; si hace falta, se corrige a
+                # mano o lo arregla la reconciliacion nocturna (actions.tasks.reconciliar_estados).
+                registrar_creacion(lote, action)
 
         messages.success(request, f'{len(resultado.filas)} gestión(es) cargada(s) correctamente.')
         return redirect('actions:bulk_upload')
