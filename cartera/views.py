@@ -166,6 +166,64 @@ class SubcarteraDeleteView(CarteraManageRequiredMixin, View):
         return redirect('cartera:detail', pk=cartera_pk)
 
 
+class AsignarArbolView(CarteraManageRequiredMixin, View):
+    """
+    Asigna a esta cartera una de las 3 plantillas de arbol de gestiones (Galgo/Tanner/Nuevo
+    Capital). Solo admin/owner, y solo UNA vez: en esta version no hay forma de cambiarlo desde
+    la web (evita dejar el arbol en un estado ambiguo, mitad una plantilla mitad otra). Una
+    version futura permitira editar nodos sueltos sin reasignar todo.
+    """
+    def post(self, request, pk, *args, **kwargs):
+        from django.utils import timezone
+        from actions.arbol_templates import APLICAR_POR_TIPO, REQUIERE_EXCEL
+
+        cartera = get_object_or_404(Cartera, pk=pk)
+
+        if cartera.arbol_tipo:
+            messages.error(
+                request,
+                f'Esta cartera ya tiene un árbol asignado ({cartera.get_arbol_tipo_display()}). '
+                'No se puede cambiar en esta versión.',
+            )
+            return redirect('cartera:detail', pk=cartera.pk)
+
+        tipo = request.POST.get('arbol_tipo')
+        if tipo not in APLICAR_POR_TIPO:
+            messages.error(request, 'Elige un árbol válido (Galgo, Tanner o Nuevo Capital).')
+            return redirect('cartera:detail', pk=cartera.pk)
+
+        excel_file = request.FILES.get('excel_file')
+        if tipo in REQUIERE_EXCEL:
+            if not excel_file:
+                messages.error(request, 'Ese árbol necesita que subas el Excel de origen.')
+                return redirect('cartera:detail', pk=cartera.pk)
+            if excel_file.size > 10 * 1024 * 1024:
+                messages.error(request, 'El archivo supera el máximo de 10 MB.')
+                return redirect('cartera:detail', pk=cartera.pk)
+
+        try:
+            if tipo in REQUIERE_EXCEL:
+                stats = APLICAR_POR_TIPO[tipo](cartera, excel_file)
+            else:
+                stats = APLICAR_POR_TIPO[tipo](cartera)
+        except Exception as exc:
+            messages.error(request, f'No se pudo aplicar el árbol: {exc}')
+            return redirect('cartera:detail', pk=cartera.pk)
+
+        cartera.arbol_tipo = tipo
+        cartera.arbol_asignado_at = timezone.now()
+        cartera.arbol_asignado_por = request.user
+        cartera.save(update_fields=['arbol_tipo', 'arbol_asignado_at', 'arbol_asignado_por'])
+
+        messages.success(
+            request,
+            f'Árbol "{cartera.get_arbol_tipo_display()}" asignado: '
+            f'{stats["medios_creados"]} medio(s), {stats["resultados_creados"]} resultado(s) nuevo(s), '
+            f'{stats["resultados_actualizados"]} actualizado(s).',
+        )
+        return redirect('cartera:detail', pk=cartera.pk)
+
+
 class SubcarteraSetDefaultView(CarteraManageRequiredMixin, View):
     """Cambia cual subcartera es la predeterminada dentro de una cartera (destino de las cargas
     de clientes que no especifican subcartera explicita)."""

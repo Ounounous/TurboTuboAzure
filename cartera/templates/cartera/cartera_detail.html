@@ -56,6 +56,52 @@
     </form>
   </div>
 
+  {% if puede_gestionar_subcarteras %}
+    <div class="card p-4 mb-6">
+      <h2 class="mb-2 text-lg font-bold">Árbol de gestiones</h2>
+      {% if cartera.arbol_tipo %}
+        <p style="font-size:13px;">
+          Árbol asignado: <strong>{{ cartera.get_arbol_tipo_display }}</strong>
+          {% if cartera.arbol_asignado_at %}· {{ cartera.arbol_asignado_at|date:"d-m-Y H:i" }}{% endif %}
+          {% if cartera.arbol_asignado_por %}· {{ cartera.arbol_asignado_por.username }}{% endif %}
+        </p>
+        <p class="muted" style="font-size:12px;">No se puede cambiar el árbol una vez asignado (en esta versión).</p>
+      {% else %}
+        <p class="muted mb-3" style="font-size:12.5px;">
+          Elige el árbol de gestiones (medios y resultados) de esta cartera.
+          <strong>Una vez asignado no se puede cambiar</strong> — revísalo bien antes de aplicar.
+        </p>
+        <form method="post" action="{% url 'cartera:asignar_arbol' cartera.pk %}" enctype="multipart/form-data"
+              onsubmit="return confirm('¿Aplicar este árbol a la cartera? No se puede deshacer.');">
+          {% csrf_token %}
+          <div style="display:flex; flex-direction:column; gap:8px; max-width:460px; font-size:13px;">
+            <label style="display:flex; align-items:center; gap:6px;">
+              <input type="radio" name="arbol_tipo" value="tanner" onchange="ttArbolToggleFile(this)" required>
+              <span><strong>Tanner</strong> — árbol fijo, no requiere archivo.</span>
+            </label>
+            <label style="display:flex; align-items:center; gap:6px;">
+              <input type="radio" name="arbol_tipo" value="galgo" onchange="ttArbolToggleFile(this)">
+              <span><strong>Galgo</strong> — requiere Excel (Medio, Resultado, Contactabilidad, DEFAULT, CREA COMPROMISO).</span>
+            </label>
+            <label style="display:flex; align-items:center; gap:6px;">
+              <input type="radio" name="arbol_tipo" value="nuevo_capital" onchange="ttArbolToggleFile(this)">
+              <span><strong>Nuevo Capital</strong> — requiere Excel (Paleta de Respuestas).</span>
+            </label>
+            <div id="tt_arbol_file_wrap" style="display:none;">
+              <input type="file" name="excel_file" accept=".xlsx">
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary mt-3">Asignar árbol</button>
+        </form>
+        <script>
+          function ttArbolToggleFile(radio) {
+            document.getElementById('tt_arbol_file_wrap').style.display = radio.value === 'tanner' ? 'none' : 'block';
+          }
+        </script>
+      {% endif %}
+    </div>
+  {% endif %}
+
   {% if medios or resultados %}
   <details class="card p-4" style="border: 1px solid var(--border); border-radius: 10px;">
     <summary style="cursor: pointer; font-size: 1.05rem; font-weight: 800; margin: 0; user-select: none;">

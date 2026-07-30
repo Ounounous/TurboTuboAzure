@@ -4,6 +4,15 @@ from django.utils.text import slugify
 
 
 class Cartera(models.Model):
+    ARBOL_GALGO = 'galgo'
+    ARBOL_TANNER = 'tanner'
+    ARBOL_NUEVO_CAPITAL = 'nuevo_capital'
+    CHOICES_ARBOL = (
+        (ARBOL_GALGO, 'Galgo'),
+        (ARBOL_TANNER, 'Tanner'),
+        (ARBOL_NUEVO_CAPITAL, 'Nuevo Capital'),
+    )
+
     nombre = models.CharField(max_length=255, unique=True)
     slug = models.SlugField(max_length=255, unique=True, blank=True)
     activo = models.BooleanField(default=True)
@@ -12,6 +21,15 @@ class Cartera(models.Model):
         null=True, blank=True, related_name='carteras_creadas'
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    # Que plantilla de arbol de gestiones (medios/resultados) tiene esta cartera. Se asigna UNA
+    # vez desde Carteras -> detalle (solo admin/owner) y, en esta version, no se puede volver
+    # atras -- mezclar dos plantillas en la misma cartera dejaria el arbol en un estado ambiguo.
+    # Una version futura permitira editar nodos sueltos sin reasignar todo.
+    arbol_tipo = models.CharField(max_length=20, choices=CHOICES_ARBOL, blank=True)
+    arbol_asignado_at = models.DateTimeField(null=True, blank=True)
+    arbol_asignado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='+',
+    )
 
     class Meta:
         ordering = ('nombre',)
