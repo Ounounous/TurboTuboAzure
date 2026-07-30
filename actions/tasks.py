@@ -591,3 +591,45 @@ def verificar_tareas_programadas():
     if not problemas:
         logger.info('verificar_tareas_programadas: todas las tareas criticas al dia.')
     return problemas
+
+
+@shared_task(**RETRY_DB)
+def generar_zip_grabaciones(job_id):
+    """
+    Arma el ZIP de grabaciones de un GrabacionesExportJob en el WORKER (no en la web). Lee el Excel
+    que subio el usuario, junta las grabaciones visibles para el, y guarda el ZIP en el propio job.
+    Cualquier fallo deja el job en estado ERROR con el detalle, nunca revienta en silencio.
+    """
+    from django.core.files.base import ContentFile
+    from actions.exports import construir_zip_grabaciones
+    from actions.models import GrabacionesExportJob
+
+    try:
+        job = GrabacionesExportJob.objects.get(pk=job_id)
+    except GrabacionesExportJob.DoesNotExist:
+        logger.warning(f"generar_zip_grabaciones: job {job_id} no existe (¿se borró?)")
+        return
+
+    job.estado = GrabacionesExportJob.PROCESANDO
+    job.save(update_fields=['estado'])
+
+    try:
+        with job.excel.open('rb') as excel_fileobj:
+            spool, total, errores = construir_zip_grabaciones(excel_fileobj, job.solicitado_por)
+
+        job.total = total
+        job.errores = '\n'.join(errores)
+        if total == 0:
+            job.estado = GrabacionesExportJob.VACIO
+        else:
+            spool.seek(0)
+            job.archivo.save(f'grabaciones_{job.pk}.zip', ContentFile(spool.read()), save=False)
+            job.estado = GrabacionesExportJob.LISTO
+        spool.close()
+    except Exception:
+        logger.exception(f"generar_zip_grabaciones: falló el job {job_id}")
+        job.estado = GrabacionesExportJob.ERROR
+        job.errores = 'Ocurrió un error generando el ZIP. Reintenta o avisa a soporte.'
+
+    job.finished_at = timezone.now()
+    job.save(update_fields=['estado', 'total', 'errores', 'archivo', 'finished_at'])

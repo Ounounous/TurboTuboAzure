@@ -105,14 +105,18 @@
 
   <hr class="my-6">
 
-  <h2 class="mb-2 text-lg font-bold">Descargar grabaciones en lote (ZIP)</h2>
+  <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+    <h2 class="text-lg font-bold" style="margin:0;">Descargar grabaciones en lote (ZIP)</h2>
+    <a href="{% url 'actions:recordings_exports' %}" class="btn btn-secondary">Mis exports</a>
+  </div>
   <p class="mb-2 text-sm">
     Sube un Excel con columnas <strong>CARTERA, SUBCARTERA, ID, FECHA</strong> (fecha opcional — si la dejas vacía, baja todas las grabaciones de ese ID).
+    El ZIP se genera en segundo plano; aparece en <strong>Mis exports</strong> cuando está listo, sin que tengas que esperar aquí.
   </p>
   <form method="post" action="{% url 'actions:recordings_export' %}" enctype="multipart/form-data">
     {% csrf_token %}
     <input type="file" name="excel_file" required>
-    <button type="submit" class="btn btn-primary mt-2">Descargar ZIP</button>
+    <button type="submit" class="btn btn-primary mt-2">Generar ZIP</button>
   </form>
 </div>
 {% endblock %}

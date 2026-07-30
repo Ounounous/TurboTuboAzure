@@ -452,3 +452,46 @@ class Payment(models.Model):
 
     def __str__(self):
         return f"Pago {self.lead.op} - {self.monto} ({self.fecha})"
+
+
+class GrabacionesExportJob(models.Model):
+    """
+    Un pedido de export de grabaciones a ZIP. El ZIP se arma en el WORKER de Celery (no en el
+    proceso web), asi una descarga grande nunca frena el ingreso de gestiones. El usuario sube el
+    Excel, se crea el job y se le avisa "en proceso"; cuando el worker termina, queda para descargar.
+    """
+    PENDIENTE = 'pendiente'
+    PROCESANDO = 'procesando'
+    LISTO = 'listo'
+    VACIO = 'vacio'
+    ERROR = 'error'
+    CHOICES_ESTADO = [
+        (PENDIENTE, _('En cola')),
+        (PROCESANDO, _('Procesando')),
+        (LISTO, _('Listo para descargar')),
+        (VACIO, _('Sin grabaciones')),
+        (ERROR, _('Error')),
+    ]
+
+    solicitado_por = models.ForeignKey(User, on_delete=models.CASCADE, related_name='export_jobs_grabaciones')
+    # El Excel subido: el worker lo lee para saber que grabaciones juntar.
+    excel = models.FileField(upload_to='exports/grabaciones/entrada/%Y/%m/')
+    # El ZIP resultante (vacio hasta que el worker termina).
+    archivo = models.FileField(upload_to='exports/grabaciones/salida/%Y/%m/', blank=True)
+    estado = models.CharField(max_length=12, choices=CHOICES_ESTADO, default=PENDIENTE)
+    total = models.PositiveIntegerField(default=0)
+    errores = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = _('Export de grabaciones')
+        verbose_name_plural = _('Exports de grabaciones')
+
+    def __str__(self):
+        return f"Export grabaciones #{self.pk} ({self.estado}) - {self.solicitado_por}"
+
+    @property
+    def en_curso(self):
+        return self.estado in (self.PENDIENTE, self.PROCESANDO)
