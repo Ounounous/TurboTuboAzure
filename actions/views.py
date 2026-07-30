@@ -179,11 +179,17 @@ class ActionIndexView(LoginRequiredMixin, View):
             cartera__nombre__iexact='Tanner'
         ).select_related('cartera')
 
+        # Equipos para "Descargar gestiones del equipo": admin/owner puede bajar cualquiera;
+        # supervisor/cobrador solo los suyos (coincide exacto con lo que ya permite
+        # ActionDownloadExcelView -- asi el desplegable nunca ofrece un equipo que despues de
+        # un 403 al intentar bajarlo).
+        equipos_descarga = Team.objects.all() if es_admin_owner(request.user) else request.user.teams.all()
+
         return render(
             request,
             'actions/action_index.html',
             {
-                'all_teams': Team.objects.all(),
+                'all_teams': equipos_descarga,
                 'all_carteras': all_carteras,
                 'tanner_subcarteras': tanner_subcarteras,
                 'usuarios_tabla': usuarios_tabla,
@@ -818,11 +824,12 @@ class TannerReportView(SupervisorRequiredMixin, View):
     FechaGestiones_BaseGestiones2_40.txt. Se envia manualmente por correo a
     gestionescobranza@tanner.cl (no se automatiza el envio, solo se genera el archivo).
 
-    Sin el parametro `subcartera`, es el reporte OFICIAL (todo Tanner junto) -- para admin/owner
-    (sin restriccion) sigue siendo el archivo completo de siempre; para un supervisor ya viene
-    acotado por scope_por_lead a sus propias subcarteras. Con `subcartera` (opcional, un id),
-    un supervisor puede bajar SOLO esa subcartera suya -- util cuando supervisa 2+ y quiere
-    revisar una por separado en el mismo formato, sin tener que esperar al archivo combinado.
+    Sin el parametro `subcartera`, es el reporte OFICIAL: TODO Tanner junto, sin importar quien lo
+    baje -- el envio regulatorio a Tanner es UNO solo por dia para toda la cartera, asi que
+    cualquier supervisor (no solo admin/owner) puede generar el archivo completo. Con `subcartera`
+    (opcional, un id), un supervisor puede bajar SOLO esa subcartera suya -- util cuando supervisa
+    2+ y quiere revisar una por separado en el mismo formato, sin tener que esperar al combinado;
+    ahi si se acota por scope_por_lead, para que no pueda pedir la subcartera de otro supervisor.
     """
 
     def get(self, request, *args, **kwargs):
@@ -838,18 +845,17 @@ class TannerReportView(SupervisorRequiredMixin, View):
         start = datetime.datetime.combine(fecha, datetime.time.min, tzinfo=report_tz)
         end = datetime.datetime.combine(fecha, datetime.time.max, tzinfo=report_tz)
 
-        actions = scope_por_lead(Action.objects.filter(
+        actions = Action.objects.filter(
             subcartera__cartera__nombre__iexact='Tanner',
             created_at__gte=start,
             created_at__lte=end,
-        ).select_related('lead', 'medio', 'resultado', 'user__userprofile', 'phone'), request.user)
+        ).select_related('lead', 'medio', 'resultado', 'user__userprofile', 'phone')
 
         subcartera_id = request.GET.get('subcartera')
         if subcartera_id:
-            # scope_por_lead ya acoto `actions` al alcance del usuario -- este filtro solo puede
-            # ACHICARLO mas (nunca ampliarlo), asi que no hace falta validar el id por separado:
-            # si no es una subcartera suya, la interseccion queda vacia y responde 404 mas abajo.
-            actions = actions.filter(subcartera_id=subcartera_id)
+            # Solo aca se acota al alcance real del usuario: pedir "mi subcartera" no debe poder
+            # devolver la de otro supervisor.
+            actions = scope_por_lead(actions, request.user).filter(subcartera_id=subcartera_id)
 
         if not actions.exists():
             return JsonResponse({'error': 'No hay gestiones de Tanner para esa fecha.'}, status=404)
@@ -1365,10 +1371,20 @@ class PaymentListView(LoginRequiredMixin, View):
                 'active': selected_cartera == str(cartera.id),
             })
 
-        # Tabla: todos los pagos (no solo los de este mes), filtrados por la cartera elegida.
+        # Pagos historicos: busqueda libre por OP y/o fecha exacta sobre TODOS los pagos (no solo
+        # el mes) -- antes la unica forma de encontrar un pago viejo era entrar al lead uno por
+        # uno. Independiente del filtro de cartera de arriba (se combinan).
+        hist_op = request.GET.get('hist_op', '').strip()
+        hist_fecha = request.GET.get('hist_fecha', '').strip()
         tabla_qs = payments
         if selected_cartera:
             tabla_qs = tabla_qs.filter(subcartera__cartera_id=selected_cartera)
+        if hist_op:
+            tabla_qs = tabla_qs.filter(lead__op__icontains=hist_op)
+        if hist_fecha:
+            parsed_fecha = parse_date(hist_fecha)
+            if parsed_fecha:
+                tabla_qs = tabla_qs.filter(fecha=parsed_fecha)
         tabla_pagos = list(tabla_qs[:300])
 
         context = {
@@ -1378,6 +1394,8 @@ class PaymentListView(LoginRequiredMixin, View):
             'resumen_mes_total': resumen_mes_total,
             'tabla_pagos': tabla_pagos,
             'selected_cartera': selected_cartera,
+            'hist_op': hist_op,
+            'hist_fecha': hist_fecha,
         }
         return render(request, self.template_name, context)
 
@@ -1399,6 +1417,10 @@ class NuevoCapitalReportView(SupervisorRequiredMixin, View):
     Operacion, RUT, Dv, FechaGest, HoraGest, Usuario, Accion, Sub Estado, Estado,
     Comentario, Fecha Compromiso, Monto Compromiso, Telefono, eMail, Origen Gestion(In=1/Out=2),
     Externo(ZONA SUR).
+
+    Como en Tanner, es el reporte OFICIAL: la cartera COMPLETA para el dia, sin acotar por
+    scope_por_lead -- el envio regulatorio es uno solo por dia, no por subcartera, asi que
+    cualquier supervisor (no solo admin/owner) puede generarlo.
     """
 
     HEADERS = [
@@ -1419,11 +1441,11 @@ class NuevoCapitalReportView(SupervisorRequiredMixin, View):
         start = datetime.datetime.combine(fecha, datetime.time.min, tzinfo=report_tz)
         end = datetime.datetime.combine(fecha, datetime.time.max, tzinfo=report_tz)
 
-        actions = scope_por_lead(Action.objects.filter(
+        actions = Action.objects.filter(
             subcartera__cartera__nombre__iexact='Nuevo Capital',
             created_at__gte=start,
             created_at__lte=end,
-        ).select_related('lead', 'medio', 'resultado', 'user', 'phone'), request.user)
+        ).select_related('lead', 'medio', 'resultado', 'user', 'phone')
 
         if not actions.exists():
             return JsonResponse({'error': 'No hay gestiones de Nuevo Capital para esa fecha.'}, status=404)
