@@ -77,7 +77,7 @@
       <table class="table-dense">
         <thead><tr>
           <th>Usuario</th><th>Nombre</th><th>RUT</th><th>Rol</th><th>Equipo</th>
-          <th>Correo / Teléfono</th><th>SIP (usuario · anexo)</th><th>Configurar SIP</th>
+          <th>Correo / Teléfono</th><th>SIP (usuario · anexo)</th><th>Configurar SIP</th><th>Resetear clave</th>
         </tr></thead>
         <tbody>
           {% for u in usuarios %}
@@ -180,9 +180,29 @@
                   </form>
                 </details>
               </td>
+
+              {# Resetear clave — solo admin/owner: pone una clave nueva directamente #}
+              <td>
+                {% if es_admin %}
+                <details>
+                  <summary class="cursor-pointer" style="font-size:12px; font-weight:600; color:var(--text-muted);">🔑 Resetear</summary>
+                  <form method="post" action="{% url 'configuracion:usuarios_permisos' %}" style="display:flex; flex-direction:column; gap:5px; margin-top:8px; min-width:200px;" onsubmit="return confirm('¿Poner una clave nueva a {{ u.username }}? Se le pedirá cambiarla en su próximo ingreso.');">
+                    {% csrf_token %}
+                    <input type="hidden" name="accion" value="resetear_password">
+                    <input type="hidden" name="user_id" value="{{ u.id }}">
+                    <label style="font-size:11px;">Nueva clave
+                      <input type="password" name="new_password" autocomplete="new-password" required style="width:100%; font-size:12px;">
+                    </label>
+                    <button type="submit" class="btn btn-primary" style="font-size:11px; padding:4px 10px;">Guardar clave</button>
+                  </form>
+                </details>
+                {% else %}
+                  <span class="muted">—</span>
+                {% endif %}
+              </td>
             </tr>
           {% empty %}
-            <tr><td colspan="8" class="muted" style="text-align:center; padding:16px;">No hay usuarios en tu equipo.</td></tr>
+            <tr><td colspan="9" class="muted" style="text-align:center; padding:16px;">No hay usuarios en tu equipo.</td></tr>
           {% endfor %}
         </tbody>
       </table>

@@ -177,6 +177,28 @@ class UsuariosPermisosView(LoginRequiredMixin, View):
                 userprofile.save(update_fields=['active_team'])
                 messages.success(request, f'{user.username} ahora pertenece al equipo "{nuevo_equipo.name}".')
 
+        elif accion == 'resetear_password':
+            user = get_object_or_404(User, pk=request.POST.get('user_id'))
+            nueva_clave = request.POST.get('new_password', '')
+            from django.contrib.auth.password_validation import validate_password
+            from django.core.exceptions import ValidationError as DjangoValidationError
+            try:
+                validate_password(nueva_clave, user=user)
+            except DjangoValidationError as exc:
+                for error in exc.messages:
+                    messages.error(request, f'Clave de {user.username}: {error}')
+            else:
+                user.set_password(nueva_clave)
+                user.save(update_fields=['password'])
+                # Misma logica que al crear usuario: la clave que puso el admin es TEMPORAL.
+                userprofile, _ = Userprofile.objects.get_or_create(user=user)
+                userprofile.must_change_password = True
+                userprofile.save(update_fields=['must_change_password'])
+                messages.success(
+                    request,
+                    f'Clave de {user.username} reseteada. Se le pedirá cambiarla en su próximo ingreso.'
+                )
+
         elif accion == 'asignar_supervisores':
             subcartera = get_object_or_404(Subcartera, pk=request.POST.get('subcartera_id'))
             ids = request.POST.getlist('supervisores')
