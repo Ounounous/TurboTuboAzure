@@ -110,13 +110,21 @@
     <a href="{% url 'actions:recordings_exports' %}" class="btn btn-secondary">Mis exports</a>
   </div>
   <p class="mb-2 text-sm">
-    Sube un Excel con columnas <strong>CARTERA, SUBCARTERA, ID, FECHA</strong> (fecha opcional — si la dejas vacía, baja todas las grabaciones de ese ID).
     El ZIP se genera en segundo plano; aparece en <strong>Mis exports</strong> cuando está listo, sin que tengas que esperar aquí.
   </p>
-  <form method="post" action="{% url 'actions:recordings_export' %}" enctype="multipart/form-data">
+  <a href="{% url 'actions:recordings_export_template' %}" class="btn btn-secondary mb-3">Descargar plantilla (.xlsx)</a>
+  <form method="post" action="{% url 'actions:recordings_export' %}" enctype="multipart/form-data" class="mb-3">
     {% csrf_token %}
     <input type="file" name="excel_file" required>
     <button type="submit" class="btn btn-primary mt-2">Generar ZIP</button>
   </form>
+  <div class="card p-4" style="max-width:640px;">
+    <h4 class="font-bold mb-2" style="font-size:13px;">Columnas</h4>
+    <ul class="list-disc list-inside space-y-1" style="font-size:13px;">
+      <li><strong>cartera</strong>, <strong>subcartera</strong>, <strong>op</strong> (ID) — identifican al cliente. Obligatorias.</li>
+      <li><strong>fecha</strong> — formato AAAA-MM-DD. Opcional: si se deja vacía, se bajan todas las grabaciones de ese cliente.</li>
+    </ul>
+    <p class="muted mt-2" style="font-size:12px;">Máximo 500 grabaciones por descarga — si necesitas más, acota el Excel y descarga por tramos.</p>
+  </div>
 </div>
 {% endblock %}

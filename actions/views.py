@@ -705,6 +705,26 @@ class SyncRecordingsNowView(LoginRequiredMixin, View):
         return redirect('actions:recordings_list')
 
 
+class RecordingsExportTemplateView(SupervisorRequiredMixin, View):
+    """Plantilla Excel para elegir qué grabaciones exportar en lote."""
+    def get(self, request, *args, **kwargs):
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = 'Grabaciones'
+        ws.append(['cartera', 'subcartera', 'op', 'fecha'])
+        ws.append(['CARTERA-EJEMPLO', 'SUBCARTERA-EJEMPLO', 'OP-EJEMPLO', '2026-07-30'])
+
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+        response = HttpResponse(
+            content=output.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        response['Content-Disposition'] = 'attachment; filename=plantilla_exportar_grabaciones.xlsx'
+        return response
+
+
 class RecordingsExportZipView(SupervisorRequiredMixin, View):
     """
     Recibe el Excel y encola el armado del ZIP en el WORKER de Celery (no lo arma en el proceso
