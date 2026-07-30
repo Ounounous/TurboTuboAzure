@@ -20,6 +20,7 @@ from openpyxl import load_workbook
 
 from .forms import AddFileForm, AddLeadForm, UploadExcelFileForm, UploadAssignmentFileForm, QuickAssignForm
 from .models import Lead, LeadAssignment, LeadFile, LeadNote, User
+from core.concurrency import con_limite_concurrencia
 from cartera.models import Cartera, Subcartera
 from demographics.models import IDDemographics, AvalDemographics, IDItem, Phone
 
@@ -531,6 +532,7 @@ class UploadExcelFileView(_SupervisorGate, View):
         return redirect('leads:list')
 
 class DownloadExcelView(_SupervisorGate, View):
+    @con_limite_concurrencia('export_excel', slots=2)
     def get(self, request, *args, **kwargs):
         from .permissions import leads_visibles
         # Create your Excel file here

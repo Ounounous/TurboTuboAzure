@@ -1,7 +1,4 @@
 import datetime
-import shutil
-import tempfile
-import zipfile
 
 from django.contrib import messages
 from django.contrib.auth.models import User
@@ -29,6 +26,7 @@ from cartera.models import Cartera, Subcartera
 from demographics.models import CONTACT_ACTIVE, IDDemographics, Phone
 from demographics.views import find_lead, _normalize_header
 from .forms import ActionForm, AddEmailQuickForm, AddPhoneQuickForm, LeadSearchForm, DemographicSelectionForm, PaymentForm
+from core.concurrency import con_limite_concurrencia
 import openpyxl
 import re
 from io import BytesIO
@@ -477,6 +475,7 @@ class OriginatePbxCallView(LoginRequiredMixin, View):
         return JsonResponse({'ok': True})
 
 class ActionDownloadExcelView(LoginRequiredMixin, View):
+    @con_limite_concurrencia('export_excel', slots=2)
     def get(self, request, *args, **kwargs):
         scope = kwargs.get('scope', 'team')
 
@@ -707,96 +706,68 @@ class SyncRecordingsNowView(LoginRequiredMixin, View):
 
 
 class RecordingsExportZipView(SupervisorRequiredMixin, View):
-    # Tope de grabaciones por export: acota una operacion que si no es potencialmente ilimitada
-    # (un Excel con muchos OP podria pedir miles de audios). Con el tope, se pide acotar el Excel.
-    MAX_GRABACIONES = 500
-
+    """
+    Recibe el Excel y encola el armado del ZIP en el WORKER de Celery (no lo arma en el proceso
+    web): asi una descarga grande de grabaciones nunca frena el ingreso de gestiones ni se cae por
+    timeout. El usuario queda en la lista de exports, donde ve el progreso y descarga cuando esta.
+    """
     def post(self, request, *args, **kwargs):
         excel_file = request.FILES.get('excel_file')
         if not excel_file:
             messages.error(request, 'Debes subir un archivo Excel.')
             return redirect('actions:recordings_list')
 
-        wb = load_workbook(excel_file)
-        sheet = wb.active
+        from .models import GrabacionesExportJob
+        from .tasks import generar_zip_grabaciones
+        job = GrabacionesExportJob.objects.create(
+            solicitado_por=request.user,
+            excel=excel_file,
+        )
+        # Se procesa en el worker; si Celery/Redis no responde, no se pierde el pedido (queda
+        # PENDIENTE y la tarea periodica lo puede retomar / se reintenta manual).
+        try:
+            generar_zip_grabaciones.delay(job.pk)
+        except Exception:
+            logger.exception('No se pudo encolar generar_zip_grabaciones; queda pendiente.')
 
-        # El ZIP se arma en un archivo temporal que se vuelca a DISCO pasado un umbral (no se
-        # queda entero en RAM como el BytesIO anterior) y cada audio se copia en streaming, no
-        # leyendolo completo a memoria -- clave para no tumbar el worker del B1 con un export grande.
-        spool = tempfile.SpooledTemporaryFile(max_size=8 * 1024 * 1024)
-        errors = []
-        total = 0
-        excedido = False
+        messages.success(
+            request,
+            'Estamos generando el ZIP de grabaciones. Aparecerá para descargar en "Mis exports" '
+            'en cuanto esté listo (no necesitas esperar en esta página).'
+        )
+        return redirect('actions:recordings_exports')
 
-        with zipfile.ZipFile(spool, 'w', zipfile.ZIP_DEFLATED) as zf:
-            used_names = set()
-            for row_number, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
-                if excedido:
-                    break
-                cartera, subcartera, op, fecha = (list(row) + [None] * 4)[:4]
-                if not cartera or not subcartera or not op:
-                    errors.append(f"Fila {row_number}: faltan cartera, subcartera u OP.")
-                    continue
 
-                lead = find_lead(cartera, subcartera, op)
-                if not lead:
-                    errors.append(f"Fila {row_number}: no se encontró lead OP={op} en Cartera={cartera}, Subcartera={subcartera}.")
-                    continue
+class RecordingsExportListView(SupervisorRequiredMixin, ListView):
+    """Lista los exports de grabaciones del usuario (los suyos; admin/owner ven todos), con su
+    estado y el link de descarga cuando estan listos."""
+    template_name = 'actions/recordings_exports.html'
+    context_object_name = 'jobs'
+    paginate_by = 20
 
-                # Alcance: solo grabaciones de leads visibles para el usuario (antes se exportaba
-                # cualquier lead que find_lead encontrara, sin mirar la cartera del supervisor).
-                recordings = scope_por_lead(CallRecording.objects.filter(lead=lead), request.user)
+    def get_queryset(self):
+        from .models import GrabacionesExportJob
+        qs = GrabacionesExportJob.objects.select_related('solicitado_por')
+        if not es_admin_owner(self.request.user):
+            qs = qs.filter(solicitado_por=self.request.user)
+        return qs
 
-                if fecha:
-                    parsed_date = None
-                    if isinstance(fecha, (datetime.date, datetime.datetime)):
-                        parsed_date = fecha.date() if isinstance(fecha, datetime.datetime) else fecha
-                    else:
-                        parsed_date = parse_date(str(fecha).strip())
-                    if parsed_date:
-                        recordings = recordings.filter(
-                            Q(call_date__date=parsed_date) | Q(call_date__isnull=True, created_at__date=parsed_date)
-                        )
-                    else:
-                        errors.append(f"Fila {row_number}: no se pudo interpretar la fecha '{fecha}', se ignoró el filtro.")
 
-                for recording in recordings.iterator():
-                    if not recording.audio_file:
-                        continue
-                    if total >= self.MAX_GRABACIONES:
-                        excedido = True
-                        break
-                    name = recording.audio_file.name.rsplit('/', 1)[-1]
-                    while name in used_names:
-                        name = f"dup_{name}"
-                    used_names.add(name)
-                    # Streaming: se copia el audio en bloques hacia el ZIP, sin cargarlo entero.
-                    with recording.audio_file.open('rb') as src, zf.open(name, 'w') as dst:
-                        shutil.copyfileobj(src, dst, length=64 * 1024)
-                    total += 1
+class RecordingsExportDownloadView(SupervisorRequiredMixin, View):
+    """Descarga el ZIP ya generado de un job. Solo el dueño del job (o admin/owner) puede bajarlo."""
+    def get(self, request, *args, **kwargs):
+        from .models import GrabacionesExportJob
+        job = get_object_or_404(GrabacionesExportJob, pk=kwargs.get('pk'))
+        if job.solicitado_por_id != request.user.pk and not es_admin_owner(request.user):
+            raise PermissionDenied
+        if job.estado != GrabacionesExportJob.LISTO or not job.archivo:
+            messages.error(request, 'Ese export todavía no está listo o no tiene archivo.')
+            return redirect('actions:recordings_exports')
 
-            if excedido:
-                errors.append(
-                    f"Se alcanzó el máximo de {self.MAX_GRABACIONES} grabaciones por descarga. "
-                    "Acota el Excel (menos OP o un rango de fechas) y descarga por tramos."
-                )
-            if errors:
-                zf.writestr('errores.txt', '\n'.join(errors))
-
-        if total == 0:
-            spool.close()
-            messages.error(request, 'No se encontraron grabaciones para las filas del Excel subido.')
-            for error in errors:
-                messages.error(request, error)
-            return redirect('actions:recordings_list')
-
-        spool.seek(0)
         from configuracion.models import AccessLog, registrar_acceso
-        registrar_acceso(request.user, AccessLog.DESCARGAR_GRABACIONES, detail=f'ZIP de {total} grabación(es)')
-        # FileResponse transmite desde el temporal en disco (no lo re-lee entero a memoria) y lo
-        # cierra al terminar.
-        response = FileResponse(spool, as_attachment=True, filename='grabaciones.zip',
-                                content_type='application/zip')
+        registrar_acceso(request.user, AccessLog.DESCARGAR_GRABACIONES, detail=f'ZIP de {job.total} grabación(es)')
+        response = FileResponse(job.archivo.open('rb'), as_attachment=True,
+                                filename=f'grabaciones_{job.pk}.zip', content_type='application/zip')
         return response
 
 
