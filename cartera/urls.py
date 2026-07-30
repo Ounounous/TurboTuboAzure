@@ -10,4 +10,6 @@ urlpatterns = [
     path('<int:pk>/', views.CarteraDetailView.as_view(), name='detail'),
     path('<int:pk>/delete/', views.CarteraDeleteView.as_view(), name='delete'),
     path('<int:cartera_pk>/subcarteras/add/', views.SubcarteraCreateView.as_view(), name='add_subcartera'),
+    path('<int:cartera_pk>/subcarteras/<int:pk>/eliminar/', views.SubcarteraDeleteView.as_view(), name='delete_subcartera'),
+    path('<int:cartera_pk>/subcarteras/<int:pk>/marcar-default/', views.SubcarteraSetDefaultView.as_view(), name='set_default_subcartera'),
 ]

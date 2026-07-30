@@ -1,6 +1,7 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.db.models import Count, Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
@@ -68,9 +69,15 @@ class CarteraDetailView(CarteraViewRequiredMixin, DetailView):
         # Solo las subcarteras que el usuario supervisa dentro de esta cartera (admin/owner: todas).
         # Una cartera con varias subcarteras (ej. Tanner con una por supervisor) no debe mostrarle
         # a un supervisor las subcarteras -- y sus clientes -- de otro.
-        context['subcarteras'] = subcarteras_visibles(self.request.user).filter(cartera=self.object)
+        context['subcarteras'] = subcarteras_visibles(self.request.user).filter(
+            cartera=self.object
+        ).annotate(n_leads=Count('leads'))
         context['subcartera_form'] = SubcarteraForm()
         context['puede_eliminar'] = _puede_eliminar_cartera(self.request.user, self.object)
+        # Crear/eliminar subcarteras y cambiar cual es la predeterminada: solo admin/owner (mismo
+        # criterio que crear subcarteras -- CarteraManageRequiredMixin), no el supervisor que
+        # creo la cartera.
+        context['puede_gestionar_subcarteras'] = es_admin_owner(self.request.user)
 
         # Árbol de decisiones
         context['medios'] = Medio.objects.filter(cartera=self.object).order_by('nombre')
@@ -125,3 +132,48 @@ class SubcarteraCreateView(CarteraManageRequiredMixin, CreateView):
 
     def get_success_url(self):
         return reverse_lazy('cartera:detail', kwargs={'pk': self.cartera.pk})
+
+
+class SubcarteraDeleteView(CarteraManageRequiredMixin, View):
+    """Elimina una subcartera vacia. Bloqueada si: tiene clientes (Lead.subcartera es PROTECT --
+    borrarla igual reventaria con un error feo sin este chequeo previo), es la subcartera por
+    defecto (romperia las cargas de clientes sin subcartera explicita -- primero hay que marcar
+    otra como predeterminada), o es la unica subcartera de la cartera (para eso se elimina la
+    cartera completa, no la subcartera)."""
+    def post(self, request, cartera_pk, pk, *args, **kwargs):
+        subcartera = get_object_or_404(Subcartera, pk=pk, cartera_id=cartera_pk)
+        if subcartera.leads.exists():
+            messages.error(
+                request,
+                f'No se puede eliminar "{subcartera.nombre}": todavía tiene clientes asignados.',
+            )
+        elif subcartera.es_default:
+            messages.error(
+                request,
+                f'"{subcartera.nombre}" es la subcartera por defecto. Marca otra como '
+                'predeterminada antes de eliminarla.',
+            )
+        elif subcartera.cartera.subcarteras.count() <= 1:
+            messages.error(
+                request,
+                'No puedes eliminar la única subcartera de una cartera. Si ya no la necesitas, '
+                'elimina la cartera completa.',
+            )
+        else:
+            nombre = subcartera.nombre
+            subcartera.delete()
+            messages.success(request, f'Subcartera "{nombre}" eliminada.')
+        return redirect('cartera:detail', pk=cartera_pk)
+
+
+class SubcarteraSetDefaultView(CarteraManageRequiredMixin, View):
+    """Cambia cual subcartera es la predeterminada dentro de una cartera (destino de las cargas
+    de clientes que no especifican subcartera explicita)."""
+    def post(self, request, cartera_pk, pk, *args, **kwargs):
+        subcartera = get_object_or_404(Subcartera, pk=pk, cartera_id=cartera_pk)
+        with transaction.atomic():
+            Subcartera.objects.filter(cartera_id=cartera_pk).update(es_default=False)
+            subcartera.es_default = True
+            subcartera.save(update_fields=['es_default'])
+        messages.success(request, f'"{subcartera.nombre}" es ahora la subcartera por defecto.')
+        return redirect('cartera:detail', pk=cartera_pk)

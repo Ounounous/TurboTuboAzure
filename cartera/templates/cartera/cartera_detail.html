@@ -14,12 +14,29 @@
     <div class="card mb-6" style="border:1px solid var(--border); border-radius:10px;">
       <div class="overflow-x-auto">
         <table class="table-dense">
-          <thead><tr><th>Nombre</th><th>Por defecto</th></tr></thead>
+          <thead><tr><th>Nombre</th><th>Por defecto</th><th>Clientes</th>{% if puede_gestionar_subcarteras %}<th>Acciones</th>{% endif %}</tr></thead>
           <tbody>
             {% for subcartera in subcarteras %}
               <tr>
                 <td style="font-weight:600">{{ subcartera.nombre }}</td>
                 <td>{% if subcartera.es_default %}<span class="dot-st"><span class="d st-green"></span>Sí</span>{% else %}<span class="muted">No</span>{% endif %}</td>
+                <td>{{ subcartera.n_leads }}</td>
+                {% if puede_gestionar_subcarteras %}
+                <td style="display:flex; gap:6px; flex-wrap:wrap;">
+                  {% if not subcartera.es_default %}
+                    <form method="post" action="{% url 'cartera:set_default_subcartera' cartera.pk subcartera.pk %}" style="margin:0;">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-secondary" style="font-size:11px; padding:3px 8px;">Marcar predeterminada</button>
+                    </form>
+                  {% endif %}
+                  {% if not subcartera.es_default and subcartera.n_leads == 0 and subcarteras|length > 1 %}
+                    <form id="del_sub_{{ subcartera.pk }}" method="post" action="{% url 'cartera:delete_subcartera' cartera.pk subcartera.pk %}" style="margin:0;">{% csrf_token %}</form>
+                    <a href="#" onclick="if(confirm('¿Eliminar la subcartera \'{{ subcartera.nombre }}\'?')){document.getElementById('del_sub_{{ subcartera.pk }}').submit();} return false;" class="btn btn-danger" style="font-size:11px; padding:3px 8px;">Eliminar</a>
+                  {% elif subcartera.n_leads > 0 %}
+                    <span class="muted" style="font-size:11px;" title="Tiene {{ subcartera.n_leads }} cliente(s) asignado(s)">No se puede eliminar</span>
+                  {% endif %}
+                </td>
+                {% endif %}
               </tr>
             {% endfor %}
           </tbody>
