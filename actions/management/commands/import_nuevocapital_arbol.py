@@ -10,12 +10,16 @@ arbol desde la web, Carteras -> detalle).
 """
 from django.core.management.base import BaseCommand, CommandError
 
-from actions.arbol_templates import aplicar_nuevo_capital
+from actions.arbol_templates import importar_nuevo_capital_excel
 from cartera.models import Cartera
 
 
 class Command(BaseCommand):
-    help = "Carga el arbol de gestiones de Nuevo Capital desde su Paleta Respuestas (.xlsx)."
+    help = (
+        "Reimporta el arbol de gestiones de Nuevo Capital desde su Paleta Respuestas (.xlsx). "
+        "Uso puntual: la asignacion de arbol desde la web (Carteras -> detalle) usa el arbol de "
+        "Nuevo Capital ya fijo, sin Excel -- ver actions/arbol_templates.py."
+    )
 
     def add_arguments(self, parser):
         parser.add_argument('excel_path')
@@ -26,7 +30,7 @@ class Command(BaseCommand):
         except Cartera.DoesNotExist:
             raise CommandError("No existe la cartera 'Nuevo Capital'. Creala primero en /dashboard/carteras/.")
 
-        stats = aplicar_nuevo_capital(cartera, options['excel_path'])
+        stats = importar_nuevo_capital_excel(cartera, options['excel_path'])
 
         self.stdout.write(self.style.SUCCESS(
             f"Cartera 'Nuevo Capital': {stats['medios_creados']} medio(s) nuevo(s), "

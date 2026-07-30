@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand, CommandError
 
-from actions.arbol_templates import aplicar_galgo
+from actions.arbol_templates import importar_galgo_excel
 from cartera.models import Cartera
 
 
@@ -10,8 +10,9 @@ class Command(BaseCommand):
         "con columnas: Medio de contacto, Estado del contacto, Contactabilidad, DEFAULT, CREA COMPROMISO. "
         "Los datos empiezan en la fila 3 (las 2 primeras son encabezados). Medio y Resultado se "
         "guardan como catalogos independientes de la cartera (un mismo resultado puede repetirse "
-        "bajo varios medios en el Excel de origen -- se deduplica por nombre). Misma logica que "
-        "usa la asignacion de arbol desde la web (Carteras -> detalle), ver actions/arbol_templates.py."
+        "bajo varios medios en el Excel de origen -- se deduplica por nombre). Uso puntual: la "
+        "asignacion de arbol desde la web (Carteras -> detalle) usa el arbol de Galgo ya fijo, "
+        "sin Excel -- ver actions/arbol_templates.py."
     )
 
     def add_arguments(self, parser):
@@ -27,7 +28,7 @@ class Command(BaseCommand):
         except Cartera.DoesNotExist:
             raise CommandError(f"No existe la cartera '{cartera_nombre}'. Creala primero en /dashboard/carteras/.")
 
-        stats = aplicar_galgo(cartera, excel_path)
+        stats = importar_galgo_excel(cartera, excel_path)
 
         self.stdout.write(self.style.SUCCESS(
             f"Cartera '{cartera.nombre}': {stats['medios_creados']} medio(s) nuevo(s), "

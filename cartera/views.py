@@ -169,13 +169,14 @@ class SubcarteraDeleteView(CarteraManageRequiredMixin, View):
 class AsignarArbolView(CarteraManageRequiredMixin, View):
     """
     Asigna a esta cartera una de las 3 plantillas de arbol de gestiones (Galgo/Tanner/Nuevo
-    Capital). Solo admin/owner, y solo UNA vez: en esta version no hay forma de cambiarlo desde
-    la web (evita dejar el arbol en un estado ambiguo, mitad una plantilla mitad otra). Una
-    version futura permitira editar nodos sueltos sin reasignar todo.
+    Capital). Las 3 son autocontenidas -- no piden Excel (ver actions/arbol_templates.py). Solo
+    admin/owner, y solo UNA vez: en esta version no hay forma de cambiarlo desde la web (evita
+    dejar el arbol en un estado ambiguo, mitad una plantilla mitad otra). Una version futura
+    permitira editar nodos sueltos sin reasignar todo.
     """
     def post(self, request, pk, *args, **kwargs):
         from django.utils import timezone
-        from actions.arbol_templates import APLICAR_POR_TIPO, REQUIERE_EXCEL
+        from actions.arbol_templates import APLICAR_POR_TIPO
 
         cartera = get_object_or_404(Cartera, pk=pk)
 
@@ -192,20 +193,8 @@ class AsignarArbolView(CarteraManageRequiredMixin, View):
             messages.error(request, 'Elige un árbol válido (Galgo, Tanner o Nuevo Capital).')
             return redirect('cartera:detail', pk=cartera.pk)
 
-        excel_file = request.FILES.get('excel_file')
-        if tipo in REQUIERE_EXCEL:
-            if not excel_file:
-                messages.error(request, 'Ese árbol necesita que subas el Excel de origen.')
-                return redirect('cartera:detail', pk=cartera.pk)
-            if excel_file.size > 10 * 1024 * 1024:
-                messages.error(request, 'El archivo supera el máximo de 10 MB.')
-                return redirect('cartera:detail', pk=cartera.pk)
-
         try:
-            if tipo in REQUIERE_EXCEL:
-                stats = APLICAR_POR_TIPO[tipo](cartera, excel_file)
-            else:
-                stats = APLICAR_POR_TIPO[tipo](cartera)
+            stats = APLICAR_POR_TIPO[tipo](cartera)
         except Exception as exc:
             messages.error(request, f'No se pudo aplicar el árbol: {exc}')
             return redirect('cartera:detail', pk=cartera.pk)

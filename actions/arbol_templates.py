@@ -1,13 +1,15 @@
 """
-Plantillas de arbol de gestiones (Medios + Resultados), reutilizables entre los management
-commands (uso por CLI/script, ver actions/management/commands/import_*_arbol.py) y la vista web
-de asignacion de arbol (Carteras -> detalle, solo admin/owner). Cada funcion recibe una Cartera YA
-EXISTENTE (no la busca por nombre), para poder aplicarse a cualquier cartera -- no solo a una
-llamada literalmente "Galgo"/"Tanner"/"Nuevo Capital".
+Plantillas de arbol de gestiones (Medios + Resultados) para las 3 carteras reales del negocio.
 
-Tanner es autocontenido (las tablas de codigos salen de un instructivo Word, transcritas a mano
-aqui abajo). Galgo y Nuevo Capital necesitan el Excel de origen de la cartera real -- no hay forma
-de "adivinar" ese arbol sin el archivo.
+Las funciones `aplicar_galgo(cartera)` / `aplicar_tanner(cartera)` / `aplicar_nuevo_capital(cartera)`
+son AUTOCONTENIDAS -- no piden Excel. Los datos de Galgo y Nuevo Capital se extrajeron tal cual de
+las carteras ya cargadas y validadas en este ambiente (mismo criterio que Tanner, que ya estaba
+transcrito del instructivo oficial). Las usa la asignacion de arbol desde la web (Carteras ->
+detalle, solo admin/owner): 3 opciones fijas, sin subir archivo.
+
+`importar_galgo_excel` / `importar_nuevo_capital_excel` quedan aparte, solo para los management
+commands (uso puntual por CLI si en el futuro hay que reimportar un Excel nuevo de esas carteras
+-- no se usan desde la web).
 """
 from openpyxl import load_workbook
 
@@ -15,112 +17,82 @@ from .demografia_rules import desactiva_whatsapp, efecto_demografia
 from .models import Medio, Resultado
 
 
-# ===========================================================================
-# GALGO -- Excel con columnas: Medio, Resultado, Contactabilidad, DEFAULT, CREA COMPROMISO.
-# Datos desde la fila 3 (2 primeras son encabezados).
-# ===========================================================================
-GALGO_CANAL_POR_MEDIO = {
-    'WHATSAPP': Medio.CANAL_TELEFONO,
-    'TELEFONICO': Medio.CANAL_TELEFONO,
-    'SMS': Medio.CANAL_TELEFONO,
-    'EMAIL': Medio.CANAL_EMAIL,
-}
-GALGO_MEDIOS_LLAMADA = {'TELEFONICO', 'LLAMADA', 'LLAMADA TELEFONICA', 'VOZ'}
-
-
-def aplicar_galgo(cartera, excel_file):
-    wb = load_workbook(excel_file, data_only=True)
-    ws = wb.active
-
-    medios_creados = 0
-    filas_omitidas = 0
-    resultados_agg = {}
-
-    for row in ws.iter_rows(min_row=3, values_only=True):
-        if not row or len(row) < 2:
-            continue
-        medio_nombre, resultado_nombre, contactabilidad, es_default, crea_compromiso = (list(row) + [None] * 5)[:5]
-
-        if not medio_nombre or not resultado_nombre:
-            filas_omitidas += 1
-            continue
-
-        medio_nombre = str(medio_nombre).strip()
-        resultado_nombre = str(resultado_nombre).strip()
-        canal = GALGO_CANAL_POR_MEDIO.get(medio_nombre.upper(), Medio.CANAL_TELEFONO)
-
-        medio, medio_created = Medio.objects.get_or_create(
-            cartera=cartera, nombre=medio_nombre,
-            defaults={'canal': canal, 'es_llamada': medio_nombre.upper() in GALGO_MEDIOS_LLAMADA}
+def _crear_medios(cartera, medios):
+    """medios: lista de (nombre, canal, es_llamada, es_inbound). Devuelve cuantos se crearon."""
+    creados = 0
+    for nombre, canal, es_llamada, es_inbound in medios:
+        medio, created = Medio.objects.get_or_create(
+            cartera=cartera, nombre=nombre,
+            defaults={'canal': canal, 'es_llamada': es_llamada, 'es_inbound': es_inbound},
         )
-        nuevo_permite = medio.calcular_permite_manual()
-        if medio.permite_manual != nuevo_permite:
-            medio.permite_manual = nuevo_permite
-            medio.save(update_fields=['permite_manual'])
-        if medio_created:
-            medios_creados += 1
+        medio.canal = canal
+        medio.es_llamada = es_llamada
+        medio.es_inbound = es_inbound
+        medio.permite_manual = medio.calcular_permite_manual()
+        medio.save(update_fields=['canal', 'es_llamada', 'es_inbound', 'permite_manual'])
+        if created:
+            creados += 1
+    return creados
 
-        contactabilidad_norm = (
-            Resultado.CON_CONTACTO
-            if 'CON CONTACTO' in str(contactabilidad or '').upper()
-            else Resultado.SIN_CONTACTO
-        )
-        crea_compromiso_bool = bool(crea_compromiso)
 
-        agg = resultados_agg.setdefault(resultado_nombre, {
-            'contactabilidad': contactabilidad_norm,
-            'es_default': False,
-            'crea_compromiso': False,
-            'es_llamada': False,
-        })
-        agg['es_default'] = agg['es_default'] or bool(es_default)
-        agg['crea_compromiso'] = agg['crea_compromiso'] or crea_compromiso_bool
-        agg['es_llamada'] = agg['es_llamada'] or medio.es_llamada
-        if contactabilidad_norm == Resultado.CON_CONTACTO:
-            agg['contactabilidad'] = Resultado.CON_CONTACTO
+# ===========================================================================
+# GALGO -- 3 medios, 13 resultados (sin codigo ni tipo_contacto).
+# ===========================================================================
+GALGO_MEDIOS = [
+    # (nombre, canal, es_llamada, es_inbound)
+    ('EMAIL', Medio.CANAL_EMAIL, False, False),
+    ('TELEFONICO', Medio.CANAL_TELEFONO, True, False),
+    ('WHATSAPP', Medio.CANAL_TELEFONO, False, False),
+]
+
+GALGO_RESULTADOS = [
+    # (nombre, contactabilidad, es_default, crea_compromiso, requiere_fecha_pago, efecto_pago, descarga_grabacion)
+    ('COMPROMISO DE PAGO', Resultado.CON_CONTACTO, False, True, True, '', True),
+    ('CONTACTO SIN FECHA', Resultado.CON_CONTACTO, False, False, False, '', True),
+    ('DACION', Resultado.CON_CONTACTO, False, True, True, '', True),
+    ('DESCONOCE DEUDA', Resultado.CON_CONTACTO, True, False, False, '', True),
+    ('EMAIL INVALIDO', Resultado.SIN_CONTACTO, False, False, False, '', False),
+    ('FONO NO CORRESPONDE', Resultado.SIN_CONTACTO, False, False, False, '', False),
+    ('FUERA DE SERVICIO', Resultado.SIN_CONTACTO, False, False, False, '', False),
+    ('MSJ DE CONTACTO', Resultado.CON_CONTACTO, True, False, False, '', False),
+    ('NO RESPONDE', Resultado.SIN_CONTACTO, True, False, False, '', False),
+    ('PAGO / AL DIA', Resultado.CON_CONTACTO, False, False, True, Resultado.EFECTO_AL_DIA, True),
+    ('PAGO / CONTENIDO', Resultado.CON_CONTACTO, True, False, True, Resultado.EFECTO_PAGANDO, True),
+    ('RESPONDE MSJ / CONTACTO SIN FECHA', Resultado.CON_CONTACTO, False, False, False, '', False),
+    ('SIN WHATSAPP', Resultado.SIN_CONTACTO, False, False, False, '', False),
+]
+
+
+def aplicar_galgo(cartera):
+    medios_creados = _crear_medios(cartera, GALGO_MEDIOS)
 
     resultados_creados, resultados_actualizados = 0, 0
-    for nombre, agg in resultados_agg.items():
-        requiere_fecha_pago = agg['crea_compromiso'] or 'PAGO' in nombre.upper()
-        nombre_upper = nombre.upper()
-        if nombre_upper.startswith('PAGO') and 'AL DIA' in nombre_upper:
-            efecto_pago = Resultado.EFECTO_AL_DIA
-        elif nombre_upper.startswith('PAGO'):
-            efecto_pago = Resultado.EFECTO_PAGANDO
-        else:
-            efecto_pago = ''
-
-        resultado, resultado_created = Resultado.objects.get_or_create(cartera=cartera, nombre=nombre)
-        resultado.contactabilidad = agg['contactabilidad']
-        resultado.es_default = agg['es_default']
-        resultado.crea_compromiso = agg['crea_compromiso']
+    for nombre, contactabilidad, es_default, crea_compromiso, requiere_fecha_pago, efecto_pago, descarga_grabacion in GALGO_RESULTADOS:
+        resultado, created = Resultado.objects.get_or_create(cartera=cartera, nombre=nombre)
+        resultado.contactabilidad = contactabilidad
+        resultado.es_default = es_default
+        resultado.crea_compromiso = crea_compromiso
         resultado.requiere_fecha_pago = requiere_fecha_pago
         resultado.efecto_pago = efecto_pago
         resultado.efecto_demografia = efecto_demografia(nombre)
         resultado.desactiva_whatsapp = desactiva_whatsapp(nombre)
-        if resultado_created:
-            resultado.descarga_grabacion = (
-                agg['es_llamada'] and agg['contactabilidad'] == Resultado.CON_CONTACTO
-            )
+        if created:
+            resultado.descarga_grabacion = descarga_grabacion
             resultados_creados += 1
         else:
             resultados_actualizados += 1
         resultado.save()
 
-    if medios_creados == 0 and resultados_creados == 0 and resultados_actualizados == 0:
-        raise ValueError('El Excel no tenía filas válidas (medio y resultado). Revisa el formato.')
-
     return {
         'medios_creados': medios_creados,
         'resultados_creados': resultados_creados,
         'resultados_actualizados': resultados_actualizados,
-        'filas_omitidas': filas_omitidas,
     }
 
 
 # ===========================================================================
-# TANNER -- autocontenido: tablas de codigos transcritas del "Instructivo base de gestiones -
-# Tanner Automotriz (version 11)". No requiere archivo.
+# TANNER -- 8 medios, 113 resultados (codigo + tipo_contacto). Transcrito del "Instructivo base
+# de gestiones - Tanner Automotriz (version 11)".
 # ===========================================================================
 TANNER_MEDIOS = [
     # (codigo, nombre, canal, es_llamada)
@@ -294,20 +266,249 @@ def aplicar_tanner(cartera):
         'medios_creados': medios_creados,
         'resultados_creados': resultados_creados,
         'resultados_actualizados': resultados_actualizados,
-        'filas_omitidas': 0,
     }
 
 
 # ===========================================================================
-# NUEVO CAPITAL -- Excel "Paleta Respuestas": Accion (col C), Sub Estado (col D), Estado (col E),
-# In/Out Bound (col G).
+# NUEVO CAPITAL -- 12 medios, 76 resultados (tipo_contacto, sin codigo).
 # ===========================================================================
+NC_MEDIOS = [
+    # (nombre, canal, es_llamada, es_inbound)
+    ('BUSQUEDA', Medio.CANAL_TELEFONO, False, False),
+    ('CORREO', Medio.CANAL_EMAIL, False, False),
+    ('CORREO RECIBIDO', Medio.CANAL_EMAIL, False, True),
+    ('IVR', Medio.CANAL_TELEFONO, True, False),
+    ('IVR AUDIO', Medio.CANAL_TELEFONO, True, False),
+    ('LLAMADA', Medio.CANAL_TELEFONO, True, False),
+    ('LLAMADA RECIBIDA', Medio.CANAL_TELEFONO, True, True),
+    ('SMS', Medio.CANAL_TELEFONO, False, False),
+    ('SMS RECIBIDO', Medio.CANAL_TELEFONO, False, True),
+    ('TERRENO', Medio.CANAL_TELEFONO, False, False),
+    ('WHATSAPP', Medio.CANAL_TELEFONO, False, False),
+    ('WHATSAPP RECIBIDO', Medio.CANAL_TELEFONO, False, True),
+]
+
+NC_RESULTADOS = [
+    # (nombre, tipo_contacto, contactabilidad, es_default, crea_compromiso, requiere_fecha_pago, efecto_pago, descarga_grabacion)
+    ('BUZON DE VOZ', 'ACCION MASIVA', 'sin_contacto', False, False, False, '', False),
+    ('ENVIO EMAIL ENTREGADO', 'ACCION MASIVA', 'sin_contacto', False, False, False, '', False),
+    ('ENVIO EMAIL NO ENTREGADO', 'ACCION MASIVA', 'sin_contacto', False, False, False, '', False),
+    ('ENVIO SMS ENTREGADO', 'ACCION MASIVA', 'sin_contacto', False, False, False, '', False),
+    ('ENVIO SMS NO ENTREGADO', 'ACCION MASIVA', 'sin_contacto', False, False, False, '', False),
+    ('ENVIO WHATSAPP ENTREGADO', 'ACCION MASIVA', 'sin_contacto', False, False, False, '', False),
+    ('ENVIO WHATSAPP NO ENTREGADO', 'ACCION MASIVA', 'sin_contacto', False, False, False, '', False),
+    ('ERROR DE CONEXION', 'ACCION MASIVA', 'sin_contacto', False, False, False, '', False),
+    ('FONO NO DISPONIBLE', 'ACCION MASIVA', 'sin_contacto', False, False, False, '', False),
+    ('IVR ENVIADO', 'ACCION MASIVA', 'sin_contacto', False, False, False, '', False),
+    ('NO CONTESTA', 'ACCION MASIVA', 'sin_contacto', False, False, False, '', False),
+    ('TONO OCUPADO', 'ACCION MASIVA', 'sin_contacto', False, False, False, '', False),
+    ('UTIL POSITIVO', 'ACCION MASIVA', 'sin_contacto', False, False, False, '', False),
+    ('CESANTE', 'DIRECTO', 'con_contacto', False, False, False, '', True),
+    ('COMPROMISO DE PAGO', 'DIRECTO', 'con_contacto', False, True, True, '', True),
+    ('DESCONOCE DEUDA', 'DIRECTO', 'con_contacto', False, False, False, '', True),
+    ('DICE HABER PAGADO', 'DIRECTO', 'con_contacto', False, False, False, '', True),
+    ('DOMICILIO CORRESPONDE', 'DIRECTO', 'con_contacto', False, False, False, '', False),
+    ('ENFERMO', 'DIRECTO', 'con_contacto', False, False, False, '', True),
+    ('EN NEGOCIACION', 'DIRECTO', 'con_contacto', False, False, False, '', True),
+    ('EN PROCESO DE DACION', 'DIRECTO', 'con_contacto', False, False, False, '', True),
+    ('EN PROCESO DE RENEGOCIACION', 'DIRECTO', 'con_contacto', False, False, False, '', True),
+    ('ENVIO EMAIL ENTREGADO', 'DIRECTO', 'con_contacto', False, False, False, '', False),
+    ('ENVIO SMS ENTREGADO', 'DIRECTO', 'con_contacto', False, False, False, '', False),
+    ('ENVIO WHATSAPP ENTREGADO', 'DIRECTO', 'con_contacto', False, False, False, '', False),
+    ('INCAUTADO/REMATADO', 'DIRECTO', 'con_contacto', False, False, False, '', True),
+    ('INTENCION DE DACION', 'DIRECTO', 'con_contacto', False, False, False, '', True),
+    ('INTENCION DE PAGO', 'DIRECTO', 'con_contacto', False, True, True, '', True),
+    ('INTENCION DE RENEGOCIACION', 'DIRECTO', 'con_contacto', False, False, False, '', True),
+    ('NO CORRESPONDE A TITULAR', 'DIRECTO', 'con_contacto', False, False, False, '', False),
+    ('OTROS', 'DIRECTO', 'con_contacto', False, False, False, '', True),
+    ('PAGA TERCERO O AVAL', 'DIRECTO', 'con_contacto', False, False, False, 'pagando', True),
+    ('SIN DINERO', 'DIRECTO', 'con_contacto', False, False, False, '', True),
+    ('SINIESTRO', 'DIRECTO', 'con_contacto', False, False, False, '', True),
+    ('SIN INTENCION DE PAGO', 'DIRECTO', 'con_contacto', False, False, False, '', True),
+    ('SMS RECIBIDO', 'DIRECTO', 'con_contacto', False, False, False, '', False),
+    ('CESANTE', 'DIRECTO AVAL', 'con_contacto', False, False, False, '', True),
+    ('COMPROMISO DE PAGO', 'DIRECTO AVAL', 'con_contacto', False, True, True, '', True),
+    ('DESCONOCE DEUDA', 'DIRECTO AVAL', 'con_contacto', False, False, False, '', True),
+    ('DICE HABER PAGADO', 'DIRECTO AVAL', 'con_contacto', False, False, False, '', True),
+    ('ENFERMO', 'DIRECTO AVAL', 'con_contacto', False, False, False, '', True),
+    ('EN NEGOCIACION', 'DIRECTO AVAL', 'con_contacto', False, False, False, '', True),
+    ('EN PROCESO DE DACION', 'DIRECTO AVAL', 'con_contacto', False, False, False, '', True),
+    ('EN PROCESO DE RENEGOCIACION', 'DIRECTO AVAL', 'con_contacto', False, False, False, '', True),
+    ('ENVIO EMAIL ENTREGADO', 'DIRECTO AVAL', 'con_contacto', False, False, False, '', False),
+    ('ENVIO WHATSAPP ENTREGADO', 'DIRECTO AVAL', 'con_contacto', False, False, False, '', False),
+    ('INCAUTADO/REMATADO', 'DIRECTO AVAL', 'con_contacto', False, False, False, '', True),
+    ('INTENCION DE DACION', 'DIRECTO AVAL', 'con_contacto', False, False, False, '', True),
+    ('INTENCION DE PAGO', 'DIRECTO AVAL', 'con_contacto', False, True, True, '', True),
+    ('INTENCION DE RENEGOCIACION', 'DIRECTO AVAL', 'con_contacto', False, False, False, '', True),
+    ('NO CORRESPONDE A TITULAR', 'DIRECTO AVAL', 'con_contacto', False, False, False, '', False),
+    ('OTROS', 'DIRECTO AVAL', 'con_contacto', False, False, False, '', True),
+    ('PAGA TERCERO O AVAL', 'DIRECTO AVAL', 'con_contacto', False, False, False, 'pagando', True),
+    ('SIN DINERO', 'DIRECTO AVAL', 'con_contacto', False, False, False, '', True),
+    ('SINIESTRO', 'DIRECTO AVAL', 'con_contacto', False, False, False, '', True),
+    ('SIN INTENCION DE PAGO', 'DIRECTO AVAL', 'con_contacto', False, False, False, '', True),
+    ('EN NEGOCIACION', 'INDIRECTO', 'con_contacto', False, False, False, '', True),
+    ('ENVIO EMAIL ENTREGADO', 'INDIRECTO', 'con_contacto', False, False, False, '', False),
+    ('ENVIO SMS ENTREGADO', 'INDIRECTO', 'con_contacto', False, False, False, '', False),
+    ('ENVIO WHATSAPP ENTREGADO', 'INDIRECTO', 'con_contacto', False, False, False, '', False),
+    ('FALLECIDO', 'INDIRECTO', 'con_contacto', False, False, False, '', True),
+    ('NO CORRESPONDE A TITULAR', 'INDIRECTO', 'con_contacto', False, False, False, '', True),
+    ('RECADO CON TERCERO', 'INDIRECTO', 'con_contacto', False, False, False, '', True),
+    ('SINIESTRO', 'INDIRECTO', 'con_contacto', False, False, False, '', True),
+    ('SMS RECIBIDO', 'INDIRECTO', 'con_contacto', False, False, False, '', False),
+    ('BUSQUEDA DE DATOS', 'SIN CONTACTO', 'sin_contacto', False, False, False, '', False),
+    ('BUZON DE VOZ', 'SIN CONTACTO', 'sin_contacto', False, False, False, '', False),
+    ('CORTA LLAMADO', 'SIN CONTACTO', 'sin_contacto', False, False, False, '', False),
+    ('ENVIO EMAIL ENTREGADO', 'SIN CONTACTO', 'sin_contacto', False, False, False, '', False),
+    ('ENVIO EMAIL NO ENTREGADO', 'SIN CONTACTO', 'sin_contacto', False, False, False, '', False),
+    ('ENVIO WHATSAPP ENTREGADO', 'SIN CONTACTO', 'sin_contacto', False, False, False, '', False),
+    ('ENVIO WHATSAPP NO ENTREGADO', 'SIN CONTACTO', 'sin_contacto', False, False, False, '', False),
+    ('FUERA DE SERVICIO', 'SIN CONTACTO', 'sin_contacto', False, False, False, '', False),
+    ('NO CONTESTA', 'SIN CONTACTO', 'sin_contacto', False, False, False, '', False),
+    ('SIN DATOS DEMOGRAFICOS', 'SIN CONTACTO', 'sin_contacto', False, False, False, '', False),
+    ('TONO OCUPADO', 'SIN CONTACTO', 'sin_contacto', False, False, False, '', False),
+]
+
+
+def aplicar_nuevo_capital(cartera):
+    medios_creados = _crear_medios(cartera, NC_MEDIOS)
+
+    resultados_creados, resultados_actualizados = 0, 0
+    for nombre, tipo_contacto, contactabilidad, es_default, crea_compromiso, requiere_fecha_pago, efecto_pago, descarga_grabacion in NC_RESULTADOS:
+        resultado, created = Resultado.objects.get_or_create(cartera=cartera, nombre=nombre, tipo_contacto=tipo_contacto)
+        resultado.contactabilidad = contactabilidad
+        resultado.es_default = es_default
+        resultado.crea_compromiso = crea_compromiso
+        resultado.requiere_fecha_pago = requiere_fecha_pago
+        resultado.efecto_pago = efecto_pago
+        resultado.efecto_demografia = efecto_demografia(nombre)
+        resultado.desactiva_whatsapp = desactiva_whatsapp(nombre)
+        if created:
+            resultado.descarga_grabacion = descarga_grabacion
+            resultados_creados += 1
+        else:
+            resultados_actualizados += 1
+        resultado.save()
+
+    return {
+        'medios_creados': medios_creados,
+        'resultados_creados': resultados_creados,
+        'resultados_actualizados': resultados_actualizados,
+    }
+
+
+APLICAR_POR_TIPO = {
+    'galgo': aplicar_galgo,
+    'tanner': aplicar_tanner,
+    'nuevo_capital': aplicar_nuevo_capital,
+}
+
+
+# ===========================================================================
+# Solo para los management commands (CLI): reimportar desde un Excel de origen si hiciera falta
+# actualizar el arbol de Galgo/Nuevo Capital mas adelante. NO se usan desde la asignacion web.
+# ===========================================================================
+GALGO_CANAL_POR_MEDIO = {
+    'WHATSAPP': Medio.CANAL_TELEFONO,
+    'TELEFONICO': Medio.CANAL_TELEFONO,
+    'SMS': Medio.CANAL_TELEFONO,
+    'EMAIL': Medio.CANAL_EMAIL,
+}
+GALGO_MEDIOS_LLAMADA = {'TELEFONICO', 'LLAMADA', 'LLAMADA TELEFONICA', 'VOZ'}
+
+
+def importar_galgo_excel(cartera, excel_file):
+    wb = load_workbook(excel_file, data_only=True)
+    ws = wb.active
+
+    medios_creados = 0
+    filas_omitidas = 0
+    resultados_agg = {}
+
+    for row in ws.iter_rows(min_row=3, values_only=True):
+        if not row or len(row) < 2:
+            continue
+        medio_nombre, resultado_nombre, contactabilidad, es_default, crea_compromiso = (list(row) + [None] * 5)[:5]
+
+        if not medio_nombre or not resultado_nombre:
+            filas_omitidas += 1
+            continue
+
+        medio_nombre = str(medio_nombre).strip()
+        resultado_nombre = str(resultado_nombre).strip()
+        canal = GALGO_CANAL_POR_MEDIO.get(medio_nombre.upper(), Medio.CANAL_TELEFONO)
+
+        medio, medio_created = Medio.objects.get_or_create(
+            cartera=cartera, nombre=medio_nombre,
+            defaults={'canal': canal, 'es_llamada': medio_nombre.upper() in GALGO_MEDIOS_LLAMADA}
+        )
+        nuevo_permite = medio.calcular_permite_manual()
+        if medio.permite_manual != nuevo_permite:
+            medio.permite_manual = nuevo_permite
+            medio.save(update_fields=['permite_manual'])
+        if medio_created:
+            medios_creados += 1
+
+        contactabilidad_norm = (
+            Resultado.CON_CONTACTO
+            if 'CON CONTACTO' in str(contactabilidad or '').upper()
+            else Resultado.SIN_CONTACTO
+        )
+        crea_compromiso_bool = bool(crea_compromiso)
+
+        agg = resultados_agg.setdefault(resultado_nombre, {
+            'contactabilidad': contactabilidad_norm,
+            'es_default': False,
+            'crea_compromiso': False,
+            'es_llamada': False,
+        })
+        agg['es_default'] = agg['es_default'] or bool(es_default)
+        agg['crea_compromiso'] = agg['crea_compromiso'] or crea_compromiso_bool
+        agg['es_llamada'] = agg['es_llamada'] or medio.es_llamada
+        if contactabilidad_norm == Resultado.CON_CONTACTO:
+            agg['contactabilidad'] = Resultado.CON_CONTACTO
+
+    resultados_creados, resultados_actualizados = 0, 0
+    for nombre, agg in resultados_agg.items():
+        requiere_fecha_pago = agg['crea_compromiso'] or 'PAGO' in nombre.upper()
+        nombre_upper = nombre.upper()
+        if nombre_upper.startswith('PAGO') and 'AL DIA' in nombre_upper:
+            efecto_pago = Resultado.EFECTO_AL_DIA
+        elif nombre_upper.startswith('PAGO'):
+            efecto_pago = Resultado.EFECTO_PAGANDO
+        else:
+            efecto_pago = ''
+
+        resultado, resultado_created = Resultado.objects.get_or_create(cartera=cartera, nombre=nombre)
+        resultado.contactabilidad = agg['contactabilidad']
+        resultado.es_default = agg['es_default']
+        resultado.crea_compromiso = agg['crea_compromiso']
+        resultado.requiere_fecha_pago = requiere_fecha_pago
+        resultado.efecto_pago = efecto_pago
+        resultado.efecto_demografia = efecto_demografia(nombre)
+        resultado.desactiva_whatsapp = desactiva_whatsapp(nombre)
+        if resultado_created:
+            resultado.descarga_grabacion = (
+                agg['es_llamada'] and agg['contactabilidad'] == Resultado.CON_CONTACTO
+            )
+            resultados_creados += 1
+        else:
+            resultados_actualizados += 1
+        resultado.save()
+
+    return {
+        'medios_creados': medios_creados,
+        'resultados_creados': resultados_creados,
+        'resultados_actualizados': resultados_actualizados,
+        'filas_omitidas': filas_omitidas,
+    }
+
+
 NC_CANAL_EMAIL_ACCIONES = {'CORREO', 'CORREO RECIBIDO'}
 NC_LLAMADA_ACCIONES = {'LLAMADA', 'LLAMADA RECIBIDA', 'IVR', 'IVR AUDIO'}
 NC_TIPOS_CON_CONTACTO = {'DIRECTO', 'DIRECTO AVAL', 'INDIRECTO'}
 
 
-def aplicar_nuevo_capital(cartera, excel_file):
+def importar_nuevo_capital_excel(cartera, excel_file):
     wb = load_workbook(excel_file, data_only=True)
     ws = wb.active
 
@@ -338,9 +539,6 @@ def aplicar_nuevo_capital(cartera, excel_file):
         r = resultados_info.setdefault((estado, sub_estado), {'con_contacto': con_contacto, 'es_llamada': False})
         r['con_contacto'] = r['con_contacto'] or con_contacto
         r['es_llamada'] = r['es_llamada'] or es_llamada
-
-    if not medios_info and not resultados_info:
-        raise ValueError('El Excel no tenía filas válidas (columnas Accion/Sub Estado/Estado). Revisa el formato.')
 
     medios_creados = 0
     for nombre, info in medios_info.items():
@@ -385,13 +583,4 @@ def aplicar_nuevo_capital(cartera, excel_file):
         'medios_creados': medios_creados,
         'resultados_creados': resultados_creados,
         'resultados_actualizados': resultados_actualizados,
-        'filas_omitidas': 0,
     }
-
-
-APLICAR_POR_TIPO = {
-    'galgo': aplicar_galgo,
-    'tanner': aplicar_tanner,
-    'nuevo_capital': aplicar_nuevo_capital,
-}
-REQUIERE_EXCEL = {'galgo', 'nuevo_capital'}
