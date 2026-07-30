@@ -557,7 +557,11 @@ class ActionDownloadExcelView(LoginRequiredMixin, View):
         if start_date:
             actions = actions.filter(created_at__gte=start_date)
         if end_date:
-            actions = actions.filter(created_at__lte=end_date)
+            # Limite EXCLUSIVO al dia siguiente: "created_at__lte=end_date" compara contra la
+            # MEDIANOCHE de end_date (Django convierte el date a datetime 00:00), lo que dejaba
+            # afuera cualquier gestion hecha durante el propio end_date (ej. "Hasta: hoy" no
+            # traia nada de hoy). Asi se incluyen las 24 horas completas de end_date.
+            actions = actions.filter(created_at__lt=end_date + datetime.timedelta(days=1))
         if cartera_id:
             actions = actions.filter(subcartera__cartera_id=cartera_id)
 

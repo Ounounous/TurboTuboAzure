@@ -202,24 +202,28 @@
 
         <div class="card p-4 mb-4">
           <h3 class="font-bold mb-3">Descargar gestiones (Excel)</h3>
+          {% now "Y-m-d" as today_str %}
           <form method="GET" action="{% url 'actions:download_actions' scope='team' %}">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-              <div><label class="font-semibold block mb-1" for="start_date">Desde</label><input type="date" id="start_date" name="start_date" value="{{ request.GET.start_date }}" class="w-full"></div>
-              <div><label class="font-semibold block mb-1" for="end_date">Hasta</label><input type="date" id="end_date" name="end_date" value="{{ request.GET.end_date }}" class="w-full"></div>
+              <div><label class="font-semibold block mb-1" for="start_date">Desde</label><input type="date" id="start_date" name="start_date" value="{{ request.GET.start_date|default:today_str }}" required class="w-full"></div>
+              <div><label class="font-semibold block mb-1" for="end_date">Hasta</label><input type="date" id="end_date" name="end_date" value="{{ request.GET.end_date|default:today_str }}" required class="w-full"></div>
               <div><label class="font-semibold block mb-1" for="team_id">Equipo</label>
-                <select id="team_id" name="team_id" required class="w-full">
+                <select id="team_id" name="team_id" class="w-full">
                   <option value="" disabled selected>--- Selecciona equipo ---</option>
                   {% for team in all_teams %}<option value="{{ team.id }}">{{ team.name }}</option>{% endfor %}
-                </select></div>
+                </select>
+                <p class="muted" style="font-size:11px; margin-top:2px;">Solo necesario para "Descargar gestiones del equipo".</p>
+              </div>
               <div><label class="font-semibold block mb-1" for="cartera">Cartera</label>
                 <select id="cartera" name="cartera" class="w-full">
                   <option value="">--- Todas ---</option>
                   {% for cartera in all_carteras %}<option value="{{ cartera.id }}">{{ cartera.nombre }}</option>{% endfor %}
                 </select></div>
             </div>
+            <p class="muted mb-3" style="font-size:12px;">Por defecto trae solo las gestiones de hoy; cambia "Desde"/"Hasta" para otro rango.</p>
             <div class="flex flex-wrap gap-3">
               <button type="submit" class="btn btn-primary">Descargar gestiones del equipo</button>
-              <a href="{% url 'actions:download_actions' scope='user' %}" class="btn btn-secondary">Descargar mis gestiones</a>
+              <button type="submit" formaction="{% url 'actions:download_actions' scope='user' %}" class="btn btn-secondary">Descargar mis gestiones</button>
             </div>
           </form>
         </div>
