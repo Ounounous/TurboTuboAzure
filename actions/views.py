@@ -927,7 +927,9 @@ class PaymentCommitmentListView(LoginRequiredMixin, View):
         es_super = _es_supervisor(request.user)
 
         # Alcance por rol: cobrador -> sus clientes; supervisor -> sus carteras; admin/owner -> todo.
-        base_all = scope_por_lead(PaymentCommitment.objects.all(), request.user)
+        # Solo vigentes: uno editado o roto sale de tarjetas/tabla (sigue existiendo para
+        # auditoria, ver actions/commitment_lifecycle.py).
+        base_all = scope_por_lead(PaymentCommitment.objects.filter(vigente=True), request.user)
 
         # Filtros que NO son de cartera (op/fecha) — se aplican tanto a las tarjetas como a la tabla.
         base_filtered = base_all.select_related('lead', 'subcartera__cartera', 'created_by')
@@ -973,10 +975,57 @@ class PaymentCommitmentListView(LoginRequiredMixin, View):
         }
         return render(request, self.template_name, context)
 
+    def post(self, request, *args, **kwargs):
+        from .commitment_lifecycle import editar, marcar_roto
+
+        accion = request.POST.get('accion')
+        next_url = request.POST.get('next') or 'actions:commitments_list'
+        commitment = get_object_or_404(
+            scope_por_lead(
+                PaymentCommitment.objects.select_related('action', 'lead'), request.user
+            ),
+            pk=request.POST.get('commitment_id'),
+        )
+        if not commitment.vigente:
+            messages.error(request, 'Ese compromiso ya fue retirado; recarga la página.')
+            return redirect(next_url)
+
+        if accion == 'editar':
+            nueva_fecha = parse_date(request.POST.get('nueva_fecha', ''))
+            monto_raw = request.POST.get('nuevo_monto', '').strip()
+            if not nueva_fecha:
+                messages.error(request, 'Ingresa una fecha de compromiso válida.')
+                return redirect(next_url)
+            try:
+                nuevo_monto = int(monto_raw) if monto_raw else None
+            except ValueError:
+                messages.error(request, 'El monto debe ser un número.')
+                return redirect(next_url)
+            editar(
+                commitment, nueva_fecha, nuevo_monto, request.user,
+                comentario=request.POST.get('comentario', '').strip(),
+            )
+            messages.success(
+                request,
+                f'Compromiso de {commitment.lead.op} editado: nueva fecha {nueva_fecha:%d-%m-%Y}.'
+            )
+
+        elif accion == 'roto':
+            marcar_roto(commitment, request.user, comentario=request.POST.get('comentario', '').strip())
+            messages.success(
+                request,
+                f'Compromiso de {commitment.lead.op} marcado como roto. El cliente queda en estado Contactado.'
+            )
+
+        else:
+            messages.error(request, 'Acción inválida.')
+
+        return redirect(next_url)
+
 
 class PaymentCommitmentExportExcelView(SupervisorRequiredMixin, View):
     def get(self, request, *args, **kwargs):
-        qs = PaymentCommitment.objects.select_related(
+        qs = PaymentCommitment.objects.filter(vigente=True).select_related(
             'lead', 'subcartera__cartera', 'created_by'
         ).order_by('-fecha_compromiso', '-created_at')
 

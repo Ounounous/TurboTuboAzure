@@ -70,6 +70,7 @@
             <tr>
               <th>Cartera</th><th>Subcartera</th><th>ID</th><th>Cliente</th><th>Fecha compromiso</th>
               <th class="num">Monto</th><th>Fecha creación</th><th>Comentario</th><th>Ejecutivo</th>
+              <th>Editar</th><th>Compromiso roto</th>
             </tr>
           </thead>
           <tbody>
@@ -84,6 +85,56 @@
                 <td style="font-variant-numeric:tabular-nums; color:var(--text-muted)">{{ c.created_at|date:"d-m-Y H:i" }}</td>
                 <td>{{ c.comentario|default:"-"|truncatechars:60 }}</td>
                 <td>{{ c.created_by.username|default:"-" }}</td>
+
+                {# Editar: reemplaza este compromiso por uno nuevo (misma gestion, fecha/monto distintos). #}
+                <td>
+                  <details>
+                    <summary class="cursor-pointer" style="font-size:12px; font-weight:600; color:var(--text-muted);">✏️ Editar</summary>
+                    <form method="post" action="{% url 'actions:commitments_list' %}"
+                          style="display:flex; flex-direction:column; gap:5px; margin-top:8px; min-width:220px;"
+                          onsubmit="return confirm('¿Confirmas que quieres reemplazar este compromiso por uno nuevo con la fecha/monto que ingresaste? El compromiso actual queda retirado.');">
+                      {% csrf_token %}
+                      <input type="hidden" name="accion" value="editar">
+                      <input type="hidden" name="commitment_id" value="{{ c.id }}">
+                      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                      <label style="font-size:11px;">Nueva fecha
+                        <input type="date" name="nueva_fecha" value="{{ c.fecha_compromiso|date:'Y-m-d' }}" required style="width:100%; font-size:12px;">
+                      </label>
+                      <label style="font-size:11px;">Nuevo monto
+                        <input type="number" name="nuevo_monto" value="{{ c.monto|default_if_none:'' }}" min="0" style="width:100%; font-size:12px;">
+                      </label>
+                      <label style="font-size:11px;">Comentario <span class="muted">(opcional)</span>
+                        <input type="text" name="comentario" style="width:100%; font-size:12px;">
+                      </label>
+                      <label style="display:flex; align-items:center; gap:5px; font-size:11px; font-weight:500; cursor:pointer;">
+                        <input type="checkbox" required> Confirmo que quiero editar este compromiso
+                      </label>
+                      <button type="submit" class="btn btn-primary" style="font-size:11px; padding:4px 10px;">Guardar</button>
+                    </form>
+                  </details>
+                </td>
+
+                {# Compromiso roto: gestion nueva con el mismo medio/resultado, sin fecha -> status Contactado. #}
+                <td>
+                  <details>
+                    <summary class="cursor-pointer" style="font-size:12px; font-weight:600; color:var(--text-muted);">💔 Roto</summary>
+                    <form method="post" action="{% url 'actions:commitments_list' %}"
+                          style="display:flex; flex-direction:column; gap:5px; margin-top:8px; min-width:220px;"
+                          onsubmit="return confirm('¿Confirmas que este compromiso NO se cumplió? El cliente quedará en estado Contactado.');">
+                      {% csrf_token %}
+                      <input type="hidden" name="accion" value="roto">
+                      <input type="hidden" name="commitment_id" value="{{ c.id }}">
+                      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                      <label style="font-size:11px;">Comentario <span class="muted">(opcional)</span>
+                        <input type="text" name="comentario" style="width:100%; font-size:12px;">
+                      </label>
+                      <label style="display:flex; align-items:center; gap:5px; font-size:11px; font-weight:500; cursor:pointer;">
+                        <input type="checkbox" required> Confirmo que el compromiso no se cumplió
+                      </label>
+                      <button type="submit" class="btn btn-danger" style="font-size:11px; padding:4px 10px;">Marcar roto</button>
+                    </form>
+                  </details>
+                </td>
               </tr>
             {% endfor %}
           </tbody>

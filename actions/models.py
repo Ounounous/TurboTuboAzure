@@ -273,6 +273,13 @@ class Action(models.Model):
 class PaymentCommitment(models.Model):
     """Compromiso de pago acordado con el cliente durante una gestión."""
 
+    MOTIVO_EDITADO = 'editado'
+    MOTIVO_ROTO = 'roto'
+    CHOICES_MOTIVO_RETIRO = [
+        (MOTIVO_EDITADO, _('Editado (se acordó fecha/monto nuevo)')),
+        (MOTIVO_ROTO, _('Compromiso roto (no se cumplió)')),
+    ]
+
     action = models.OneToOneField(Action, on_delete=models.CASCADE, related_name='payment_commitment')
     lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name='payment_commitments')
     subcartera = models.ForeignKey('cartera.Subcartera', on_delete=models.PROTECT, related_name='payment_commitments')
@@ -281,6 +288,19 @@ class PaymentCommitment(models.Model):
     comentario = models.TextField(_('Comentario'), blank=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    # Retiro (editado o roto): unica fuente de verdad es actions/commitment_lifecycle.py, no tocar
+    # estos campos a mano por fuera de ahi (mismo espiritu que lead/lifecycle.py para Lead.activo).
+    # vigente=False deja el compromiso fuera de "Compromisos de pago" (tarjetas y tabla) pero sigue
+    # existiendo para auditoria -- la gestion que lo origino sigue en el historial del lead.
+    vigente = models.BooleanField(default=True)
+    motivo_retiro = models.CharField(max_length=10, choices=CHOICES_MOTIVO_RETIRO, blank=True)
+    retirado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    retirado_at = models.DateTimeField(null=True, blank=True)
+    # Solo si motivo_retiro=editado: el compromiso nuevo que lo reemplaza.
+    reemplazado_por = models.ForeignKey(
+        'self', on_delete=models.SET_NULL, null=True, blank=True, related_name='reemplaza_a'
+    )
 
     class Meta:
         ordering = ['-fecha_compromiso', '-created_at']

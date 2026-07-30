@@ -282,7 +282,10 @@ def check_compromisos_rotos():
 
     hoy = timezone.now().date()
     ultimo_compromiso = (
-        PaymentCommitment.objects.filter(lead=OuterRef('pk'))
+        # Solo vigentes: uno editado ya tiene un reemplazo con fecha propia; uno marcado roto a
+        # mano (ver actions/commitment_lifecycle.py) ya saco al lead de status=compromiso, asi
+        # que ni siquiera entraria al filtro de abajo -- pero se excluye igual por prolijidad.
+        PaymentCommitment.objects.filter(lead=OuterRef('pk'), vigente=True)
         .order_by('-fecha_compromiso').values('fecha_compromiso')[:1]
     )
     pks = list(

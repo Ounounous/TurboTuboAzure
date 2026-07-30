@@ -91,8 +91,11 @@ class CallRecordingAdmin(admin.ModelAdmin):
 
 
 class PaymentCommitmentAdmin(admin.ModelAdmin):
-    list_display = ('cartera', 'subcartera', 'op', 'fecha_compromiso', 'monto', 'created_by', 'created_at')
-    list_filter = ('lead__subcartera__cartera', 'fecha_compromiso', 'created_by')
+    list_display = (
+        'cartera', 'subcartera', 'op', 'fecha_compromiso', 'monto', 'vigente', 'motivo_retiro',
+        'created_by', 'created_at',
+    )
+    list_filter = ('vigente', 'motivo_retiro', 'lead__subcartera__cartera', 'fecha_compromiso', 'created_by')
     search_fields = ('lead__op',)
     list_select_related = ('lead', 'subcartera', 'subcartera__cartera', 'created_by')
 
