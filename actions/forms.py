@@ -69,7 +69,7 @@ class AddEmailQuickForm(forms.Form):
 class PaymentForm(forms.ModelForm):
     class Meta:
         model = Payment
-        fields = ['monto', 'fecha', 'tipo', 'comprobante']
+        fields = ['monto', 'fecha', 'tipo', 'comentario', 'comprobante']
         widgets = {
             'fecha': forms.DateInput(attrs={'type': 'date'}),
             'monto': forms.NumberInput(attrs={'min': 0, 'placeholder': 'Monto en pesos'}),
@@ -79,6 +79,7 @@ class PaymentForm(forms.ModelForm):
             'monto': 'Monto ($)',
             'fecha': 'Fecha del pago',
             'tipo': 'Tipo',
+            'comentario': 'Comentario',
             'comprobante': 'Comprobante (PNG/JPG/PDF)',
         }
 

@@ -432,6 +432,7 @@ class Payment(models.Model):
     monto = models.PositiveIntegerField(_('Monto'))
     fecha = models.DateField(_('Fecha de pago'))
     tipo = models.CharField(_('Tipo'), max_length=10, choices=CHOICES_TIPO, default=TIPO_CUOTA)
+    comentario = models.TextField(_('Comentario'), blank=True)
     comprobante = models.FileField(
         _('Comprobante'), upload_to='payment_receipts/%Y/%m/', null=True, blank=True,
         validators=[FileExtensionValidator(['png', 'jpg', 'jpeg', 'pdf'])],

@@ -66,8 +66,23 @@
     {% endfor %}
   </div>
 
-  <!-- Tabla de pagos (todas las fechas, según la cartera elegida arriba) -->
-  <h2 class="text-lg font-bold mb-2">Pagos{% if selected_cartera %} · {% for c in carteras_launcher %}{% if c.active %}{{ c.nombre }}{% endif %}{% endfor %}{% endif %}</h2>
+  <!-- Pagos históricos: busca por OP y/o fecha exacta sobre TODOS los pagos, no solo los de este mes -->
+  <h2 class="text-lg font-bold mb-2">Pagos históricos{% if selected_cartera %} · {% for c in carteras_launcher %}{% if c.active %}{{ c.nombre }}{% endif %}{% endfor %}{% endif %}</h2>
+  <form method="get" class="mb-4">
+    {% if selected_cartera %}<input type="hidden" name="cartera" value="{{ selected_cartera }}">{% endif %}
+    <div class="flex flex-wrap gap-4 items-end">
+      <div>
+        <label class="font-semibold block mb-1" for="hist_op">ID (OP)</label>
+        <input type="text" name="hist_op" id="hist_op" value="{{ hist_op }}">
+      </div>
+      <div>
+        <label class="font-semibold block mb-1" for="hist_fecha">Fecha del pago</label>
+        <input type="date" name="hist_fecha" id="hist_fecha" value="{{ hist_fecha }}">
+      </div>
+      <button type="submit" class="btn btn-primary">Buscar</button>
+      {% if hist_op or hist_fecha %}<a href="?{% if selected_cartera %}cartera={{ selected_cartera }}{% endif %}" class="btn btn-secondary">Limpiar</a>{% endif %}
+    </div>
+  </form>
   {% if tabla_pagos %}
     <div class="card" style="border:1px solid var(--border); border-radius:10px;">
       <div class="overflow-x-auto">
@@ -75,7 +90,7 @@
           <thead>
             <tr>
               <th>Cartera</th><th>Subcartera</th><th>ID</th><th>Cliente</th><th>Fecha</th>
-              <th class="num">Monto</th><th>Tipo</th><th>Comprobante</th><th>Registrado por</th>
+              <th class="num">Monto</th><th>Tipo</th><th>Comentario</th><th>Comprobante</th><th>Registrado por</th>
             </tr>
           </thead>
           <tbody>
@@ -88,7 +103,8 @@
                 <td style="font-variant-numeric:tabular-nums">{{ p.fecha|date:"d-m-Y" }}</td>
                 <td class="num">{{ p.monto|clp }}</td>
                 <td>{{ p.get_tipo_display }}</td>
-                <td>{% if p.comprobante %}<a href="{{ p.comprobante.url }}" target="_blank" class="link">Ver</a>{% else %}-{% endif %}</td>
+                <td>{{ p.comentario|default:"-"|truncatechars:60 }}</td>
+                <td>{% if p.comprobante %}<a href="{{ p.comprobante.url }}" target="_blank" class="link">Ver</a>{% else %}<span class="muted">No registrado</span>{% endif %}</td>
                 <td>{{ p.created_by.username|default:"-" }}</td>
               </tr>
             {% endfor %}

@@ -226,14 +226,15 @@
         {% if lead.payments.all %}
           <div class="overflow-x-auto">
             <table class="table-dense">
-              <thead><tr><th>Fecha</th><th class="num">Monto</th><th>Tipo</th><th>Comprobante</th><th>Registrado por</th></tr></thead>
+              <thead><tr><th>Fecha</th><th class="num">Monto</th><th>Tipo</th><th>Comentario</th><th>Comprobante</th><th>Registrado por</th></tr></thead>
               <tbody>
                 {% for p in lead.payments.all %}
                   <tr>
                     <td style="font-variant-numeric:tabular-nums">{{ p.fecha|date:"d-m-Y" }}</td>
                     <td class="num">{{ p.monto|clp }}</td>
                     <td>{{ p.get_tipo_display }}</td>
-                    <td>{% if p.comprobante %}<a href="{{ p.comprobante.url }}" target="_blank" class="link">Ver comprobante</a>{% else %}-{% endif %}</td>
+                    <td>{{ p.comentario|default:"-"|truncatechars:80 }}</td>
+                    <td>{% if p.comprobante %}<a href="{{ p.comprobante.url }}" target="_blank" class="link">Ver comprobante</a>{% else %}<span class="muted">No registrado</span>{% endif %}</td>
                     <td>{{ p.created_by.username|default:"-" }}</td>
                   </tr>
                 {% endfor %}
