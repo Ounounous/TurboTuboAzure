@@ -1,0 +1,65 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Cargas masivas{% endblock %}
+
+{% block content %}
+<div class="py-6 px-6">
+  <h1 class="text-xl mb-1">Configuración</h1>
+  {% include 'configuracion/_subnav.html' with active='cargas_masivas' %}
+
+  <p class="muted mb-4" style="font-size:12.5px;">
+    Historial de subidas por Excel (clientes, teléfonos, email, dirección, bienes, aval, asignaciones,
+    gestiones, suspensiones). Se puede deshacer un lote completo: las filas que creó se borran, las
+    que actualizó vuelven a su valor anterior. En clientes, borrar en cascada se lleva sus gestiones
+    y pagos, pero las grabaciones de llamadas se conservan (retención legal). No se puede deshacer un
+    lote dos veces, ni "reordenar" — si deshaces uno viejo y hay lotes más nuevos sobre las mismas
+    filas, revisa el resultado con cuidado.
+  </p>
+
+  <div class="card" style="border:1px solid var(--border); border-radius:10px;">
+    <div class="overflow-x-auto">
+      <table class="table-dense">
+        <thead>
+          <tr>
+            <th>Fecha</th><th>Tipo</th><th>Usuario</th><th>Archivo</th>
+            <th>Filas</th><th>Creadas</th><th>Actualizadas</th><th>Estado</th><th>Acción</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for lote in lotes %}
+            <tr>
+              <td style="font-variant-numeric:tabular-nums; color:var(--text-muted)">{{ lote.created_at|date:"d-m-Y H:i" }}</td>
+              <td style="font-weight:600">{{ lote.get_tipo_display }}</td>
+              <td>{{ lote.usuario.username|default:"—" }}</td>
+              <td class="muted" style="max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ lote.archivo_nombre }}">{{ lote.archivo_nombre|default:"—" }}</td>
+              <td class="num">{{ lote.total_filas }}</td>
+              <td class="num">{{ lote.n_creados }}</td>
+              <td class="num">{{ lote.n_actualizados }}</td>
+              <td>
+                {% if lote.estado == 'deshecha' %}
+                  <span class="muted">Deshecha{% if lote.deshecha_at %} · {{ lote.deshecha_at|date:"d-m-Y H:i" }}{% endif %}{% if lote.deshecha_por %} · {{ lote.deshecha_por.username }}{% endif %}</span>
+                {% else %}
+                  <span class="dot-st"><span class="d st-green"></span>Completada</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if lote.estado != 'deshecha' %}
+                  <form method="post" style="margin:0;" onsubmit="return confirm('¿Deshacer esta carga? Se borrarán {{ lote.n_creados }} fila(s) nueva(s) y se restaurarán {{ lote.n_actualizados }} fila(s) actualizada(s). No se puede deshacer dos veces.');">
+                    {% csrf_token %}
+                    <input type="hidden" name="lote_id" value="{{ lote.pk }}">
+                    <button type="submit" class="btn btn-danger" style="font-size:11px; padding:3px 8px;">Deshacer</button>
+                  </form>
+                {% else %}
+                  <span class="muted">—</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="9" class="muted" style="text-align:center; padding:16px;">Todavía no hay cargas masivas registradas.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

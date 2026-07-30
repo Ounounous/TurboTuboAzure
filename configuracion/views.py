@@ -308,3 +308,38 @@ class RegistrosAccionesView(ConfiguracionRequiredMixin, View):
             'f_accion': f_accion,
             'f_fecha': f_fecha,
         })
+
+
+class CargasMasivasView(ConfiguracionRequiredMixin, View):
+    """Historial de cargas masivas (clientes, telefonos, gestiones, asignaciones, etc.) con la
+    opcion de deshacer un lote completo. Solo admin/owner -- deshacer es una operacion delicada
+    (borra filas y revierte campos), no es cosa de supervisor."""
+    template_name = 'configuracion/cargas_masivas.html'
+
+    def get(self, request, *args, **kwargs):
+        from core.models import CargaMasiva
+        lotes = CargaMasiva.objects.select_related('usuario', 'deshecha_por').prefetch_related('cambios')[:100]
+        # Conteo de creados/actualizados por lote, sin una query aparte por fila.
+        from core.models import CargaMasivaCambio
+        for lote in lotes:
+            cambios = list(lote.cambios.all())
+            lote.n_creados = sum(1 for c in cambios if c.accion == CargaMasivaCambio.ACCION_CREADO)
+            lote.n_actualizados = sum(1 for c in cambios if c.accion == CargaMasivaCambio.ACCION_ACTUALIZADO)
+        return render(request, self.template_name, {'lotes': lotes})
+
+    def post(self, request, *args, **kwargs):
+        from core.models import CargaMasiva
+        from core.carga_tracking import deshacer_lote
+
+        lote = get_object_or_404(CargaMasiva, pk=request.POST.get('lote_id'))
+        try:
+            deshacer_lote(lote, request.user)
+        except ValueError as exc:
+            messages.error(request, str(exc))
+        else:
+            messages.success(
+                request,
+                f'Lote "{lote.get_tipo_display()}" ({lote.total_filas} fila(s), '
+                f'{lote.created_at:%d-%m-%Y %H:%M}) deshecho correctamente.',
+            )
+        return redirect('configuracion:cargas_masivas')
