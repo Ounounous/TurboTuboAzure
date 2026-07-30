@@ -96,7 +96,7 @@ class LeadListView(LoginRequiredMixin, ListView):
         return leads_visibles(self.request.user)
 
     def get_queryset(self):
-        queryset = self._base_scope().select_related('subcartera__cartera').annotate(
+        queryset = self._base_scope().select_related('subcartera__cartera', 'assigned_to__userprofile').annotate(
             # Última gestión (Action) del lead — NO cuenta las notas (LeadNote es otro modelo).
             last_action_at=Max('actions__created_at')
         )
@@ -207,6 +207,12 @@ class LeadListView(LoginRequiredMixin, ListView):
                 lead.dias_ultima_gestion = (today - localtime(lead.last_action_at).date()).days
             else:
                 lead.dias_ultima_gestion = None
+            # "Asignado a": un lead recien cargado queda con assigned_to = quien subio el Excel
+            # (tipicamente el supervisor) -- eso NO es una asignacion real a un cobrador todavia,
+            # asi que se muestra "No asignado" salvo que este realmente en manos de un cobrador.
+            asignado = lead.assigned_to
+            profile = getattr(asignado, 'userprofile', None) if asignado else None
+            lead.asignado_a_display = asignado.username if profile and profile.user_type == 'collector' else None
         context['leads'] = leads
         context['limit'] = limit
 
@@ -325,14 +331,22 @@ class LeadDetailView(LoginRequiredMixin, DetailView):
 
         if form.is_valid():
             collector = form.cleaned_data['collector']
-            lead.assigned_to = collector
-            # Reasignar saca al lead de desasignado, lo vuelve activo
-            if lead.activo == Lead.DESASIGNADO:
-                lead.activo = Lead.ACTIVO
-                lead.desasignado_at = None
-            lead.save()
-            LeadAssignment.objects.create(lead=lead, user=collector, assigned_by=request.user)
-            messages.success(request, f'Cliente asignado a {collector.username}')
+            if collector is None:
+                # "-- Sin asignar --": misma transicion que el boton Desasignar de Suspensiones
+                # (unica fuente de verdad para tocar Lead.activo, ver lead/lifecycle.py).
+                from .lifecycle import desasignar
+                desasignar(lead, changed_by=request.user)
+                LeadAssignment.objects.create(lead=lead, user=None, assigned_by=request.user)
+                messages.success(request, 'Cliente desasignado (sin cobrador).')
+            else:
+                lead.assigned_to = collector
+                # Reasignar saca al lead de desasignado, lo vuelve activo
+                if lead.activo == Lead.DESASIGNADO:
+                    lead.activo = Lead.ACTIVO
+                    lead.desasignado_at = None
+                lead.save()
+                LeadAssignment.objects.create(lead=lead, user=collector, assigned_by=request.user)
+                messages.success(request, f'Cliente asignado a {collector.username}')
             return redirect('leads:detail', pk=lead.pk)
 
         return self.get(request, *args, **kwargs)

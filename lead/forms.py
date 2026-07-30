@@ -26,8 +26,12 @@ class UploadExcelFileForm(forms.Form):
     excel_file = forms.FileField(label='Upload Excel file')
 
 class QuickAssignForm(forms.Form):
-    """Formulario simple para asignar un lead a un cobrador (en la ficha de detalle)."""
-    collector = forms.ModelChoiceField(queryset=User.objects.none(), label='Asignar a')
+    """Formulario simple para asignar un lead a un cobrador (en la ficha de detalle). No
+    obligatorio: dejar la opcion "-- Sin asignar --" desasigna al lead (igual que el boton
+    Desasignar de Suspensiones, ver LeadDetailView.post)."""
+    collector = forms.ModelChoiceField(
+        queryset=User.objects.none(), label='Asignar a', required=False, empty_label='-- Sin asignar --',
+    )
 
     def __init__(self, *args, **kwargs):
         team = kwargs.pop('team', None)
