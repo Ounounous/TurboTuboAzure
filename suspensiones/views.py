@@ -1,8 +1,12 @@
+from io import BytesIO
+
+import openpyxl
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import Count
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 
@@ -97,6 +101,26 @@ LIFECYCLE_UPLOAD_ALIASES = {
     'accion': 'accion', 'action': 'accion',
     'motivo': 'motivo', 'reason': 'motivo',
 }
+
+
+class SuspensionesTemplateView(SupervisorRequiredMixin, View):
+    """Plantilla Excel para la carga masiva de cambios de ciclo de vida (suspender/desasignar/reactivar)."""
+    def get(self, request, *args, **kwargs):
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = 'Suspensiones'
+        ws.append(['cartera', 'subcartera', 'op', 'accion', 'motivo'])
+        ws.append(['CARTERA-EJEMPLO', 'SUBCARTERA-EJEMPLO', 'OP-EJEMPLO', 'suspender', 'no ubicable'])
+
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+        response = HttpResponse(
+            content=output.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        response['Content-Disposition'] = 'attachment; filename=plantilla_suspensiones.xlsx'
+        return response
 
 
 class BulkLifecycleUploadView(SupervisorRequiredMixin, View):

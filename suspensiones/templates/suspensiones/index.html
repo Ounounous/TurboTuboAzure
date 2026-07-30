@@ -76,14 +76,22 @@
   <hr class="my-6">
 
   <h2 class="text-lg font-bold mb-2">Carga masiva (Excel)</h2>
-  <p class="mb-2" style="font-size:13px;">
-    Sube un Excel con columnas <strong>CARTERA, SUBCARTERA, ID, ACCION, MOTIVO</strong>. La acción debe ser
-    <strong>suspender</strong>, <strong>desasignar</strong> o <strong>reactivar</strong> (motivo opcional, solo para suspender).
-  </p>
-  <form method="post" action="{% url 'suspensiones:bulk_upload' %}" enctype="multipart/form-data">
+  <a href="{% url 'suspensiones:bulk_template' %}" class="btn btn-secondary mb-3">Descargar plantilla (.xlsx)</a>
+  <form method="post" action="{% url 'suspensiones:bulk_upload' %}" enctype="multipart/form-data" class="mb-3">
     {% csrf_token %}
     <input type="file" name="excel_file" required>
     <button type="submit" class="btn btn-primary mt-2">Subir Excel</button>
   </form>
+  <div class="card p-4" style="max-width:640px;">
+    <h4 class="font-bold mb-2" style="font-size:13px;">Columnas</h4>
+    <ul class="list-disc list-inside space-y-1" style="font-size:13px;">
+      <li><strong>cartera</strong>, <strong>subcartera</strong>, <strong>op</strong> — identifican al cliente. Obligatorias.</li>
+      <li><strong>accion</strong> — <code>suspender</code>, <code>desasignar</code> o <code>reactivar</code>. Obligatoria.</li>
+      <li><strong>motivo</strong> — texto libre explicando por qué. Opcional (solo tiene sentido para "suspender").</li>
+    </ul>
+    <p class="muted mt-2" style="font-size:12px;">
+      Si una fila tiene un error, no se aplica ninguna hasta corregirla (carga todo-o-nada).
+    </p>
+  </div>
 </div>
 {% endblock %}
