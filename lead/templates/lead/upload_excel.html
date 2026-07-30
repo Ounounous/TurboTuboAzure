@@ -3,14 +3,49 @@
 {% block title %}Agregar clientes desde Excel{% endblock %}
 
 {% block content %}
-<div class="py-6 px-6" style="max-width: 560px;">
+<div class="py-6 px-6" style="max-width: 720px;">
   <h1 class="text-xl font-bold mb-4">Agregar clientes desde Excel</h1>
-  <div class="card p-4">
+
+  <div class="card p-4 mb-4">
+    <h2 class="mb-2 text-lg font-bold">1. Descarga la plantilla</h2>
+    <p class="muted mb-3" style="font-size:12.5px;">
+      La plantilla trae los encabezados y una fila de ejemplo. Si una fila tiene un error, no se
+      sube ninguna hasta corregirla (carga todo-o-nada).
+    </p>
+    <a href="{% url 'leads:clientes_template' %}" class="btn btn-secondary">Descargar plantilla (.xlsx)</a>
+  </div>
+
+  <div class="card p-4 mb-4">
+    <h2 class="mb-2 text-lg font-bold">2. Sube el archivo</h2>
+    <p class="muted mb-3" style="font-size:12.5px;">
+      Elige primero la <strong>Cartera</strong> a la que van estos clientes — todo el archivo
+      se carga a esa cartera.
+    </p>
     <form method="post" enctype="multipart/form-data">
       {% csrf_token %}
       {{ form.as_p }}
       <button type="submit" class="btn btn-primary mt-2">Subir</button>
     </form>
+  </div>
+
+  <div class="card p-4">
+    <h2 class="mb-2 text-lg font-bold">Columnas</h2>
+    <ul class="list-disc list-inside space-y-1" style="font-size:13px;">
+      <li><strong>op</strong> — identificador único del cliente/operación. Obligatoria.</li>
+      <li><strong>name</strong> — nombre del cliente. Obligatoria.</li>
+      <li><strong>rut</strong>, <strong>dv</strong> — RUT sin puntos ni guion, y su dígito verificador aparte. Obligatorias.</li>
+      <li><strong>saldo_insoluto</strong>, <strong>saldo_deuda</strong>, <strong>valor_cuota</strong> — montos en pesos, solo números (sin $ ni puntos). Obligatorias.</li>
+      <li><strong>cuotas_atrasadas</strong> — número entero. Obligatoria.</li>
+      <li><strong>cartera</strong> — opcional en el Excel; si la incluyes, debe coincidir exactamente con la Cartera que elegiste arriba en el formulario, o la fila se rechaza.</li>
+      <li><strong>subcartera</strong> — opcional; si se omite, va a la subcartera marcada como predeterminada de esa cartera.</li>
+      <li><strong>tipo_cobranza</strong> — <code>judicial</code> o <code>extra judicial</code>. Opcional (por defecto: extra judicial).</li>
+      <li><strong>ciclo_cartera</strong>, <strong>ciclo</strong> — texto libre, según cómo lo reporte la cartera. Opcionales.</li>
+      <li><strong>activo</strong> — <code>activo</code>, <code>suspendido</code>, <code>terminado</code> o <code>desasignado</code>. Opcional (por defecto: activo).</li>
+      <li><strong>tiene_aval</strong> — <code>si</code> o <code>no</code>. Opcional (por defecto: no).</li>
+    </ul>
+    <p class="muted mt-3" style="font-size:12px;">
+      El estado del cliente (status) no se sube por Excel: se calcula solo a partir de sus gestiones y pagos.
+    </p>
   </div>
 </div>
 {% endblock %}

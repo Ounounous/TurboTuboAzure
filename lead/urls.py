@@ -15,6 +15,7 @@ urlpatterns = [
     path('<int:pk>/add-file/', views.AddFileView.as_view(), name='add_file'),
     path('add/', views.LeadCreateView.as_view(), name='add_lead'),
     path('upload_excel/', views.UploadExcelFileView.as_view(), name='upload-excel'),
+    path('upload_excel/plantilla/', views.ClientesTemplateView.as_view(), name='clientes_template'),
     path('download_excel/', views.DownloadExcelView.as_view(), name='download-excel'),
     path('assign/', AssignLeadsView.as_view(), name='leads_assign'),
     path('assign/plantilla/', views.DownloadAssignmentTemplateView.as_view(), name='assign_template'),

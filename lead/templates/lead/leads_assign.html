@@ -8,16 +8,24 @@
 
   <div class="card p-4 mb-4">
     <h2 class="mb-3 text-lg font-bold">Asignar desde Excel</h2>
-    <p class="muted mb-3" style="font-size:12.5px;">
-      Columnas: Cartera, Subcartera, OP, Collector (usuario del cobrador).
-      <a href="{% url 'leads:assign_template' %}" class="link">Descargar plantilla</a>.
-      Si alguna fila tiene un error, no se asigna nada y se descarga el mismo Excel con el detalle.
-    </p>
+    <a href="{% url 'leads:assign_template' %}" class="btn btn-secondary mb-3">Descargar plantilla (.xlsx)</a>
     <form method="post" enctype="multipart/form-data">
       {% csrf_token %}
       {{ upload_form.as_p }}
       <button type="submit" class="btn btn-primary mt-2">Subir archivo</button>
     </form>
+    <div class="mt-3" style="font-size:12.5px;">
+      <p class="font-bold mb-1">Columnas</p>
+      <ul class="list-disc list-inside space-y-1">
+        <li><strong>Cartera</strong>, <strong>Subcartera</strong>, <strong>OP</strong> — identifican al cliente. Obligatorias.</li>
+        <li><strong>Collector</strong> — nombre de usuario (username) del cobrador destino. Obligatoria.</li>
+      </ul>
+      <p class="muted mt-2">
+        Tanto el cliente como el cobrador tienen que pertenecer a tu <strong>equipo activo</strong>
+        (el que tienes seleccionado en "Mi cuenta"); si alguno es de otro equipo, la fila se rechaza.
+        Si alguna fila tiene un error, no se asigna nada y se descarga el mismo Excel con el detalle.
+      </p>
+    </div>
   </div>
 
   <p class="muted" style="font-size:12.5px;">

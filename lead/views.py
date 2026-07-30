@@ -415,6 +415,33 @@ def _parse_choice(valor, choices, default, campo, errores):
     return default
 
 
+class ClientesTemplateView(_SupervisorGate, View):
+    """Plantilla Excel para la carga masiva de clientes (leads) de una cartera."""
+    def get(self, request, *args, **kwargs):
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = 'Clientes'
+        ws.append([
+            'op', 'name', 'rut', 'dv', 'saldo_insoluto', 'saldo_deuda', 'valor_cuota',
+            'cuotas_atrasadas', 'cartera', 'subcartera', 'tipo_cobranza', 'ciclo_cartera',
+            'ciclo', 'activo', 'tiene_aval',
+        ])
+        ws.append([
+            'OP-0001', 'Juan Pérez', '12345678', '9', 500000, 550000, 45000,
+            2, 'CARTERA-EJEMPLO', 'SUBCARTERA-EJEMPLO', 'extra judicial', '2026-1',
+            '1', 'activo', 'no',
+        ])
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+        response = HttpResponse(
+            content=output.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        response['Content-Disposition'] = 'attachment; filename=plantilla_clientes.xlsx'
+        return response
+
+
 class UploadExcelFileView(_SupervisorGate, View):
     def get(self, request, *args, **kwargs):
         form = UploadExcelFileForm()
