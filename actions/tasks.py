@@ -580,6 +580,30 @@ def purgar_compromisos_rotos(dias=None):
     return borrados
 
 
+@shared_task(**RETRY_DB)
+def purgar_cargas_masivas(dias=90):
+    """
+    Borra el historial de cargas masivas (core.CargaMasiva y sus CargaMasivaCambio en cascada)
+    mas viejo que `dias`. Es la tabla que mas crece del sistema: guarda UNA FILA POR REGISTRO
+    TOCADO en cada carga, asi que subir 100.000 telefonos deja 100.000 filas permanentes.
+
+    Purgar el lote NO revierte nada ni toca los datos cargados: solo borra la posibilidad de
+    "deshacer" ese lote, que en la practica sirve los primeros dias (ver
+    configuracion/templates/configuracion/cargas_masivas.html). Los lotes ya deshechos tambien
+    se purgan: su unico valor era el rastro de auditoria, que a los 90 dias ya cumplio.
+    """
+    from core.models import CargaMasiva
+
+    corte = timezone.now() - timedelta(days=dias)
+    borrados, detalle = CargaMasiva.objects.filter(created_at__lt=corte).delete()
+    filas = detalle.get('core.CargaMasivaCambio', 0)
+    logger.info(
+        f"purgar_cargas_masivas: {detalle.get('core.CargaMasiva', 0)} lote(s) y {filas} "
+        f"fila(s) de detalle mas viejos que {dias} dias eliminados"
+    )
+    return borrados
+
+
 # Ventana maxima (en dias) que puede pasar sin que cada tarea programada corra, antes de avisar.
 HEARTBEAT_MAX_DIAS = {
     'actions.tasks.reset_status_mensual': 32,
@@ -595,6 +619,7 @@ HEARTBEAT_MAX_DIAS = {
     'actions.tasks.purgar_access_log': 8,
     'actions.tasks.purgar_asignaciones': 8,
     'actions.tasks.purgar_compromisos_rotos': 8,
+    'actions.tasks.purgar_cargas_masivas': 8,
     'mlmetadata.tasks.exportar_metadata_ml': 8,
 }
 
@@ -603,13 +628,18 @@ HEARTBEAT_MAX_DIAS = {
 def verificar_tareas_programadas():
     """
     AUTORECUPERACION (deteccion): revisa que las tareas criticas realmente esten programadas y
-    hayan corrido dentro de su ventana. Si una no esta configurada en Celery Beat o quedo atrasada,
-    lo deja en el log como WARNING (para alertar), en vez de que falle en silencio.
+    hayan corrido dentro de su ventana.
+
+    Se registra en nivel ERROR (no WARNING) a proposito: es la unica senal de que el worker de
+    Celery o Redis se cayeron, y con Redis Basic C0 (nodo unico, sin acuerdo de servicio) eso es
+    un escenario real. Al ser ERROR queda enganchable con una alerta de Azure sobre stdout /
+    Application Insights, en vez de quedar enterrado entre los WARNING de rutina. El prefijo
+    TAREAS_ATRASADAS es el texto sobre el que conviene configurar la alerta.
     """
     try:
         from django_celery_beat.models import PeriodicTask
     except ImportError:
-        logger.warning('verificar_tareas_programadas: django_celery_beat no disponible.')
+        logger.error('TAREAS_ATRASADAS: django_celery_beat no disponible.')
         return []
 
     ahora = timezone.now()
@@ -625,7 +655,7 @@ def verificar_tareas_programadas():
             problemas.append(f'{task_name}: sin correr hace mas de {max_dias} dias (ultima: {pt.last_run_at:%Y-%m-%d}).')
 
     for p in problemas:
-        logger.warning(f'verificar_tareas_programadas: {p}')
+        logger.error(f'TAREAS_ATRASADAS: {p}')
     if not problemas:
         logger.info('verificar_tareas_programadas: todas las tareas criticas al dia.')
     return problemas

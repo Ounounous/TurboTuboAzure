@@ -66,9 +66,26 @@ _blob_conn = os.environ.get('AZURE_STORAGE_CONNECTION_STRING')
 
 STORAGES = {
     'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage'},
-    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
 }
-if _blob_account or _blob_conn:
+if not (_blob_account or _blob_conn):
+    # FALLA FUERTE a proposito. Sin Blob, `default` caia a FileSystemStorage sobre el disco del
+    # App Service: unos 10 GB y EFIMERO (se borra en cada despliegue, reinicio o escalado). Ahi
+    # van las grabaciones de llamadas -- con retencion legal de 2 anios -- y los comprobantes de
+    # pago. El modo silencioso era peor que no arrancar: la app funcionaba, la gente grababa
+    # llamadas, y el siguiente despliegue las borraba sin que nadie se enterara.
+    #
+    # Para levantar produccion hay que definir AZURE_STORAGE_ACCOUNT + AZURE_STORAGE_KEY (o
+    # AZURE_STORAGE_CONNECTION_STRING). Si de verdad se quiere arrancar sin almacenamiento
+    # persistente (solo pruebas), poner ALLOW_EPHEMERAL_MEDIA=True y asumir la perdida.
+    if os.environ.get('ALLOW_EPHEMERAL_MEDIA', 'False') != 'True':
+        raise RuntimeError(
+            'Falta el almacenamiento de media en produccion: define AZURE_STORAGE_ACCOUNT y '
+            'AZURE_STORAGE_KEY (o AZURE_STORAGE_CONNECTION_STRING). Sin esto las grabaciones y '
+            'los comprobantes se guardarian en el disco efimero del App Service y se perderian '
+            'en el proximo despliegue. Para arrancar igual (solo pruebas): ALLOW_EPHEMERAL_MEDIA=True.'
+        )
+    STORAGES['default'] = {'BACKEND': 'django.core.files.storage.FileSystemStorage'}
+else:
     STORAGES['default'] = {
         'BACKEND': 'storages.backends.azure_storage.AzureStorage',
         'OPTIONS': {
