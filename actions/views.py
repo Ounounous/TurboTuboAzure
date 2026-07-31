@@ -1358,6 +1358,16 @@ class BulkActionUploadView(SupervisorRequiredMixin, View):
                 else:
                     resultado = candidatos[0]
 
+            # La carga masiva no tiene columna de fecha de compromiso (cargar promesas de pago
+            # en bloque no tiene sentido de negocio) -- si el resultado elegido exige una, no se
+            # puede cumplir esa regla del arbol por esta via: se rechaza la fila en vez de guardar
+            # la gestion sin compromiso en silencio (antes el compromiso se perdia sin avisar).
+            if resultado and resultado.requiere_fecha_pago:
+                errores.append(
+                    f'el resultado "{resultado_nom}" requiere fecha de compromiso de pago; '
+                    'no se puede cargar por carga masiva de gestiones'
+                )
+
             telefono = fila.get('telefono')
             phone_obj = None
             if telefono:
