@@ -638,6 +638,8 @@ class UploadExcelFileView(_SupervisorGate, View):
 class DownloadExcelView(_SupervisorGate, View):
     @con_limite_concurrencia('export_excel', slots=2)
     def get(self, request, *args, **kwargs):
+        from django.db.models import Max
+        from django.utils.timezone import localdate, localtime
         from .permissions import leads_visibles
         # Create your Excel file here
         workbook = openpyxl.Workbook()
@@ -645,13 +647,29 @@ class DownloadExcelView(_SupervisorGate, View):
         sheet.title = 'Clients'
 
         # Add headers
-        headers = ['Op','Name', 'RUT', 'DV', 'Saldo Insoluto', 'Saldo Deuda', 'Valor Cuota', 'Cuotas Atrasadas', 'Cartera', 'Subcartera', 'Tipo Cobranza', 'Status', 'Ciclo Cartera', 'Ciclo', 'Activo', 'Tiene Aval']
+        headers = [
+            'Op', 'Name', 'RUT', 'DV', 'Saldo Insoluto', 'Saldo Deuda', 'Valor Cuota',
+            'Cuotas Atrasadas', 'Cartera', 'Subcartera', 'Tipo Cobranza', 'Status', 'Ciclo Cartera',
+            'Ciclo', 'Activo', 'Tiene Aval', 'Asignado a', 'Días desde última gestión',
+        ]
         sheet.append(headers)
 
-        # Add data (solo las carteras del usuario; admin/owner: todo)
-        for lead in leads_visibles(request.user, base=Lead.objects.select_related('subcartera__cartera')):
+        # Add data (solo las carteras del usuario; admin/owner: todo). "Asignado a" y "Dias desde
+        # ultima gestion" se calculan al vuelo, igual que en la lista de clientes (LeadListView) --
+        # no son campos del modelo, asi que no hace falta migracion ni tocar Lead.
+        today = localdate()
+        leads = leads_visibles(
+            request.user,
+            base=Lead.objects.select_related('subcartera__cartera', 'assigned_to__userprofile'),
+        ).annotate(last_action_at=Max('actions__created_at'))
+        for lead in leads:
+            asignado = lead.assigned_to
+            perfil_asignado = getattr(asignado, 'userprofile', None) if asignado else None
+            asignado_a = asignado.username if perfil_asignado and perfil_asignado.user_type == 'collector' else 'No asignado'
+            dias_gestion = (today - localtime(lead.last_action_at).date()).days if lead.last_action_at else 'N/A'
+
             sheet.append([
-                lead.op, lead.name, lead.rut, lead.dv, lead.saldo_insoluto, lead.saldo_deuda, lead.valor_cuota, lead.cuotas_atrasadas, lead.subcartera.cartera.nombre, lead.subcartera.nombre, lead.tipo_cobranza, lead.get_status_display(), lead.ciclo_cartera, lead.ciclo, lead.activo, lead.tiene_aval
+                lead.op, lead.name, lead.rut, lead.dv, lead.saldo_insoluto, lead.saldo_deuda, lead.valor_cuota, lead.cuotas_atrasadas, lead.subcartera.cartera.nombre, lead.subcartera.nombre, lead.tipo_cobranza, lead.get_status_display(), lead.ciclo_cartera, lead.ciclo, lead.activo, lead.tiene_aval, asignado_a, dias_gestion
             ])
 
         # Save the workbook to a BytesIO stream
