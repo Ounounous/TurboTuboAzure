@@ -1,0 +1,86 @@
+# Despliegue de TurboTubo (produccion) a Azure App Service.
+#
+# Despliega el MISMO codigo a dos App Services que comparten el mismo App Service Plan:
+#   - turbotubo2026-web     -> sirve la web (startup.sh: migrate + gunicorn)
+#   - turbotubo2026-worker  -> Celery worker + beat (startup-worker.sh)
+# El arranque de cada uno se configura UNA vez en Azure (ver notas al final), no en este archivo.
+#
+# Secretos requeridos en el repo (Settings -> Secrets and variables -> Actions):
+#   SECRET                          -> el SECRET_KEY de Django (deployment.py acepta SECRET_KEY o SECRET)
+#   AZURE_PUBLISH_PROFILE_WEB       -> publish profile del App Service turbotubo2026-web
+#   AZURE_PUBLISH_PROFILE_WORKER    -> publish profile del App Service turbotubo2026-worker
+#
+# El resto de la configuracion (DB, Redis, Blob, PBX, etc.) vive en las App Settings de cada App
+# Service en Azure, NO en este workflow -- ver el documento de instrucciones de deploy, seccion 3.3.
+
+name: Deploy TurboTubo to Azure (prod)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: '3.12'                    # Debe coincidir con la version del App Service
+  DJANGO_SETTINGS_MODULE: turbotubo.deployment
+  AZURE_WEBAPP_WEB: turbotubo2026-web
+  AZURE_WEBAPP_WORKER: turbotubo2026-worker
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: Production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt --no-warn-script-location
+
+      # collectstatic corre aca (WhiteNoise sirve los estaticos hasheados). El SECRET solo se
+      # usa para que deployment.py arranque; no se usa criptograficamente en collectstatic.
+      - name: Collect static files
+        run: python manage.py collectstatic --noinput
+        env:
+          SECRET: ${{ secrets.SECRET }}
+
+      # Deploy con package: . -> Azure/Oryx instala requirements.txt en el servidor
+      # (App Service con SCM_DO_BUILD_DURING_DEPLOYMENT=true). Los estaticos ya recolectados
+      # viajan dentro del paquete.
+      - name: Deploy web app (gunicorn)
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_WEB }}
+          slot-name: 'Production'
+          publish-profile: ${{ secrets.AZURE_PUBLISH_PROFILE_WEB }}
+          package: .
+
+      - name: Deploy worker app (celery worker + beat)
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_WORKER }}
+          slot-name: 'Production'
+          publish-profile: ${{ secrets.AZURE_PUBLISH_PROFILE_WORKER }}
+          package: .
+
+# --------------------------------------------------------------------------------------------
+# Configuracion de Azure necesaria UNA sola vez (no la hace este workflow):
+#
+#   # Startup de cada App Service:
+#   az webapp config set -g <RG> -n turbotubo2026-web    --startup-file "startup.sh"
+#   az webapp config set -g <RG> -n turbotubo2026-worker --startup-file "startup-worker.sh"
+#
+#   # Que Oryx instale requirements.txt en el servidor al desplegar:
+#   az webapp config appsettings set -g <RG> -n turbotubo2026-web    --settings SCM_DO_BUILD_DURING_DEPLOYMENT=true
+#   az webapp config appsettings set -g <RG> -n turbotubo2026-worker --settings SCM_DO_BUILD_DURING_DEPLOYMENT=true
+#
+#   # Las migraciones NO se corren en este workflow (el runner de GitHub no llega a la BD de Azure
+#   # por firewall): las corre startup.sh en cada arranque de la web.
+# --------------------------------------------------------------------------------------------
