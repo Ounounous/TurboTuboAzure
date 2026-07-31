@@ -268,6 +268,10 @@ class LeadListView(LoginRequiredMixin, ListView):
 
 class LeadDetailView(LoginRequiredMixin, DetailView):
     model = Lead
+    # Cuantas gestiones se muestran en la ficha. El historial completo sigue disponible en
+    # Gestiones (filtrando por el cliente) y en el Excel de gestiones -- aca se acota porque
+    # un cliente gestionado a diario acumula cientos y la pagina no puede crecer sin techo.
+    GESTIONES_EN_FICHA = 50
 
     def get_queryset(self):
         # Alcance por rol (cobrador: suyos; supervisor: sus carteras; admin/owner: todo).
@@ -290,8 +294,22 @@ class LeadDetailView(LoginRequiredMixin, DetailView):
         context['notes'] = self.object.notes.select_related('author')
         context['phones'] = self.object.phone_set.all()
 
+        # Gestiones: ACOTADAS y con los relacionados precargados. Antes la plantilla recorria
+        # lead.actions.all sin limite ni select_related y tocaba medio/resultado/user/phone en
+        # cada vuelta -> 4 consultas POR GESTION (un cliente con 116 gestiones disparaba 478
+        # consultas, y crecia sin techo con la antiguedad del cliente).
+        context['gestiones_total'] = self.object.actions.count()
+        context['gestiones'] = list(
+            self.object.actions.select_related('medio', 'resultado', 'user', 'phone')
+            .order_by('-created_at')[:self.GESTIONES_EN_FICHA]
+        )
+        context['gestiones_hay_mas'] = context['gestiones_total'] > self.GESTIONES_EN_FICHA
+        context['gestiones_limite'] = self.GESTIONES_EN_FICHA
+
         # Días desde la última gestión (no cuenta notas), igual que en la lista de clientes.
-        last_action = self.object.actions.order_by('-created_at').first()
+        # Se reusa la primera de la lista de arriba (viene ordenada por fecha desc): sin esto
+        # era una consulta extra para traer lo que ya teniamos.
+        last_action = context['gestiones'][0] if context['gestiones'] else None
         if last_action:
             context['dias_ultima_gestion'] = (localdate() - localtime(last_action.created_at).date()).days
         else:
@@ -641,10 +659,12 @@ class DownloadExcelView(_SupervisorGate, View):
         from django.db.models import Max
         from django.utils.timezone import localdate, localtime
         from .permissions import leads_visibles
-        # Create your Excel file here
-        workbook = openpyxl.Workbook()
-        sheet = workbook.active
-        sheet.title = 'Clients'
+        # write_only: openpyxl escribe cada fila al vuelo en vez de mantener el libro entero como
+        # objetos en memoria. Con decenas de miles de clientes, el modo normal consumia cientos
+        # de MB y podia dejar sin memoria al App Service (que reinicia y corta a TODOS los
+        # usuarios, no solo a quien pidio el Excel).
+        workbook = openpyxl.Workbook(write_only=True)
+        sheet = workbook.create_sheet(title='Clients')
 
         # Add headers
         headers = [
@@ -658,11 +678,17 @@ class DownloadExcelView(_SupervisorGate, View):
         # ultima gestion" se calculan al vuelo, igual que en la lista de clientes (LeadListView) --
         # no son campos del modelo, asi que no hace falta migracion ni tocar Lead.
         today = localdate()
+        # Filtro opcional por cartera: permite bajar una sola cartera en vez de TODO siempre.
+        cartera_id = request.GET.get('cartera', '').strip()
         leads = leads_visibles(
             request.user,
             base=Lead.objects.select_related('subcartera__cartera', 'assigned_to__userprofile'),
         ).annotate(last_action_at=Max('actions__created_at')).prefetch_related('subcartera__supervisores')
-        for lead in leads:
+        if cartera_id.isdigit():
+            leads = leads.filter(subcartera__cartera_id=int(cartera_id))
+        # iterator(): trae las filas por lotes desde la base en vez de materializar la lista
+        # completa en memoria antes de empezar a escribir.
+        for lead in leads.iterator(chunk_size=2000):
             asignado = lead.assigned_to
             perfil_asignado = getattr(asignado, 'userprofile', None) if asignado else None
             asignado_a = asignado.username if perfil_asignado and perfil_asignado.user_type == 'collector' else 'No asignado'

@@ -166,12 +166,19 @@
         <div class="mb-4">
           <a href="{% url 'actions:multistep_step_with_lead' step=2 lead_id=lead.pk %}" class="btn btn-primary" onclick="openGestionModal(this.href); return false;">Nueva gestión</a>
         </div>
-        {% if lead.actions.all %}
+        {% if gestiones_hay_mas %}
+          <p class="muted mb-3" style="font-size:12.5px;">
+            Mostrando las <strong>{{ gestiones_limite }}</strong> gestiones más recientes de
+            <strong>{{ gestiones_total }}</strong>. El historial completo está en
+            <a href="{% url 'actions:index' %}" class="link">Gestiones</a> y en el Excel de gestiones.
+          </p>
+        {% endif %}
+        {% if gestiones %}
           <div class="overflow-x-auto">
             <table class="table-dense">
               <thead><tr><th>Medio</th><th>Resultado</th><th>Usuario</th><th>Fecha</th><th>Teléfono</th><th>Email</th><th>Comentario</th><th>Target</th></tr></thead>
               <tbody>
-                {% for action in lead.actions.all %}
+                {% for action in gestiones %}
                   <tr>
                     <td style="font-weight:600">{{ action.medio.nombre }}</td>
                     <td>{{ action.resultado.nombre }}</td>
