@@ -162,7 +162,25 @@ class ActionIndexView(LoginRequiredMixin, View):
             listado = listado.filter(subcartera__cartera_id=f_cartera)
         if f_solo_compromiso:
             listado = listado.filter(create_payment_commitment=True)
-        listado = list(listado.order_by('-created_at')[:200])
+        listado = listado.order_by('-created_at')
+
+        # "Mostrar: 10/50/100/Todos" -- mismo patron que Compromisos de pago.
+        limit_raw = request.GET.get('limit', '50')
+        if limit_raw == 'todos':
+            limit = None
+        else:
+            try:
+                limit = int(limit_raw)
+            except ValueError:
+                limit = 50
+            if limit not in (10, 50, 100):
+                limit = 50
+        listado = list(listado if limit is None else listado[:limit])
+
+        def _url_limit(value):
+            params = request.GET.copy()
+            params['limit'] = value
+            return '?' + params.urlencode()
 
         fav_ids = set(
             Lead.objects.filter(
@@ -207,6 +225,11 @@ class ActionIndexView(LoginRequiredMixin, View):
                 'f_solo_compromiso': f_solo_compromiso,
                 'usuarios_choices': usernames,
                 'resultados_choices': sorted(set(by_res_hoy) | set(by_res_sem) | set(by_res_mes)),
+                'limit': 'todos' if limit is None else limit,
+                'url_limit_10': _url_limit(10),
+                'url_limit_50': _url_limit(50),
+                'url_limit_100': _url_limit(100),
+                'url_limit_todos': _url_limit('todos'),
             }
         )
 
