@@ -299,6 +299,14 @@ def check_compromisos_rotos():
         StatusChangeLog.objects.bulk_create(
             [StatusChangeLog(lead_id=pk, new_status=Lead.COMPROMISO_ROTO) for pk in pks]
         )
+        # Retira el commitment vencido (igual que el boton manual "Marcar roto"): sin esto
+        # seguia apareciendo como "vigente" en Compromisos de pago aunque el lead ya hubiera
+        # pasado a compromiso roto. Gracias a retirar_anteriores() (Action.save() /
+        # commitment_lifecycle.editar) cada lead tiene a lo sumo UN vigente, asi que este UPDATE
+        # masivo retira exactamente el que vencio, sin tocar los de otros leads.
+        PaymentCommitment.objects.filter(lead_id__in=pks, vigente=True).update(
+            vigente=False, motivo_retiro=PaymentCommitment.MOTIVO_ROTO, retirado_at=timezone.now(),
+        )
     logger.info(f"check_compromisos_rotos: {len(pks)} lead(s) pasado(s) a compromiso roto")
     return len(pks)
 

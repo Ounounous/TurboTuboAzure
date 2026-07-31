@@ -8,6 +8,20 @@ from django.utils import timezone
 from .models import Action, PaymentCommitment
 
 
+def retirar_anteriores(lead, nuevo_commitment, user=None):
+    """Un lead solo tiene UN compromiso vigente a la vez. Cualquier otro compromiso que le
+    quedara vigente (de una gestion anterior, con o sin pasar por editar()) se retira como
+    "editado" -- reemplazado por este. Se llama tanto desde editar() como desde Action.save()
+    cuando una gestion normal (arbol de la cartera) genera un compromiso nuevo: sin esto, un lead
+    con varias promesas hechas en distintas gestiones se quedaba con todas "vigentes" a la vez, y
+    check_compromisos_rotos solo mira la mas nueva -- las viejas vencidas nunca se detectaban."""
+    anteriores = PaymentCommitment.objects.filter(lead=lead, vigente=True).exclude(pk=nuevo_commitment.pk)
+    anteriores.update(
+        vigente=False, motivo_retiro=PaymentCommitment.MOTIVO_EDITADO,
+        retirado_por=user, retirado_at=timezone.now(), reemplazado_por=nuevo_commitment,
+    )
+
+
 def editar(commitment, nueva_fecha, nuevo_monto, user, comentario=''):
     """Reemplaza un compromiso por uno nuevo (misma gestion, fecha/monto distintos). Reutiliza el
     MISMO medio/resultado/telefono/correo de la gestion que origino el compromiso (nunca se
@@ -32,6 +46,9 @@ def editar(commitment, nueva_fecha, nuevo_monto, user, comentario=''):
     commitment.save(update_fields=[
         'vigente', 'motivo_retiro', 'retirado_por', 'retirado_at', 'reemplazado_por',
     ])
+    # Por si el lead tenia OTRO compromiso vigente ademas de este (de una gestion anterior que
+    # nunca paso por aca) -- que no quede huerfano.
+    retirar_anteriores(commitment.lead, nuevo_commitment, user=user)
     return nuevo_commitment
 
 

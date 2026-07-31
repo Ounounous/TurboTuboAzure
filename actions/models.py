@@ -235,7 +235,7 @@ class Action(models.Model):
             # Si la gestion generó un compromiso de pago (resultado con crea_compromiso y una fecha),
             # se materializa como un PaymentCommitment consultable aparte.
             if self.create_payment_commitment and self.fecha_compromiso:
-                PaymentCommitment.objects.update_or_create(
+                nuevo_commitment, _ = PaymentCommitment.objects.update_or_create(
                     action=self,
                     defaults={
                         'lead': self.lead,
@@ -246,6 +246,12 @@ class Action(models.Model):
                         'created_by': self.user,
                     },
                 )
+                # Un lead solo tiene UN compromiso vigente a la vez: si ya tenia otro de una
+                # gestion anterior, queda retirado (reemplazado por este). Sin esto, promesas
+                # sucesivas se acumulaban todas "vigentes" y check_compromisos_rotos (que solo
+                # mira la mas nueva) nunca detectaba las viejas ya vencidas.
+                from .commitment_lifecycle import retirar_anteriores
+                retirar_anteriores(self.lead, nuevo_commitment, user=self.user)
             # El status del lead se calcula solo, a partir del resultado de la gestion.
             if self.lead_id and self.resultado_id:
                 from .status_logic import apply_status, aplicar_efecto_demografico, compute_status
