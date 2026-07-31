@@ -1,3 +1,5 @@
+import datetime
+
 from django.contrib.auth.decorators import login_required
 from django.db.models import Sum
 from django.shortcuts import render
@@ -31,7 +33,11 @@ def dashboard(request):
     # Alcance por rol (cobrador: sus leads; supervisor: sus subcarteras; admin/owner: todo),
     # acotado a leads activos -- lo que la persona esta trabajando hoy, no su historial completo.
     leads_base = leads_visibles(user).filter(activo=Lead.ACTIVO)
-    gestiones_mes = scope_por_lead(Action.objects.filter(created_at__date__gte=mes_inicio), user)
+    # Rango con zona en vez de created_at__date__gte: mismo criterio (mes en hora chilena) pero
+    # usa el indice de Action.created_at -- ver core/timeutils.py.
+    from core.timeutils import rango_local
+    mes_ini_dt, _ = rango_local(mes_inicio, today + datetime.timedelta(days=1))
+    gestiones_mes = scope_por_lead(Action.objects.filter(created_at__gte=mes_ini_dt), user)
     totales = _metricas(leads_base, gestiones_mes)
 
     # Desglose por subcartera, ademas del total: solo tiene sentido para un supervisor con 2+

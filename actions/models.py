@@ -274,6 +274,16 @@ class Action(models.Model):
         ordering = ['-created_at']
         verbose_name = _('Action')
         verbose_name_plural = _('Actions')
+        # Action es la tabla que mas crece (una fila por gestion: ~250.000/anio con 10
+        # cobradores). Todo lo que la consulta filtra u ordena por fecha -- dashboard, panel de
+        # Gestiones, reportes Tanner/Nuevo Capital, Excel de gestiones -- sin estos indices hace
+        # recorrido completo. El compuesto (lead, -created_at) es el de la ficha del cliente.
+        indexes = [
+            models.Index(fields=['-created_at'], name='action_creado_idx'),
+            models.Index(fields=['lead', '-created_at'], name='action_lead_creado_idx'),
+            models.Index(fields=['subcartera', '-created_at'], name='action_subcart_creado_idx'),
+            models.Index(fields=['user', '-created_at'], name='action_user_creado_idx'),
+        ]
 
 
 class PaymentCommitment(models.Model):
@@ -314,6 +324,12 @@ class PaymentCommitment(models.Model):
 
     class Meta:
         ordering = ['-fecha_compromiso', '-created_at']
+        # Toda pantalla de compromisos filtra por vigente y ordena/filtra por fecha_compromiso;
+        # la tarea diaria check_compromisos_rotos ademas busca el ultimo vigente POR LEAD.
+        indexes = [
+            models.Index(fields=['vigente', '-fecha_compromiso'], name='pc_vigente_fecha_idx'),
+            models.Index(fields=['lead', 'vigente'], name='pc_lead_vigente_idx'),
+        ]
         verbose_name = _('Compromiso de pago')
         verbose_name_plural = _('Compromisos de pago')
 
@@ -453,6 +469,8 @@ class Payment(models.Model):
 
     class Meta:
         ordering = ['-fecha', '-created_at']
+        # El dashboard de Pagos resume por mes y "Pagos históricos" busca por fecha exacta.
+        indexes = [models.Index(fields=['-fecha'], name='pago_fecha_idx')]
         verbose_name = _('Pago')
         verbose_name_plural = _('Pagos')
 

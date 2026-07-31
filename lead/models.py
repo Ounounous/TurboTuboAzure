@@ -1,6 +1,7 @@
 from django.contrib.auth.models import User
 from django.core.validators import FileExtensionValidator
 from django.db import models
+from django.db.models.functions import Upper
 from django.apps import apps
 
 from team.models import Team
@@ -179,6 +180,17 @@ class Lead(models.Model):
 
     class Meta:
         ordering = ('name',)
+        # Sin estos indices, TODA consulta de la lista de clientes (filtros, chips de status,
+        # alcance por subcartera) termina en recorrido completo de tabla: el costo crece lineal
+        # con la cantidad de clientes. Ver Upper('op') abajo: las cargas masivas buscan cada
+        # fila del Excel con op__iexact, que sin indice funcional es un seq scan POR FILA.
+        indexes = [
+            models.Index(fields=['status'], name='lead_status_idx'),
+            models.Index(fields=['activo'], name='lead_activo_idx'),
+            models.Index(fields=['subcartera', 'status'], name='lead_subcart_status_idx'),
+            models.Index(fields=['assigned_to', 'activo'], name='lead_asignado_activo_idx'),
+            models.Index(Upper('op'), name='lead_op_upper_idx'),
+        ]
 
     def __str__(self):
         return self.op
@@ -209,6 +221,11 @@ class StatusChangeLog(models.Model):
     changed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
     new_status = models.CharField(max_length=100)
     timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        # La purga por retencion (purge_status_change_log) barre por timestamp; sin indice
+        # recorre la tabla entera, que es de las que mas crece (una fila por cambio de status).
+        indexes = [models.Index(fields=['timestamp'], name='statuslog_ts_idx')]
 
     def __str__(self):
         quien = self.changed_by.username if self.changed_by else 'sistema'

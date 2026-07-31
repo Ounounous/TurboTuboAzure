@@ -46,8 +46,13 @@ def _period_bounds(today):
 
 
 def _by_field_counts(qs, field, start, end_excl):
+    # Rango con zona en vez de created_at__date__gte/__lt: mismo criterio, pero permite usar el
+    # indice de Action.created_at (ver core/timeutils.py). Esta funcion corre 6 veces por carga
+    # del panel de Gestiones, asi que era el recorrido de tabla mas repetido del sistema.
+    from core.timeutils import rango_local
+    ini, fin = rango_local(start, end_excl)
     rows = (
-        qs.filter(created_at__date__gte=start, created_at__date__lt=end_excl)
+        qs.filter(created_at__gte=ini, created_at__lt=fin)
         .values(field).annotate(n=Count('id'))
     )
     return {(r[field] or '—'): r['n'] for r in rows}
@@ -83,7 +88,9 @@ class ActionIndexView(LoginRequiredMixin, View):
         by_user_hoy = _by_field_counts(base_actions, 'user__username', hoy_ini, hoy_fin)
         by_user_sem = _by_field_counts(base_actions, 'user__username', sem_ini, sem_fin)
         by_user_mes = _by_field_counts(base_actions, 'user__username', mes_ini, mes_fin)
-        contact_rows = base_actions.filter(created_at__date__gte=mes_ini, created_at__date__lt=mes_fin).values(
+        from core.timeutils import rango_local, rango_del_dia
+        mes_ini_dt, mes_fin_dt = rango_local(mes_ini, mes_fin)
+        contact_rows = base_actions.filter(created_at__gte=mes_ini_dt, created_at__lt=mes_fin_dt).values(
             'user__username'
         ).annotate(total=Count('id'), con=Count('id', filter=Q(resultado__contactabilidad='con_contacto')))
         contact_by_user = {
@@ -128,9 +135,13 @@ class ActionIndexView(LoginRequiredMixin, View):
         }
 
         # ---- KPIs (sin "mejor ejecutivo") ----
-        gestiones_hoy_total = base_actions.filter(created_at__date=today).count()
+        hoy_ini_dt, hoy_fin_dt = rango_del_dia(today)
+        gestiones_hoy_total = base_actions.filter(
+            created_at__gte=hoy_ini_dt, created_at__lt=hoy_fin_dt
+        ).count()
         gestiones_hoy_con = base_actions.filter(
-            created_at__date=today, resultado__contactabilidad='con_contacto'
+            created_at__gte=hoy_ini_dt, created_at__lt=hoy_fin_dt,
+            resultado__contactabilidad='con_contacto',
         ).count()
         contactabilidad_hoy = round(100 * gestiones_hoy_con / gestiones_hoy_total) if gestiones_hoy_total else 0
         cutoff = today - datetime.timedelta(days=7)
@@ -149,11 +160,12 @@ class ActionIndexView(LoginRequiredMixin, View):
 
         listado = base_actions.select_related('lead__subcartera__cartera', 'medio', 'resultado', 'user')
         if f_periodo == 'semana':
-            listado = listado.filter(created_at__date__gte=sem_ini, created_at__date__lt=sem_fin)
+            ini_dt, fin_dt = rango_local(sem_ini, sem_fin)
         elif f_periodo == 'mes':
-            listado = listado.filter(created_at__date__gte=mes_ini, created_at__date__lt=mes_fin)
+            ini_dt, fin_dt = mes_ini_dt, mes_fin_dt
         else:
-            listado = listado.filter(created_at__date=today)
+            ini_dt, fin_dt = hoy_ini_dt, hoy_fin_dt
+        listado = listado.filter(created_at__gte=ini_dt, created_at__lt=fin_dt)
         if f_usuario:
             listado = listado.filter(user__username=f_usuario)
         if f_resultado:
