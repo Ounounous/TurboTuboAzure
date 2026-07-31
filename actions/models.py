@@ -301,6 +301,10 @@ class PaymentCommitment(models.Model):
     reemplazado_por = models.ForeignKey(
         'self', on_delete=models.SET_NULL, null=True, blank=True, related_name='reemplaza_a'
     )
+    # Motivo/comentario libre al marcar ROTO. Para "editado" no hace falta: ese comentario ya
+    # queda en la gestion nueva (Action.comment). "Roto" ya NO genera gestion (ver
+    # commitment_lifecycle.marcar_roto), asi que este es el unico lugar donde queda ese texto.
+    comentario_retiro = models.TextField(blank=True)
 
     class Meta:
         ordering = ['-fecha_compromiso', '-created_at']
