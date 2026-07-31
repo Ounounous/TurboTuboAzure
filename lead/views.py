@@ -826,7 +826,12 @@ class AssignLeadsView(LoginRequiredMixin, View):
 
                 lead = None
                 if cartera and op:
-                    lead = Lead.objects.filter(op__iexact=op, subcartera__cartera=cartera, team=team).first()
+                    # OJO: NO filtrar por team=team aca -- Lead.team es el equipo de quien SUBIO
+                    # ese lead originalmente (puede ser distinto del equipo de quien esta asignando
+                    # ahora), asi que exigirlo hacia fallar la busqueda de un lead real y visible.
+                    # El alcance correcto ya lo da leads_visibles() de abajo (por cartera/subcartera
+                    # supervisada, no por equipo).
+                    lead = Lead.objects.filter(op__iexact=op, subcartera__cartera=cartera).first()
                     if not lead:
                         errores.append(f'no se encontró el lead OP={op} en cartera {cartera_nombre}')
                     elif not leads_visibles(request.user, base=Lead.objects.filter(pk=lead.pk)).exists():
