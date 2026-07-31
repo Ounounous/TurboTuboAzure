@@ -46,10 +46,15 @@ jobs:
 
       # collectstatic corre aca (WhiteNoise sirve los estaticos hasheados). El SECRET solo se
       # usa para que deployment.py arranque; no se usa criptograficamente en collectstatic.
+      # ALLOW_EPHEMERAL_MEDIA: collectstatic no toca Blob Storage/media -- exigir esas
+      # credenciales aca (el runner de GitHub no tiene ni deberia tener acceso a Azure Storage)
+      # es innecesario. La app real en Azure SI las exige (App Settings), esto solo evita el
+      # chequeo duro en este paso puntual del pipeline.
       - name: Collect static files
         run: python manage.py collectstatic --noinput
         env:
           SECRET: ${{ secrets.SECRET }}
+          ALLOW_EPHEMERAL_MEDIA: 'True'
 
       # Deploy con package: . -> Azure/Oryx instala requirements.txt en el servidor
       # (App Service con SCM_DO_BUILD_DURING_DEPLOYMENT=true). Los estaticos ya recolectados
