@@ -304,8 +304,11 @@ class MultiStepActionView(LoginRequiredMixin, View):
             selected_email = request.session.get('selected_email')
             canal = Medio.CANAL_TELEFONO if selected_phone_id else Medio.CANAL_EMAIL
             selected_phone = Phone.objects.filter(pk=selected_phone_id).first()
-            form = ActionForm(cartera=lead.subcartera.cartera, canal=canal)
             userprofile = getattr(request.user, 'userprofile', None)
+            es_cobrador = bool(userprofile and userprofile.user_type == 'collector')
+            form = ActionForm(cartera=lead.subcartera.cartera, canal=canal, es_cobrador=es_cobrador)
+            from .gestion_defaults import resultados_default_por_medio
+            resultado_defaults = resultados_default_por_medio(lead.subcartera.cartera, lead=lead)
             return render(request, 'actions/multistep_form.html', {
                 'lead': lead, 'action_form': form, 'step': step,
                 'canal': canal,
@@ -314,6 +317,7 @@ class MultiStepActionView(LoginRequiredMixin, View):
                 'selected_email': selected_email,
                 'has_pbx': bool(userprofile and userprofile.has_pbx_credentials),
                 'lead_notes': lead.notes.select_related('author'),
+                'resultado_defaults': resultado_defaults,
             })
         else:
             return redirect('actions:multistep_step', step=1)
@@ -371,8 +375,13 @@ class MultiStepActionView(LoginRequiredMixin, View):
             selected_phone_id = request.session.get('selected_phone')
             selected_email = request.session.get('selected_email')
             canal = Medio.CANAL_TELEFONO if selected_phone_id else Medio.CANAL_EMAIL
+            userprofile = getattr(request.user, 'userprofile', None)
+            es_cobrador = bool(userprofile and userprofile.user_type == 'collector')
 
-            form = ActionForm(request.POST, cartera=lead.subcartera.cartera, canal=canal)
+            # es_cobrador tambien aca (no solo en el GET): sin esto, un cobrador podria mandar
+            # por POST un resultado fuera de la lista permitida (Indirecto/Accion masiva/etc.)
+            # y el queryset sin filtrar lo habria aceptado igual.
+            form = ActionForm(request.POST, cartera=lead.subcartera.cartera, canal=canal, es_cobrador=es_cobrador)
 
             if form.is_valid():
                 action = form.save(commit=False)
@@ -410,6 +419,7 @@ class MultiStepActionView(LoginRequiredMixin, View):
                 logger.debug(f"Invalid form data: {form.errors}")
 
             selected_phone = Phone.objects.filter(pk=selected_phone_id).first()
+            from .gestion_defaults import resultados_default_por_medio
             return render(request, 'actions/multistep_form.html', {
                 'lead': lead,
                 'action_form': form,
@@ -418,6 +428,7 @@ class MultiStepActionView(LoginRequiredMixin, View):
                 'selected_phone': selected_phone,
                 'phone_digits': re.sub(r'\D', '', selected_phone.phone_number) if selected_phone else '',
                 'selected_email': selected_email,
+                'resultado_defaults': resultados_default_por_medio(lead.subcartera.cartera, lead=lead),
             })
 
         return redirect('actions:multistep_step', step=1)

@@ -71,6 +71,7 @@
     {% endif %}
   </p>
 
+  {{ resultado_defaults|json_script:"resultado-defaults-data" }}
   <form method="post" id="action-form" data-lead-id="{{ lead.id }}" data-phone-id="{% if selected_phone %}{{ selected_phone.id }}{% endif %}">
     {% csrf_token %}
 
@@ -182,6 +183,19 @@
       var fechaInputs = Array.from(fechaGroup.querySelectorAll('input'));
       var fechaInput = fechaInputs[0];
       var medioButtons = Array.from(document.querySelectorAll('.medio-btn'));
+      var defaultsDataEl = document.getElementById('resultado-defaults-data');
+      var resultadoDefaults = {};
+      try { resultadoDefaults = JSON.parse(defaultsDataEl.textContent) || {}; } catch (e) {}
+
+      // "Un click final": al elegir un medio se preselecciona el resultado mas probable (el
+      // cobrador igual puede cambiarlo antes de grabar). Si no hay default para ese medio, no
+      // toca el resultado ya elegido.
+      function applyDefaultResultado(medioId) {
+        var resultadoId = resultadoDefaults[medioId];
+        if (resultadoId === undefined) { return; }
+        resultadoSelect.value = String(resultadoId);
+        updateFechaVisibility();
+      }
 
       function updateFechaVisibility() {
         var selected = resultadoSelect.options[resultadoSelect.selectedIndex];
@@ -197,6 +211,7 @@
         });
         btn.classList.add('is-selected');
         medioSelect.value = btn.dataset.medioId;
+        applyDefaultResultado(btn.dataset.medioId);
       }
 
       function originatePbxCall(btn) {
@@ -253,12 +268,14 @@
 
       resultadoSelect.addEventListener('change', updateFechaVisibility);
 
-      // Elegir el medio directo del desplegable resalta el botón que corresponda, pero NO
-      // dispara la llamada/whatsapp (a diferencia de clickear el botón).
+      // Elegir el medio directo del desplegable resalta el botón que corresponda y también
+      // preselecciona el resultado por defecto, pero NO dispara la llamada/whatsapp (a
+      // diferencia de clickear el botón).
       medioSelect.addEventListener('change', function () {
         medioButtons.forEach(function (b) {
           b.classList.toggle('is-selected', b.dataset.medioId === medioSelect.value);
         });
+        applyDefaultResultado(medioSelect.value);
       });
 
       // Si solo hay un medio disponible (típico para email), se preselecciona solo.

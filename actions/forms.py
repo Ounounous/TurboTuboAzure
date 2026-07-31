@@ -112,6 +112,7 @@ class ActionForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         cartera = kwargs.pop('cartera', None)
         canal = kwargs.pop('canal', None)
+        es_cobrador = kwargs.pop('es_cobrador', False)
         super().__init__(*args, **kwargs)
 
         medios_qs = Medio.objects.none()
@@ -124,6 +125,15 @@ class ActionForm(forms.ModelForm):
             # Medio y Resultado son independientes: el resultado se elige de la lista
             # completa de la cartera, sin filtrar por el medio elegido.
             resultados_qs = Resultado.objects.filter(cartera=cartera)
+            if es_cobrador:
+                # Un cobrador solo puede registrar Directo/Sin contacto en Tanner y Nuevo
+                # Capital (nada de Indirecto/Directo aval/Accion masiva/Recibidos) -- eso no
+                # toca el arbol ni la carga masiva, solo el desplegable de este formulario.
+                # admin/owner/supervisor siguen viendo la lista completa.
+                from .gestion_defaults import TIPO_CONTACTO_COLLECTOR_WHITELIST
+                permitidos = TIPO_CONTACTO_COLLECTOR_WHITELIST.get((cartera.nombre or '').strip())
+                if permitidos:
+                    resultados_qs = resultados_qs.filter(tipo_contacto__in=permitidos)
 
         self.fields['medio'].queryset = medios_qs
         self.fields['resultado'].queryset = resultados_qs
