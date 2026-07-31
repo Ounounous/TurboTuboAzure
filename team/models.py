@@ -17,7 +17,11 @@ class Team(models.Model):
     plan = models.ForeignKey(Plan, related_name='teams', blank=True, null=True, on_delete=models.CASCADE)
     name = models.CharField(max_length=100)
     members = models.ManyToManyField(User, related_name='teams')
-    created_by = models.ForeignKey(User, related_name='created_teams', on_delete=models.CASCADE)
+    # SET_NULL (no CASCADE): borrar a quien creo el equipo NO debe borrar el equipo entero --
+    # eso arrastraria en cascada TODOS sus leads (Lead.team es CASCADE) y sus archivos.
+    created_by = models.ForeignKey(
+        User, related_name='created_teams', on_delete=models.SET_NULL, null=True, blank=True
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

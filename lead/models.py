@@ -156,7 +156,9 @@ class Lead(models.Model):
     motivo_suspension = models.CharField(max_length=255, blank=True)
     tiene_aval = models.CharField(max_length=2, choices=CHOICES_AVAL, default=NO)
     fecha_compromiso_pago = models.DateField(null=True, blank=True)
-    created_by = models.ForeignKey(User, related_name='leads', on_delete=models.CASCADE)
+    # SET_NULL (no CASCADE): quien creo/subio el lead es solo metadata de origen -- borrar a ese
+    # usuario (ver configuracion/user_deletion.py) NO debe destruir clientes reales.
+    created_by = models.ForeignKey(User, related_name='leads', on_delete=models.SET_NULL, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     modified_at = models.DateTimeField(auto_now=True)
     assigned_to = models.ForeignKey(User, related_name='assigned_leads', on_delete=models.SET_NULL, null=True, blank=True)
@@ -222,7 +224,8 @@ class LeadFile(models.Model):
     team = models.ForeignKey(Team, related_name='lead_files', on_delete=models.CASCADE)
     lead = models.ForeignKey(Lead, related_name='files', on_delete=models.CASCADE)
     file = models.FileField(upload_to='leadfiles/', validators=[FileExtensionValidator(EXTENSIONES)])
-    created_by = models.ForeignKey(User, related_name='lead_files', on_delete=models.CASCADE)
+    # SET_NULL (no CASCADE): borrar a quien lo subio no debe borrar el archivo adjunto.
+    created_by = models.ForeignKey(User, related_name='lead_files', on_delete=models.SET_NULL, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     @property
@@ -232,12 +235,15 @@ class LeadFile(models.Model):
         return os.path.basename(self.file.name) if self.file else ''
 
     def __str__(self):
-        return self.created_by.username
+        return self.created_by.username if self.created_by else self.filename
 
 class LeadAssignment(models.Model):
     lead = models.ForeignKey(Lead, on_delete=models.CASCADE)
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='lead_assignments')
-    assigned_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='assignments_made')
+    # SET_NULL (no CASCADE): borrar a quien hizo la asignacion no debe borrar el rastro historico.
+    assigned_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assignments_made'
+    )
     assigned_at = models.DateTimeField(auto_now_add=True)
 
 

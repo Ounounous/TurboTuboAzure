@@ -77,7 +77,7 @@
       <table class="table-dense">
         <thead><tr>
           <th>Usuario</th><th>Nombre</th><th>RUT</th><th>Rol</th><th>Equipo</th>
-          <th>Correo / Teléfono</th><th>SIP (usuario · anexo)</th><th>Configurar SIP</th><th>Resetear clave</th>
+          <th>Correo / Teléfono</th><th>SIP (usuario · anexo)</th><th>Configurar SIP</th><th>Resetear clave</th><th>Eliminar</th>
         </tr></thead>
         <tbody>
           {% for u in usuarios %}
@@ -200,9 +200,35 @@
                   <span class="muted">—</span>
                 {% endif %}
               </td>
+
+              {# Eliminar usuario — solo admin/owner, y no a uno mismo. Preserva gestiones, pagos,
+                 compromisos, grabaciones y archivos (SET_NULL en el modelo); desasigna su cartera
+                 de verdad (lead.lifecycle.desasignar) y, si supervisaba alguna subcartera, quien
+                 elimina queda cubriendola hasta nombrar a otro. #}
+              <td>
+                {% if es_admin and u.id != request.user.id %}
+                <details>
+                  <summary class="cursor-pointer" style="font-size:12px; font-weight:600; color:var(--danger);">🗑️ Eliminar</summary>
+                  <form method="post" action="{% url 'configuracion:usuarios_permisos' %}" style="display:flex; flex-direction:column; gap:5px; margin-top:8px; min-width:240px;" onsubmit="return confirm('¿Eliminar a {{ u.username }} definitivamente? Sus gestiones, pagos, compromisos y grabaciones se conservan; su cartera queda desasignada. Esta acción NO se puede deshacer.');">
+                    {% csrf_token %}
+                    <input type="hidden" name="accion" value="eliminar_usuario">
+                    <input type="hidden" name="user_id" value="{{ u.id }}">
+                    <label style="font-size:11px;">Escribe "{{ u.username }}" para confirmar
+                      <input type="text" name="confirm_username" autocomplete="off" required style="width:100%; font-size:12px;">
+                    </label>
+                    <label style="display:flex; align-items:center; gap:5px; font-size:11px; font-weight:500; cursor:pointer;">
+                      <input type="checkbox" required> Confirmo que quiero eliminar esta cuenta
+                    </label>
+                    <button type="submit" class="btn btn-danger" style="font-size:11px; padding:4px 10px;">Eliminar usuario</button>
+                  </form>
+                </details>
+                {% else %}
+                  <span class="muted">—</span>
+                {% endif %}
+              </td>
             </tr>
           {% empty %}
-            <tr><td colspan="9" class="muted" style="text-align:center; padding:16px;">No hay usuarios en tu equipo.</td></tr>
+            <tr><td colspan="10" class="muted" style="text-align:center; padding:16px;">No hay usuarios en tu equipo.</td></tr>
           {% endfor %}
         </tbody>
       </table>

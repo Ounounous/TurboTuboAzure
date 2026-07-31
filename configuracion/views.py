@@ -199,6 +199,25 @@ class UsuariosPermisosView(LoginRequiredMixin, View):
                     f'Clave de {user.username} reseteada. Se le pedirá cambiarla en su próximo ingreso.'
                 )
 
+        elif accion == 'eliminar_usuario':
+            target = get_object_or_404(User, pk=request.POST.get('user_id'))
+            if target.pk == request.user.pk:
+                messages.error(request, 'No puedes eliminarte a ti mismo.')
+            elif request.POST.get('confirm_username', '').strip() != target.username:
+                messages.error(
+                    request,
+                    f'Para eliminar a {target.username}, escribe su nombre de usuario exacto para confirmar.'
+                )
+            else:
+                from .user_deletion import eliminar_usuario
+                username_borrado = target.username
+                eliminar_usuario(target, deleted_by=request.user)
+                messages.success(
+                    request,
+                    f'Usuario "{username_borrado}" eliminado. Sus gestiones, pagos, compromisos y '
+                    f'grabaciones se conservan; su cartera quedó desasignada.'
+                )
+
         elif accion == 'asignar_supervisores':
             subcartera = get_object_or_404(Subcartera, pk=request.POST.get('subcartera_id'))
             ids = request.POST.getlist('supervisores')
