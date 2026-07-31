@@ -38,6 +38,13 @@ class RetentionSettings(models.Model):
                   '(LeadAssignment) antes de purgarlo. La asignacion ACTUAL vive en Lead.assigned_to, '
                   'no se pierde; esto es solo el rastro historico.',
     )
+    dias_retencion_compromisos_rotos = models.PositiveIntegerField(
+        default=60,
+        help_text='Dias que se conserva el registro de un compromiso de pago marcado como roto '
+                  '(actions.PaymentCommitment con motivo_retiro=roto) antes de purgarlo. El status '
+                  'del lead ya quedo actualizado al momento de marcarlo roto; esto es solo el '
+                  'rastro historico (visible en Compromisos -> Compromisos rotos).',
+    )
     updated_at = models.DateTimeField(auto_now=True)
     updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
 

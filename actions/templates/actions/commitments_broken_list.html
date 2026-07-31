@@ -1,0 +1,84 @@
+{% extends 'core/base.html' %}
+{% load money %}
+
+{% block title %}Compromisos rotos{% endblock %}
+
+{% block content %}
+<div class="py-6 px-6">
+  <h1 class="mb-1 text-xl">Compromisos rotos</h1>
+  <p class="muted mb-4" style="font-size:12.5px;">
+    Compromisos de pago marcados como rotos: no generan una gestión (el árbol de gestión de
+    ninguna cartera lo pide), es puro cambio de status a Contactado. Se conservan
+    {{ dias_retencion }} días desde que se marcaron y después se borran solos.
+  </p>
+
+  <form method="get" class="mb-4">
+    <div class="flex flex-wrap gap-4 items-end">
+      <div>
+        <label class="font-semibold block mb-1" for="op">ID (OP)</label>
+        <input type="text" name="op" id="op" value="{{ selected_op }}">
+      </div>
+      <div>
+        <label class="font-semibold block mb-1" for="cartera">Cartera</label>
+        <select name="cartera" id="cartera">
+          <option value="">--- Todas ---</option>
+          {% for c in carteras_choices %}
+            <option value="{{ c.id }}" {% if selected_cartera == c.id|stringformat:"s" %}selected{% endif %}>{{ c.nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit" class="btn btn-primary">Filtrar</button>
+      {% if selected_op or selected_cartera %}<a href="{% url 'actions:commitments_broken_list' %}" class="btn btn-secondary">Limpiar</a>{% endif %}
+    </div>
+  </form>
+
+  <p class="muted mb-3" style="font-size:12.5px;">{{ total }} compromiso(s) roto(s) en los últimos {{ dias_retencion }} días.</p>
+
+  {% if tabla %}
+    <div class="card" style="border:1px solid var(--border); border-radius:10px;">
+      <div class="overflow-x-auto">
+        <table class="table-dense">
+          <thead>
+            <tr>
+              <th>Cartera</th><th>Subcartera</th><th>ID</th><th>Cliente</th>
+              <th>Fecha del compromiso roto</th><th class="num">Monto</th>
+              <th>Motivo</th><th>Retirado por</th><th>Retirado el</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in tabla %}
+              <tr>
+                <td>{{ c.subcartera.cartera.nombre|default:"-" }}</td>
+                <td>{{ c.subcartera.nombre }}</td>
+                <td class="op"><a href="{% url 'leads:detail' c.lead.pk %}" class="link">{{ c.lead.op }}</a></td>
+                <td style="font-weight:600">{{ c.lead.name }}</td>
+                <td style="font-variant-numeric:tabular-nums">{{ c.fecha_compromiso|date:"d-m-Y" }}</td>
+                <td class="num">{{ c.monto|clp }}</td>
+                <td>{{ c.comentario_retiro|default:"-"|truncatechars:60 }}</td>
+                <td>{{ c.retirado_por.username|default:"-" }}</td>
+                <td style="font-variant-numeric:tabular-nums; color:var(--text-muted)">{{ c.retirado_at|date:"d-m-Y H:i" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="flex flex-wrap items-center justify-center gap-3 mt-4">
+      <span class="font-semibold">Mostrar:</span>
+      <span class="pag">
+        <a href="{{ url_limit_10 }}" class="{% if limit == 10 %}on{% endif %}">10</a>
+        <a href="{{ url_limit_50 }}" class="{% if limit == 50 %}on{% endif %}">50</a>
+        <a href="{{ url_limit_100 }}" class="{% if limit == 100 %}on{% endif %}">100</a>
+        <a href="{{ url_limit_todos }}" class="{% if limit == 'todos' %}on{% endif %}">Todos</a>
+      </span>
+    </div>
+  {% else %}
+    <p class="empty-state">No hay compromisos rotos para estos filtros.</p>
+  {% endif %}
+
+  <div class="mt-4">
+    <a href="{% url 'actions:commitments_list' %}" class="btn btn-secondary">← Volver a Compromisos de pago</a>
+  </div>
+</div>
+{% endblock %}

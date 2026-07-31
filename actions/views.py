@@ -1052,6 +1052,77 @@ class PaymentCommitmentListView(LoginRequiredMixin, View):
         return redirect(next_url)
 
 
+class BrokenCommitmentsListView(LoginRequiredMixin, View):
+    """
+    Compromisos de pago marcados como rotos (ver actions/commitment_lifecycle.marcar_roto): no
+    generan gestion, son puro cambio de status a Contactado -- esta pantalla es su propio
+    historial, separado de "Compromisos de pago" (que solo muestra vigentes). Se purgan solos
+    despues de RetentionSettings.dias_retencion_compromisos_rotos dias
+    (actions.tasks.purgar_compromisos_rotos), asi que esta lista queda acotada a esa ventana sola.
+    """
+    template_name = 'actions/commitments_broken_list.html'
+
+    def get(self, request, *args, **kwargs):
+        from suspensiones.models import RetentionSettings
+
+        selected_op = request.GET.get('op', '').strip()
+        selected_cartera = request.GET.get('cartera', '').strip()
+
+        dias_retencion = RetentionSettings.get_solo().dias_retencion_compromisos_rotos
+        corte = timezone.now() - datetime.timedelta(days=dias_retencion)
+
+        # Alcance por rol: cobrador -> sus clientes; supervisor -> sus carteras; admin/owner -> todo.
+        base_all = scope_por_lead(
+            PaymentCommitment.objects.filter(
+                motivo_retiro=PaymentCommitment.MOTIVO_ROTO, retirado_at__gte=corte,
+            ),
+            request.user,
+        ).select_related('lead', 'subcartera__cartera', 'retirado_por')
+
+        cartera_ids = base_all.values_list('subcartera__cartera_id', flat=True).distinct()
+        carteras_choices = Cartera.objects.filter(id__in=cartera_ids)
+
+        qs = base_all
+        if selected_op:
+            qs = qs.filter(lead__op__icontains=selected_op)
+        if selected_cartera:
+            qs = qs.filter(subcartera__cartera_id=selected_cartera)
+        qs = qs.order_by('-retirado_at')
+        total_filtrado = qs.count()
+
+        limit_raw = request.GET.get('limit', '50')
+        if limit_raw == 'todos':
+            limit = None
+        else:
+            try:
+                limit = int(limit_raw)
+            except ValueError:
+                limit = 50
+            if limit not in (10, 50, 100):
+                limit = 50
+        tabla = list(qs if limit is None else qs[:limit])
+
+        def _url_limit(value):
+            params = request.GET.copy()
+            params['limit'] = value
+            return '?' + params.urlencode()
+
+        context = {
+            'tabla': tabla,
+            'total': total_filtrado,
+            'dias_retencion': dias_retencion,
+            'selected_op': selected_op,
+            'selected_cartera': selected_cartera,
+            'carteras_choices': carteras_choices,
+            'limit': 'todos' if limit is None else limit,
+            'url_limit_10': _url_limit(10),
+            'url_limit_50': _url_limit(50),
+            'url_limit_100': _url_limit(100),
+            'url_limit_todos': _url_limit('todos'),
+        }
+        return render(request, self.template_name, context)
+
+
 class PaymentCommitmentExportExcelView(SupervisorRequiredMixin, View):
     def get(self, request, *args, **kwargs):
         qs = PaymentCommitment.objects.filter(vigente=True).select_related(

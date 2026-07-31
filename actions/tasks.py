@@ -546,6 +546,32 @@ def purgar_asignaciones(dias=None):
     return borrados
 
 
+@shared_task(**RETRY_DB)
+def purgar_compromisos_rotos(dias=None):
+    """
+    Borra los PaymentCommitment marcados como rotos (motivo_retiro='roto') mas viejos que `dias`
+    dias desde que se retiraron (retirado_at). El plazo sale de
+    RetentionSettings.dias_retencion_compromisos_rotos (editable en Configuracion -> Retencion de
+    datos, default ~2 meses). No toca los vigentes ni los editados -- solo el rastro historico de
+    promesas incumplidas, que ya cumplio su proposito (el status del lead ya quedo actualizado via
+    apply_status al momento de marcarlo roto, ver actions/commitment_lifecycle.py).
+    """
+    from .models import PaymentCommitment
+
+    if dias is None:
+        try:
+            from suspensiones.models import RetentionSettings
+            dias = RetentionSettings.get_solo().dias_retencion_compromisos_rotos
+        except Exception:
+            dias = 60
+    corte = timezone.now() - timedelta(days=dias)
+    borrados, _ = PaymentCommitment.objects.filter(
+        motivo_retiro=PaymentCommitment.MOTIVO_ROTO, retirado_at__lt=corte,
+    ).delete()
+    logger.info(f"purgar_compromisos_rotos: {borrados} compromiso(s) roto(s) mas viejos que {dias} dias eliminados")
+    return borrados
+
+
 # Ventana maxima (en dias) que puede pasar sin que cada tarea programada corra, antes de avisar.
 HEARTBEAT_MAX_DIAS = {
     'actions.tasks.reset_status_mensual': 32,
@@ -560,6 +586,7 @@ HEARTBEAT_MAX_DIAS = {
     'actions.tasks.purgar_gestiones_ciclo_vida': 2,
     'actions.tasks.purgar_access_log': 8,
     'actions.tasks.purgar_asignaciones': 8,
+    'actions.tasks.purgar_compromisos_rotos': 8,
     'mlmetadata.tasks.exportar_metadata_ml': 8,
 }
 

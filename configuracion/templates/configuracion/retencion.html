@@ -34,6 +34,10 @@
         <span class="k">Historial de asignaciones de leads</span>
         <span class="v"><input type="number" name="dias_retencion_asignaciones" min="1" value="{{ config.dias_retencion_asignaciones }}" style="width:90px; text-align:right;"> días</span>
       </div>
+      <div class="kv">
+        <span class="k">Compromisos de pago rotos</span>
+        <span class="v"><input type="number" name="dias_retencion_compromisos_rotos" min="1" value="{{ config.dias_retencion_compromisos_rotos }}" style="width:90px; text-align:right;"> días</span>
+      </div>
     </div>
     <button type="submit" class="btn btn-primary mt-4">Guardar</button>
     {% if config.updated_by %}
