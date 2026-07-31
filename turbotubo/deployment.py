@@ -5,11 +5,18 @@ critico, el arranque FALLA fuerte a proposito -- mejor que correr inseguro.
 """
 import os
 
+# Alias SECRET -> SECRET_KEY ANTES de importar settings.py: settings.py exige SECRET_KEY en el
+# entorno cuando DEBUG=False y falla duro en el import mismo si falta (ImproperlyConfigured) --
+# el chequeo de mas abajo (que sí acepta SECRET como alias) nunca llegaba a ejecutarse porque
+# el import de la linea siguiente ya reventaba antes.
+if not os.environ.get('SECRET_KEY') and os.environ.get('SECRET'):
+    os.environ['SECRET_KEY'] = os.environ['SECRET']
+
 from .settings import *  # noqa
 from .settings import BASE_DIR, DATABASES
 
 # --- Secretos: obligatorios en produccion, sin fallback ---
-SECRET_KEY = os.environ.get('SECRET_KEY') or os.environ.get('SECRET')
+SECRET_KEY = os.environ.get('SECRET_KEY')
 if not SECRET_KEY:
     raise RuntimeError('Falta SECRET_KEY (o SECRET) en el entorno de produccion.')
 
