@@ -962,7 +962,25 @@ class PaymentCommitmentListView(LoginRequiredMixin, View):
         tabla_qs = base_filtered
         if selected_cartera:
             tabla_qs = tabla_qs.filter(subcartera__cartera_id=selected_cartera)
-        tabla_compromisos = list(tabla_qs.order_by('-fecha_compromiso', '-created_at')[:300])
+        tabla_qs = tabla_qs.order_by('-fecha_compromiso', '-created_at')
+
+        # "Mostrar: 10/50/100/Todos" -- mismo patron que la lista de clientes (LeadListView).
+        limit_raw = request.GET.get('limit', '50')
+        if limit_raw == 'todos':
+            limit = None
+        else:
+            try:
+                limit = int(limit_raw)
+            except ValueError:
+                limit = 50
+            if limit not in (10, 50, 100):
+                limit = 50
+        tabla_compromisos = list(tabla_qs if limit is None else tabla_qs[:limit])
+
+        def _url_limit(value):
+            params = request.GET.copy()
+            params['limit'] = value
+            return '?' + params.urlencode()
 
         # Resumen por fecha de compromiso (hoy / esta semana / este mes), dentro del alcance.
         today = timezone.localdate()
@@ -977,6 +995,11 @@ class PaymentCommitmentListView(LoginRequiredMixin, View):
             'selected_op': selected_op,
             'selected_cartera': selected_cartera,
             'selected_fecha': selected_fecha,
+            'limit': 'todos' if limit is None else limit,
+            'url_limit_10': _url_limit(10),
+            'url_limit_50': _url_limit(50),
+            'url_limit_100': _url_limit(100),
+            'url_limit_todos': _url_limit('todos'),
             'es_supervisor': es_super,
         }
         return render(request, self.template_name, context)
