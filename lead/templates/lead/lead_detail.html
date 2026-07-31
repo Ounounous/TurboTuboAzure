@@ -28,7 +28,8 @@
           <div class="alert alert-danger mt-2" style="font-size:11.5px; padding:6px 10px;">{{ lead.motivo_no_gestionable }} — solo se pueden agregar notas.</div>
         {% endif %}
         {% if is_supervisor and lead.status != 'al dia' %}
-          <form method="post" action="{% url 'leads:marcar_al_dia' lead.pk %}" style="margin-top:8px;">
+          <form method="post" action="{% url 'leads:marcar_al_dia' lead.pk %}" style="margin-top:8px;"
+                onsubmit="return confirm('¿Marcar {{ lead.op }} como al día? Esta acción dispara procesos que no tienen vuelta atrás.');">
             {% csrf_token %}
             <button type="submit" class="btn btn-secondary" style="font-size:11.5px; padding:4px 10px;">Marcar al día</button>
           </form>
