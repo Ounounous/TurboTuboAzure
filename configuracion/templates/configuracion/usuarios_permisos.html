@@ -83,7 +83,18 @@
           {% for u in usuarios %}
             <tr>
               <td class="op">{{ u.username }}</td>
-              <td>{{ u.get_full_name|default:"—" }}</td>
+
+              {# Nombre — editable por supervisor+admin (usado como Ejecutivo en reporte Tanner) #}
+              <td>
+                <form method="post" action="{% url 'configuracion:usuarios_permisos' %}" style="display:flex; gap:4px; align-items:center;">
+                  {% csrf_token %}
+                  <input type="hidden" name="accion" value="editar_contacto">
+                  <input type="hidden" name="user_id" value="{{ u.id }}">
+                  <input type="text" name="first_name" value="{{ u.first_name }}" placeholder="Nombre" style="width:90px; font-size:12px;">
+                  <input type="text" name="last_name" value="{{ u.last_name }}" placeholder="Apellido" style="width:90px; font-size:12px;">
+                  <button type="submit" class="btn btn-secondary" style="font-size:11px; padding:3px 7px;">✓</button>
+                </form>
+              </td>
 
               {# RUT — editable por supervisor+admin #}
               <td>

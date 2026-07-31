@@ -913,9 +913,6 @@ class TannerReportView(SupervisorRequiredMixin, View):
             compromiso = action.fecha_compromiso.strftime('%d-%m-%Y') if action.fecha_compromiso else ''
             observacion = (action.comment or '').replace('|', ' ').replace('\n', ' ')[:255]
             local_dt = action.created_at.astimezone(report_tz)
-            ejecutivo_rut = ''
-            if action.user and hasattr(action.user, 'userprofile'):
-                ejecutivo_rut = action.user.userprofile.rut
 
             row = [
                 lead.op,
@@ -927,7 +924,7 @@ class TannerReportView(SupervisorRequiredMixin, View):
                 action.medio.codigo,
                 local_dt.strftime('%d-%m-%Y'),
                 local_dt.strftime('%H:%M:%S'),
-                ejecutivo_rut or '99999999',
+                _ejecutivo_nombre(action.user),
                 _format_tanner_phone(action.phone.phone_number) if action.phone else '',
                 action.email or '',
                 TANNER_TIPO_GESTION_DEFAULT,

@@ -92,9 +92,18 @@ class UsuariosPermisosView(LoginRequiredMixin, View):
 
             if accion == 'editar_contacto':
                 # Actualiza solo los campos presentes en el POST (permite formularios separados).
+                user_fields = []
+                if 'first_name' in request.POST:
+                    user.first_name = request.POST.get('first_name', '').strip()
+                    user_fields.append('first_name')
+                if 'last_name' in request.POST:
+                    user.last_name = request.POST.get('last_name', '').strip()
+                    user_fields.append('last_name')
                 if 'email' in request.POST:
                     user.email = request.POST.get('email', '').strip()
-                    user.save(update_fields=['email'])
+                    user_fields.append('email')
+                if user_fields:
+                    user.save(update_fields=user_fields)
                 if 'rut' in request.POST:
                     userprofile.rut = request.POST.get('rut', '').strip()
                 if 'telefono' in request.POST:
