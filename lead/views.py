@@ -650,7 +650,7 @@ class DownloadExcelView(_SupervisorGate, View):
         headers = [
             'Op', 'Name', 'RUT', 'DV', 'Saldo Insoluto', 'Saldo Deuda', 'Valor Cuota',
             'Cuotas Atrasadas', 'Cartera', 'Subcartera', 'Tipo Cobranza', 'Status', 'Ciclo Cartera',
-            'Ciclo', 'Activo', 'Tiene Aval', 'Asignado a', 'Días desde última gestión',
+            'Ciclo', 'Activo', 'Tiene Aval', 'Asignado a', 'Días desde última gestión', 'Supervisor',
         ]
         sheet.append(headers)
 
@@ -661,15 +661,17 @@ class DownloadExcelView(_SupervisorGate, View):
         leads = leads_visibles(
             request.user,
             base=Lead.objects.select_related('subcartera__cartera', 'assigned_to__userprofile'),
-        ).annotate(last_action_at=Max('actions__created_at'))
+        ).annotate(last_action_at=Max('actions__created_at')).prefetch_related('subcartera__supervisores')
         for lead in leads:
             asignado = lead.assigned_to
             perfil_asignado = getattr(asignado, 'userprofile', None) if asignado else None
             asignado_a = asignado.username if perfil_asignado and perfil_asignado.user_type == 'collector' else 'No asignado'
             dias_gestion = (today - localtime(lead.last_action_at).date()).days if lead.last_action_at else 'N/A'
+            # Una subcartera puede tener 1 o varios supervisores (o ninguno).
+            supervisores = ', '.join(u.username for u in lead.subcartera.supervisores.all()) or '-'
 
             sheet.append([
-                lead.op, lead.name, lead.rut, lead.dv, lead.saldo_insoluto, lead.saldo_deuda, lead.valor_cuota, lead.cuotas_atrasadas, lead.subcartera.cartera.nombre, lead.subcartera.nombre, lead.tipo_cobranza, lead.get_status_display(), lead.ciclo_cartera, lead.ciclo, lead.activo, lead.tiene_aval, asignado_a, dias_gestion
+                lead.op, lead.name, lead.rut, lead.dv, lead.saldo_insoluto, lead.saldo_deuda, lead.valor_cuota, lead.cuotas_atrasadas, lead.subcartera.cartera.nombre, lead.subcartera.nombre, lead.tipo_cobranza, lead.get_status_display(), lead.ciclo_cartera, lead.ciclo, lead.activo, lead.tiene_aval, asignado_a, dias_gestion, supervisores
             ])
 
         # Save the workbook to a BytesIO stream
