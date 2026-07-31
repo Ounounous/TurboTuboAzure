@@ -31,7 +31,9 @@
                   {% endif %}
                   {% if not subcartera.es_default and subcartera.n_leads == 0 and subcarteras|length > 1 %}
                     <form id="del_sub_{{ subcartera.pk }}" method="post" action="{% url 'cartera:delete_subcartera' cartera.pk subcartera.pk %}" style="margin:0;">{% csrf_token %}</form>
-                    <a href="#" onclick="if(confirm('¿Eliminar la subcartera \'{{ subcartera.nombre }}\'?')){document.getElementById('del_sub_{{ subcartera.pk }}').submit();} return false;" class="btn btn-danger" style="font-size:11px; padding:3px 8px;">Eliminar</a>
+                    {# escapejs obligatorio: el nombre de la subcartera lo puede fijar un
+                       supervisor al subir el Excel de clientes/asignaciones (nombre libre). #}
+                    <a href="#" onclick="if(confirm('¿Eliminar la subcartera \'{{ subcartera.nombre|escapejs }}\'?')){document.getElementById('del_sub_{{ subcartera.pk }}').submit();} return false;" class="btn btn-danger" style="font-size:11px; padding:3px 8px;">Eliminar</a>
                   {% elif subcartera.n_leads > 0 %}
                     <span class="muted" style="font-size:11px;" title="Tiene {{ subcartera.n_leads }} cliente(s) asignado(s)">No se puede eliminar</span>
                   {% endif %}
@@ -178,7 +180,10 @@
           Las grabaciones de llamadas se conservan (retención legal). Esta acción no se puede deshacer.
         </p>
         <form id="cartera_delete_form" method="post" action="{% url 'cartera:delete' cartera.pk %}">{% csrf_token %}</form>
-        <a href="#" onclick="if(confirm('¿Eliminar la cartera \'{{ cartera.nombre }}\' junto con todos sus leads y gestiones? Esta acción no se puede deshacer.')){document.getElementById('cartera_delete_form').submit();} return false;" class="btn btn-danger">Eliminar cartera</a>
+        {# escapejs (no solo el escapado HTML de Django): el nombre se inserta DENTRO de una
+           cadena JS, y el navegador decodifica &#x27; a comilla antes de que lo lea el motor de
+           JavaScript -- sin esto un nombre con comilla cierra la cadena e inyecta codigo. #}
+        <a href="#" onclick="if(confirm('¿Eliminar la cartera \'{{ cartera.nombre|escapejs }}\' junto con todos sus leads y gestiones? Esta acción no se puede deshacer.')){document.getElementById('cartera_delete_form').submit();} return false;" class="btn btn-danger">Eliminar cartera</a>
       </div>
     </details>
   {% endif %}
