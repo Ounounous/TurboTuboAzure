@@ -72,4 +72,5 @@ ENV/
 env.bak/
 venv.bak/
 django_env/
+django_env_*/
 
