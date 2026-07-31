@@ -1,8 +1,11 @@
 name: Build and deploy Python app to Azure Web App
 
+# Deploy a turbotubobeta (ambiente viejo de Carlos), reemplazado por
+# deploy-turbotubo-prod.yml para el ambiente nuevo. Se deja solo como
+# disparo manual -- ya NO se dispara solo con cada push a main, para no
+# desplegar sin querer 125+ commits de golpe a un ambiente que se va a
+# dejar de usar. Reactivar el trigger "push" a mano si hace falta.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 env:
