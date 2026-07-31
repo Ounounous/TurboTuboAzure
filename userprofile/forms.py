@@ -14,7 +14,7 @@ INPUT_CLASS = 'w-full my-4 py-4 px-6 rounded-xl bg-gray-100'
 # su clave): a los N fallos, esta IP queda bloqueada un rato. Se bloquea por IP, no por usuario.
 LOGIN_THROTTLE_MAX_ATTEMPTS = 5          # a los 5 fallos, lockout temporal de esta IP
 LOGIN_THROTTLE_WINDOW_SECONDS = 5 * 60
-LOGIN_THROTTLE_LOCKOUT_SECONDS = 15 * 60
+LOGIN_THROTTLE_LOCKOUT_SECONDS = 1 * 60   # bloqueo corto: frena un ataque sin castigar al que se equivoca
 
 
 def _client_ip(request):
@@ -84,9 +84,10 @@ class LoginForm(AuthenticationForm):
         lock_key = f'login_lockout:{ip}'
         if _cache_get(lock_key):
             minutos = LOGIN_THROTTLE_LOCKOUT_SECONDS // 60
+            unidad = 'minuto' if minutos == 1 else 'minutos'
             raise forms.ValidationError(
                 f'Demasiados intentos fallidos desde esta conexión. Intenta de nuevo en '
-                f'{minutos} minutos.',
+                f'{minutos} {unidad}.',
                 code='throttled',
             )
 
