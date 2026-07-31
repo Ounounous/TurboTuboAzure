@@ -123,8 +123,10 @@ class ActionForm(forms.ModelForm):
             medios_qs = Medio.objects.filter(cartera=cartera, canal=canal, permite_manual=True)
         if cartera:
             # Medio y Resultado son independientes: el resultado se elige de la lista
-            # completa de la cartera, sin filtrar por el medio elegido.
-            resultados_qs = Resultado.objects.filter(cartera=cartera)
+            # completa de la cartera, sin filtrar por el medio elegido. permite_manual=False
+            # saca los resultados de campaña/backoffice (ej. Tanner PAC/Venta Directa) que no
+            # son para que un gestor los elija a mano -- la carga masiva/Excel si los acepta.
+            resultados_qs = Resultado.objects.filter(cartera=cartera, permite_manual=True)
             if es_cobrador:
                 # Un cobrador solo puede registrar Directo/Sin contacto en Tanner y Nuevo
                 # Capital (nada de Indirecto/Directo aval/Accion masiva/Recibidos) -- eso no

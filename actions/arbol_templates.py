@@ -225,6 +225,10 @@ TANNER_RESULTADOS = [
 
 TANNER_TIPOS_CONTACTO_CON_CONTACTO = {'DIRECTO', 'DIRECTO AVAL', 'INDIRECTO'}
 TANNER_CODIGOS_EFECTO_PAGANDO = {'112', '301'}  # PAGA TERCERO O AVAL (DIRECTO), PAGA TERCERO (INDIRECTO)
+# PAC / Venta Directa (cod. 129-153): campaña de venta de vehiculo, no gestion de cobranza -- la
+# paleta oficial de Tanner los marca "NO VAN A GESTIONES USUARIOS". Se sacan del formulario manual
+# pero se siguen aceptando en la carga masiva/Excel (son de backoffice, no de gestor).
+TANNER_CODIGOS_NO_MANUAL = {str(c) for c in range(129, 154)}
 
 
 def aplicar_tanner(cartera):
@@ -253,6 +257,7 @@ def aplicar_tanner(cartera):
         resultado.crea_compromiso = requiere_fecha_pago
         resultado.requiere_fecha_pago = requiere_fecha_pago
         resultado.efecto_pago = Resultado.EFECTO_PAGANDO if codigo in TANNER_CODIGOS_EFECTO_PAGANDO else ''
+        resultado.permite_manual = codigo not in TANNER_CODIGOS_NO_MANUAL
         resultado.efecto_demografia = efecto_demografia(respuesta)
         resultado.desactiva_whatsapp = desactiva_whatsapp(respuesta)
         if created:

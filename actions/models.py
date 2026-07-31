@@ -152,6 +152,12 @@ class Resultado(models.Model):
         User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+',
         help_text=_('Último usuario que configuró este resultado (ej. quién activó descarga_grabacion).')
     )
+    # Si el gestor puede elegir este resultado en el formulario manual de gestion. Por defecto
+    # True para todos; se usa para sacar del formulario manual resultados que son de campaña/
+    # backoffice y no de gestor (ej. Tanner cod. 129-153, PAC/Venta Directa: la paleta de Tanner
+    # los marca "NO VAN A GESTIONES USUARIOS"). La carga masiva/Excel sigue aceptandolos igual,
+    # solo se filtra el desplegable del formulario manual.
+    permite_manual = models.BooleanField(default=True)
 
     class Meta:
         ordering = ('nombre',)
