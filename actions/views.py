@@ -1068,6 +1068,10 @@ class PaymentCommitmentListView(LoginRequiredMixin, View):
             if not nueva_fecha:
                 messages.error(request, 'Ingresa una fecha de compromiso válida.')
                 return redirect(next_url)
+            # localdate(), no date.today(): ver nota en actions/forms.py (ActionForm.clean).
+            if nueva_fecha < timezone.localdate():
+                messages.error(request, 'La fecha de compromiso no puede ser anterior a hoy.')
+                return redirect(next_url)
             try:
                 nuevo_monto = int(monto_raw) if monto_raw else None
             except ValueError:

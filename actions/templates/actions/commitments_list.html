@@ -98,7 +98,7 @@
                       <input type="hidden" name="commitment_id" value="{{ c.id }}">
                       <input type="hidden" name="next" value="{{ request.get_full_path }}">
                       <label style="font-size:11px;">Nueva fecha
-                        <input type="date" name="nueva_fecha" value="{{ c.fecha_compromiso|date:'Y-m-d' }}" required style="width:100%; font-size:12px;">
+                        <input type="date" name="nueva_fecha" value="{{ c.fecha_compromiso|date:'Y-m-d' }}" min="{% now 'Y-m-d' %}" required style="width:100%; font-size:12px;">
                       </label>
                       <label style="font-size:11px;">Nuevo monto
                         <input type="number" name="nuevo_monto" value="{{ c.monto|default_if_none:'' }}" min="0" style="width:100%; font-size:12px;">

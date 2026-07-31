@@ -1,4 +1,5 @@
 from django import forms
+from django.utils import timezone
 from .models import Action, Lead, Medio, Resultado, Payment
 from demographics.models import Phone, IDDemographics, AvalDemographics
 import logging
@@ -143,6 +144,10 @@ class ActionForm(forms.ModelForm):
         self.fields['resultado'].required = True
         self.fields['fecha_compromiso'].required = False
         self.fields['monto_compromiso'].required = False
+        # localdate(), no date.today(): el servidor puede correr en otro huso horario (ej. UTC en
+        # Azure) -- localdate() usa TIME_ZONE=America/Santiago (settings.py), date.today() usaria
+        # la hora del sistema y desfasaria "hoy" cerca de la medianoche.
+        self.fields['fecha_compromiso'].widget.attrs['min'] = timezone.localdate().isoformat()
 
         logger.debug(f"Form initialized with fields: {self.fields}")
 
@@ -155,6 +160,9 @@ class ActionForm(forms.ModelForm):
 
         if resultado and resultado.requiere_fecha_pago and not fecha_compromiso:
             self.add_error('fecha_compromiso', 'Este resultado requiere una fecha de compromiso/pago.')
+
+        if fecha_compromiso and fecha_compromiso < timezone.localdate():
+            self.add_error('fecha_compromiso', 'La fecha de compromiso no puede ser anterior a hoy.')
 
         logger.debug(f"Cleaned data - Medio: {medio}, Resultado: {resultado}, Fecha: {fecha_compromiso}")
 
