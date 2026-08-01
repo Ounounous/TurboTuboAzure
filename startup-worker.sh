@@ -3,9 +3,16 @@
 # distinto arranque. Configurar una vez en el App Service worker:
 #   az webapp config set -g <RG> -n turbotubo-worker --startup-file "startup-worker.sh"
 #
-# NO corre gunicorn ni sirve HTTP: este App Service solo procesa tareas de fondo. La web las
-# encola via Redis (CELERY_BROKER_URL) y este proceso las ejecuta.
+# NO corre gunicorn: este App Service solo procesa tareas de fondo. La web las encola via Redis
+# (CELERY_BROKER_URL) y este proceso las ejecuta.
 set -e
+
+# Sonda HTTP (worker_probe.py): Azure App Service mata cualquier contenedor que no escuche en un
+# puerto ("No listening ports were detected", 230s de gracia) y lo reinicia en bucle. Celery no
+# sirve HTTP, asi que sin esto el worker vivia ~4 minutos por arranque -- se detectaron 28
+# reinicios y las tareas quedaban encoladas sin procesar. Este servidor minimo responde 200 y
+# mantiene el contenedor vivo.
+python worker_probe.py &
 
 # ffmpeg: necesario para comprimir las grabaciones a Opus (actions/audio_compress.py). Si no se
 # puede instalar, la app cae al fallback y guarda el MP3 sin comprimir -- no rompe nada.
