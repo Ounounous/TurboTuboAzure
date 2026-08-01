@@ -119,15 +119,23 @@ CELERY_TASK_IGNORE_RESULT = True
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 CELERY_TIMEZONE = 'America/Santiago'
 
-# Cache compartido entre workers (Redis, mismo host que Celery pero DB distinta para no mezclar
-# claves con la cola). Necesario para que el throttle de login (userprofile/forms.py) funcione
-# de verdad en produccion: con el cache en memoria por-proceso (default de Django) cada worker de
-# gunicorn lleva su propio contador y el limite se evade solo repartiendo requests entre workers.
+# Cache compartido entre workers (Redis, mismo host que Celery). Necesario para que el throttle
+# de login (userprofile/forms.py) funcione de verdad en produccion: con el cache en memoria
+# por-proceso (default de Django) cada worker de gunicorn lleva su propio contador y el limite se
+# evade solo repartiendo requests entre workers.
+#
+# OJO con la DB: en local se usa la /1 para no mezclar claves con la cola de Celery (/0), pero
+# Azure Managed Redis (Redis Enterprise) NO soporta multiples DBs -- solo existe la 0, y pedir la
+# /1 falla con "DB index is out of range", dejando el cache muerto y el throttle de login
+# silenciosamente desactivado. Por eso en Azure hay que apuntar CACHE_REDIS_URL a la /0; el
+# KEY_PREFIX mantiene la separacion logica que antes daba la DB aparte (las claves de Celery son
+# 'celery*', '_kombu.*', 'unacked*' -- no chocan con 'ttcache:...').
 _redis_base = CELERY_BROKER_URL.rsplit('/', 1)[0]
 CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.redis.RedisCache',
         'LOCATION': os.environ.get('CACHE_REDIS_URL', f'{_redis_base}/1'),
+        'KEY_PREFIX': 'ttcache',
     }
 }
 
