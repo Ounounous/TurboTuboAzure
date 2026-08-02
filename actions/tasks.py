@@ -132,11 +132,16 @@ def sync_pbx_recordings_user(user_id):
             call.save(update_fields=['resolved', 'resolved_at'])
 
     for call in not_yet_actioned:
-        call.attempts += 1
+        # OJO: NO tocar call.attempts aca -- ese contador es el que el filtro de arriba usa
+        # (attempts__lt=MAX_ATTEMPTS) para decidir si la llamada sigue elegible. Si se
+        # incrementara mientras todavia no tiene gestion, tras MAX_ATTEMPTS ciclos del cron
+        # (~100 min) la llamada quedaria excluida de esta consulta PARA SIEMPRE, sin haberse
+        # marcado resolved ni haberse siquiera consultado la central una sola vez. El unico
+        # limite real para "nunca se guardo la gestion" es el plazo de 24h de mas abajo.
         if call.requested_at < give_up_before:
             call.resolved = True
             call.resolved_at = timezone.now()
-        call.save(update_fields=['attempts', 'resolved', 'resolved_at'])
+            call.save(update_fields=['resolved', 'resolved_at'])
 
     if not actionable:
         return 0

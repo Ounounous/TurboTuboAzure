@@ -58,7 +58,7 @@ GALGO_RESULTADOS = [
     ('NO RESPONDE', Resultado.SIN_CONTACTO, True, False, False, '', False),
     ('PAGO / AL DIA', Resultado.CON_CONTACTO, False, False, True, Resultado.EFECTO_AL_DIA, True),
     ('PAGO / CONTENIDO', Resultado.CON_CONTACTO, True, False, True, Resultado.EFECTO_PAGANDO, True),
-    ('RESPONDE MSJ / CONTACTO SIN FECHA', Resultado.CON_CONTACTO, False, False, False, '', False),
+    ('RESPONDE MSJ / CONTACTO SIN FECHA', Resultado.CON_CONTACTO, False, False, False, '', True),
     ('SIN WHATSAPP', Resultado.SIN_CONTACTO, False, False, False, '', False),
 ]
 

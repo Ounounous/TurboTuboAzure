@@ -429,12 +429,14 @@ class MultiStepActionView(LoginRequiredMixin, View):
                 action.save()
 
                 if selected_phone_id and action.medio.es_llamada:
-                    pending_call = PendingPbxCall.objects.filter(
+                    # TODAS las llamadas sin resolver a este telefono, no solo la ultima: si el
+                    # colector llamo mas de una vez antes de guardar la gestion (ej. no contesto
+                    # y volvio a intentar), esta gestion describe ambos intentos por igual -- si
+                    # solo se linkeara la mas reciente, las anteriores quedarian huerfanas para
+                    # siempre (sin accion asociada, nunca se les busca grabacion).
+                    PendingPbxCall.objects.filter(
                         user=request.user, lead=lead, phone_id=selected_phone_id, resolved=False,
-                    ).order_by('-requested_at').first()
-                    if pending_call:
-                        pending_call.action = action
-                        pending_call.save(update_fields=['action'])
+                    ).update(action=action)
 
                 logger.debug(f"Action saved: {action}, Lead: {lead}, User: {request.user}")
                 messages.success(request, 'Gestión guardada correctamente.')
