@@ -54,7 +54,7 @@ GALGO_RESULTADOS = [
     ('EMAIL INVALIDO', Resultado.SIN_CONTACTO, False, False, False, '', False),
     ('FONO NO CORRESPONDE', Resultado.SIN_CONTACTO, False, False, False, '', False),
     ('FUERA DE SERVICIO', Resultado.SIN_CONTACTO, False, False, False, '', False),
-    ('MSJ DE CONTACTO', Resultado.CON_CONTACTO, True, False, False, '', False),
+    ('MSJ DE CONTACTO', Resultado.SIN_CONTACTO, True, False, False, '', False),
     ('NO RESPONDE', Resultado.SIN_CONTACTO, True, False, False, '', False),
     ('PAGO / AL DIA', Resultado.CON_CONTACTO, False, False, True, Resultado.EFECTO_AL_DIA, True),
     ('PAGO / CONTENIDO', Resultado.CON_CONTACTO, True, False, True, Resultado.EFECTO_PAGANDO, True),
