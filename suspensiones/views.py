@@ -48,10 +48,10 @@ class SuspensionesHomeView(SupervisorRequiredMixin, View):
 
     def get_limit(self):
         try:
-            limit = int(self.request.GET.get('limit', 50))
+            limit = int(self.request.GET.get('limit', 10))
         except ValueError:
-            limit = 50
-        return limit if limit in (10, 50, 100) else 50
+            limit = 10
+        return limit if limit in (10, 50, 100) else 10
 
     def get(self, request, *args, **kwargs):
         estado = request.GET.get('estado', Lead.SUSPENDIDO)

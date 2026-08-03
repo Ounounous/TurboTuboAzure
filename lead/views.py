@@ -424,11 +424,11 @@ def status_changes_by_date(request, period='day'):
         )
 
     try:
-        limit = int(request.GET.get('limit', 50))
+        limit = int(request.GET.get('limit', 10))
     except ValueError:
-        limit = 50
+        limit = 10
     if limit not in (10, 50, 100):
-        limit = 50
+        limit = 10
     logs = logs[:limit]
 
     return render(request, 'lead/status_changes_list.html', {

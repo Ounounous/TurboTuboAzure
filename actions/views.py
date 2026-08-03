@@ -177,16 +177,16 @@ class ActionIndexView(LoginRequiredMixin, View):
         listado = listado.order_by('-created_at')
 
         # "Mostrar: 10/50/100/Todos" -- mismo patron que Compromisos de pago.
-        limit_raw = request.GET.get('limit', '50')
+        limit_raw = request.GET.get('limit', '10')
         if limit_raw == 'todos':
             limit = None
         else:
             try:
                 limit = int(limit_raw)
             except ValueError:
-                limit = 50
+                limit = 10
             if limit not in (10, 50, 100):
-                limit = 50
+                limit = 10
         listado = list(listado if limit is None else listado[:limit])
 
         def _url_limit(value):
@@ -695,10 +695,10 @@ class RecordingListView(SupervisorRequiredMixin, ListView):
 
     def get_limit(self):
         try:
-            limit = int(self.request.GET.get('limit', 50))
+            limit = int(self.request.GET.get('limit', 10))
         except ValueError:
-            limit = 50
-        return limit if limit in (10, 50, 100) else 50
+            limit = 10
+        return limit if limit in (10, 50, 100) else 10
 
     def get_queryset(self):
         # Alcance por cartera: un supervisor solo ve las grabaciones de sus carteras.
@@ -1010,16 +1010,16 @@ class PaymentCommitmentListView(LoginRequiredMixin, View):
         tabla_qs = tabla_qs.order_by('-fecha_compromiso', '-created_at')
 
         # "Mostrar: 10/50/100/Todos" -- mismo patron que la lista de clientes (LeadListView).
-        limit_raw = request.GET.get('limit', '50')
+        limit_raw = request.GET.get('limit', '10')
         if limit_raw == 'todos':
             limit = None
         else:
             try:
                 limit = int(limit_raw)
             except ValueError:
-                limit = 50
+                limit = 10
             if limit not in (10, 50, 100):
-                limit = 50
+                limit = 10
         tabla_compromisos = list(tabla_qs if limit is None else tabla_qs[:limit])
 
         def _url_limit(value):
@@ -1139,16 +1139,16 @@ class BrokenCommitmentsListView(LoginRequiredMixin, View):
         qs = qs.order_by('-retirado_at')
         total_filtrado = qs.count()
 
-        limit_raw = request.GET.get('limit', '50')
+        limit_raw = request.GET.get('limit', '10')
         if limit_raw == 'todos':
             limit = None
         else:
             try:
                 limit = int(limit_raw)
             except ValueError:
-                limit = 50
+                limit = 10
             if limit not in (10, 50, 100):
-                limit = 50
+                limit = 10
         tabla = list(qs if limit is None else qs[:limit])
 
         def _url_limit(value):
@@ -1538,7 +1538,24 @@ class PaymentListView(LoginRequiredMixin, View):
             parsed_fecha = parse_date(hist_fecha)
             if parsed_fecha:
                 tabla_qs = tabla_qs.filter(fecha=parsed_fecha)
-        tabla_pagos = list(tabla_qs[:300])
+
+        # "Mostrar: 10/50/100/Todos" -- mismo patron que Compromisos de pago.
+        limit_raw = request.GET.get('limit', '10')
+        if limit_raw == 'todos':
+            limit = None
+        else:
+            try:
+                limit = int(limit_raw)
+            except ValueError:
+                limit = 10
+            if limit not in (10, 50, 100):
+                limit = 10
+        tabla_pagos = list(tabla_qs if limit is None else tabla_qs[:limit])
+
+        def _url_limit(value):
+            params = request.GET.copy()
+            params['limit'] = value
+            return '?' + params.urlencode()
 
         context = {
             'q': q,
@@ -1549,6 +1566,11 @@ class PaymentListView(LoginRequiredMixin, View):
             'selected_cartera': selected_cartera,
             'hist_op': hist_op,
             'hist_fecha': hist_fecha,
+            'limit': 'todos' if limit is None else limit,
+            'url_limit_10': _url_limit(10),
+            'url_limit_50': _url_limit(50),
+            'url_limit_100': _url_limit(100),
+            'url_limit_todos': _url_limit('todos'),
         }
         return render(request, self.template_name, context)
 

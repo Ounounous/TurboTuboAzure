@@ -481,6 +481,13 @@ class UploadAvalDemographicsView(SupervisorRequiredMixin, View):
 class PhoneStatusView(SupervisorRequiredMixin, View):
     template_name = 'demographics/phone_status.html'
 
+    def get_limit(self):
+        try:
+            limit = int(self.request.GET.get('limit', 10))
+        except ValueError:
+            limit = 10
+        return limit if limit in (10, 50, 100) else 10
+
     def get(self, request, *args, **kwargs):
         q = request.GET.get('q', '').strip()
         # Alcance por cartera: un supervisor solo ve/edita los datos de sus carteras.
@@ -489,9 +496,10 @@ class PhoneStatusView(SupervisorRequiredMixin, View):
             phones = phones.filter(
                 Q(phone_number__icontains=q) | Q(lead__op__icontains=q) | Q(lead__name__icontains=q)
             )
-        phones = phones.order_by('lead__op', 'phone_number')[:300]
+        limit = self.get_limit()
+        phones = phones.order_by('lead__op', 'phone_number')[:limit]
         return render(request, self.template_name, {
-            'q': q, 'phones': phones, 'status_choices': CHOICES_CONTACT_STATUS,
+            'q': q, 'phones': phones, 'status_choices': CHOICES_CONTACT_STATUS, 'limit': limit,
         })
 
     def post(self, request, *args, **kwargs):
@@ -607,10 +615,18 @@ class EmailStatusView(SupervisorRequiredMixin, View):
         items.sort(key=lambda x: (x['lead'].op if x['lead'] else '', x['email']))
         return items
 
+    def get_limit(self):
+        try:
+            limit = int(self.request.GET.get('limit', 10))
+        except ValueError:
+            limit = 10
+        return limit if limit in (10, 50, 100) else 10
+
     def get(self, request, *args, **kwargs):
         q = request.GET.get('q', '').strip()
+        limit = self.get_limit()
         return render(request, self.template_name, {
-            'q': q, 'emails': self._emails(q), 'status_choices': CHOICES_CONTACT_STATUS,
+            'q': q, 'emails': self._emails(q)[:limit], 'status_choices': CHOICES_CONTACT_STATUS, 'limit': limit,
         })
 
     def post(self, request, *args, **kwargs):

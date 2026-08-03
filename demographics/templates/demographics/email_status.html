@@ -51,6 +51,15 @@
         </table>
       </div>
     </div>
+
+    <div class="flex flex-wrap items-center justify-center gap-3 mb-6">
+      <span class="font-semibold">Mostrar:</span>
+      <span class="pag">
+        <a href="?q={{ q|urlencode }}&limit=10" class="{% if limit == 10 %}on{% endif %}">10</a>
+        <a href="?q={{ q|urlencode }}&limit=50" class="{% if limit == 50 %}on{% endif %}">50</a>
+        <a href="?q={{ q|urlencode }}&limit=100" class="{% if limit == 100 %}on{% endif %}">100</a>
+      </span>
+    </div>
   {% elif q %}
     <p class="empty-state mb-6">No se encontraron correos para "{{ q }}".</p>
   {% else %}

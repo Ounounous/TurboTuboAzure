@@ -112,6 +112,16 @@
         </table>
       </div>
     </div>
+
+    <div class="flex flex-wrap items-center justify-center gap-3 mt-4">
+      <span class="font-semibold">Mostrar:</span>
+      <span class="pag">
+        <a href="{{ url_limit_10 }}" class="{% if limit == 10 %}on{% endif %}">10</a>
+        <a href="{{ url_limit_50 }}" class="{% if limit == 50 %}on{% endif %}">50</a>
+        <a href="{{ url_limit_100 }}" class="{% if limit == 100 %}on{% endif %}">100</a>
+        <a href="{{ url_limit_todos }}" class="{% if limit == 'todos' %}on{% endif %}">Todos</a>
+      </span>
+    </div>
   {% else %}
     <p class="empty-state">No hay pagos registrados para estos filtros.</p>
   {% endif %}
