@@ -12,6 +12,11 @@
     </div>
   </div>
 
+  <form method="get" class="mb-4 flex flex-wrap gap-3">
+    <input type="text" name="q" value="{{ q }}" placeholder="Buscar por ID, nombre o usuario…" style="min-width:260px;">
+    <button type="submit" class="btn btn-primary">Buscar</button>
+  </form>
+
   {% if logs %}
     <div class="card" style="border:1px solid var(--border); border-radius:10px;">
       <div class="overflow-x-auto">
@@ -34,6 +39,17 @@
         </table>
       </div>
     </div>
+
+    <div class="flex flex-wrap items-center justify-center gap-3 mt-6">
+      <span class="font-semibold">Mostrar:</span>
+      <span class="pag">
+        <a href="?q={{ q|urlencode }}&limit=10" class="{% if limit == 10 %}on{% endif %}">10</a>
+        <a href="?q={{ q|urlencode }}&limit=50" class="{% if limit == 50 %}on{% endif %}">50</a>
+        <a href="?q={{ q|urlencode }}&limit=100" class="{% if limit == 100 %}on{% endif %}">100</a>
+      </span>
+    </div>
+  {% elif q %}
+    <p class="empty-state">No se encontraron cambios de estado para "{{ q }}".</p>
   {% else %}
     <p class="empty-state">No hay cambios de estado en este período.</p>
   {% endif %}

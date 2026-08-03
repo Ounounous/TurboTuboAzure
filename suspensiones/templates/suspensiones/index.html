@@ -22,6 +22,13 @@
   </div>
 
   <h2 class="text-lg font-bold mb-2">{{ estado_label }}</h2>
+
+  <form method="get" class="mb-4 flex flex-wrap gap-3">
+    <input type="hidden" name="estado" value="{{ estado }}">
+    <input type="text" name="q" value="{{ q }}" placeholder="Buscar por ID, nombre o cobrador…" style="min-width:260px;">
+    <button type="submit" class="btn btn-primary">Buscar</button>
+  </form>
+
   {% if leads %}
     <div class="card mb-6" style="border:1px solid var(--border); border-radius:10px;">
       <div class="overflow-x-auto">
@@ -69,6 +76,17 @@
         </table>
       </div>
     </div>
+
+    <div class="flex flex-wrap items-center justify-center gap-3 mb-6">
+      <span class="font-semibold">Mostrar:</span>
+      <span class="pag">
+        <a href="?estado={{ estado }}&q={{ q|urlencode }}&limit=10" class="{% if limit == 10 %}on{% endif %}">10</a>
+        <a href="?estado={{ estado }}&q={{ q|urlencode }}&limit=50" class="{% if limit == 50 %}on{% endif %}">50</a>
+        <a href="?estado={{ estado }}&q={{ q|urlencode }}&limit=100" class="{% if limit == 100 %}on{% endif %}">100</a>
+      </span>
+    </div>
+  {% elif q %}
+    <p class="empty-state mb-6">No se encontraron clientes en estado "{{ estado_label }}" para "{{ q }}".</p>
   {% else %}
     <p class="empty-state mb-6">No hay clientes en estado "{{ estado_label }}".</p>
   {% endif %}

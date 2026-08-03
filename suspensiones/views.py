@@ -5,7 +5,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
@@ -46,10 +46,18 @@ def _aplicar(accion, lead, request):
 class SuspensionesHomeView(SupervisorRequiredMixin, View):
     template_name = 'suspensiones/index.html'
 
+    def get_limit(self):
+        try:
+            limit = int(self.request.GET.get('limit', 50))
+        except ValueError:
+            limit = 50
+        return limit if limit in (10, 50, 100) else 50
+
     def get(self, request, *args, **kwargs):
         estado = request.GET.get('estado', Lead.SUSPENDIDO)
         if estado not in dict(Lead.CHOICES_ACTIVO):
             estado = Lead.SUSPENDIDO
+        q = request.GET.get('q', '').strip()
 
         # Alcance por rol: un supervisor solo ve los leads de sus carteras.
         from lead.permissions import leads_visibles
@@ -60,11 +68,13 @@ class SuspensionesHomeView(SupervisorRequiredMixin, View):
             for val, label in Lead.CHOICES_ACTIVO
         ]
 
-        leads = (
-            visibles.filter(activo=estado)
-            .select_related('subcartera__cartera', 'assigned_to')
-            .order_by('-suspendido_at', '-desasignado_at', '-terminado_at', 'name')[:300]
-        )
+        leads = visibles.filter(activo=estado).select_related('subcartera__cartera', 'assigned_to')
+        if q:
+            leads = leads.filter(
+                Q(op__icontains=q) | Q(name__icontains=q) | Q(assigned_to__username__icontains=q)
+            )
+        limit = self.get_limit()
+        leads = leads.order_by('-suspendido_at', '-desasignado_at', '-terminado_at', 'name')[:limit]
 
         context = {
             'tarjetas': tarjetas,
@@ -72,6 +82,8 @@ class SuspensionesHomeView(SupervisorRequiredMixin, View):
             'estado_label': dict(Lead.CHOICES_ACTIVO)[estado],
             'leads': leads,
             'es_activo': estado == Lead.ACTIVO,
+            'q': q,
+            'limit': limit,
         }
         return render(request, self.template_name, context)
 

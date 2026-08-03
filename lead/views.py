@@ -399,6 +399,7 @@ class MarcarAlDiaView(LoginRequiredMixin, View):
 def status_changes_by_date(request, period='day'):
     # Fecha de inicio en la zona horaria local (evita perder cambios de las últimas horas
     # por el desfase UTC: usamos localdate + el lookup __date que compara por día local).
+    from django.db.models import Q
     from .permissions import scope_por_lead
 
     today = localdate()
@@ -416,7 +417,23 @@ def status_changes_by_date(request, period='day'):
         # Cobrador: solo lo que el mismo cambio (ya acotado, sin tocar mas).
         logs = logs.filter(changed_by=request.user)
 
-    return render(request, 'lead/status_changes_list.html', {'logs': logs, 'period': period})
+    q = request.GET.get('q', '').strip()
+    if q:
+        logs = logs.filter(
+            Q(lead__op__icontains=q) | Q(lead__name__icontains=q) | Q(changed_by__username__icontains=q)
+        )
+
+    try:
+        limit = int(request.GET.get('limit', 50))
+    except ValueError:
+        limit = 50
+    if limit not in (10, 50, 100):
+        limit = 50
+    logs = logs[:limit]
+
+    return render(request, 'lead/status_changes_list.html', {
+        'logs': logs, 'period': period, 'q': q, 'limit': limit,
+    })
 
 class LeadCreateView(_SupervisorGate, CreateView):
     model = Lead
