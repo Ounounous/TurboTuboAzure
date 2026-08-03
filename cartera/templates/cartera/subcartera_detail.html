@@ -1,0 +1,58 @@
+{% extends 'core/base.html' %}
+{% load money %}
+
+{% block title %}{{ subcartera.cartera.nombre }} / {{ subcartera.nombre }}{% endblock %}
+
+{% block content %}
+<div class="py-6 px-6" style="max-width: 720px;">
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+    <h1 class="text-xl font-bold">{{ subcartera.cartera.nombre }} / {{ subcartera.nombre }}</h1>
+    <a href="{% url 'cartera:detail' subcartera.cartera.pk %}" class="btn btn-secondary">Volver a {{ subcartera.cartera.nombre }}</a>
+  </div>
+
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+    <div class="card p-4">
+      <p class="muted text-sm mb-1">Clientes activos</p>
+      <p class="text-2xl font-bold">{{ total_clientes }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="muted text-sm mb-1">Saldo insoluto total</p>
+      <p class="text-2xl font-bold">{{ total_saldo|clp }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="muted text-sm mb-1">Gestiones (mes)</p>
+      <p class="text-2xl font-bold">{{ total_gestiones }}</p>
+    </div>
+  </div>
+
+  {% if por_usuario %}
+    <details class="card p-4" style="border: 1px solid var(--border); border-radius: 10px;" open>
+      <summary style="cursor: pointer; font-size: 1.05rem; font-weight: 800; margin: 0; user-select: none;">
+        Detalle por usuario
+      </summary>
+      <div class="overflow-x-auto" style="margin-top: 16px;">
+        <table class="table-dense">
+          <thead>
+            <tr>
+              <th>Usuario</th><th class="num">Clientes</th>
+              <th class="num">Saldo insoluto</th><th class="num">Gestiones (mes)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for fila in por_usuario %}
+              <tr>
+                <td style="font-weight:600">{{ fila.username }}</td>
+                <td class="num">{{ fila.n_clientes }}</td>
+                <td class="num">{{ fila.saldo|clp }}</td>
+                <td class="num">{{ fila.n_gestiones }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  {% else %}
+    <p class="empty-state">Todavía no hay clientes asignados ni gestiones en esta subcartera.</p>
+  {% endif %}
+</div>
+{% endblock %}

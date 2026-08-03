@@ -18,7 +18,7 @@
           <tbody>
             {% for subcartera in subcarteras %}
               <tr>
-                <td style="font-weight:600">{{ subcartera.nombre }}</td>
+                <td style="font-weight:600"><a href="{% url 'cartera:subcartera_detail' cartera.pk subcartera.pk %}" class="link">{{ subcartera.nombre }}</a></td>
                 <td>{% if subcartera.es_default %}<span class="dot-st"><span class="d st-green"></span>Sí</span>{% else %}<span class="muted">No</span>{% endif %}</td>
                 <td>{{ subcartera.n_leads }}</td>
                 {% if puede_gestionar_subcarteras %}

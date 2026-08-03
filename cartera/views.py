@@ -1,5 +1,6 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import Count, Q, Sum
@@ -82,6 +83,71 @@ class CarteraDetailView(CarteraViewRequiredMixin, DetailView):
         # Árbol de decisiones
         context['medios'] = Medio.objects.filter(cartera=self.object).order_by('nombre')
         context['resultados'] = Resultado.objects.filter(cartera=self.object).order_by('nombre')
+
+        return context
+
+
+class SubcarteraDetailView(CarteraViewRequiredMixin, DetailView):
+    """Desglose de una subcartera por cobrador: cuántos clientes tiene asignados cada uno, cuánto
+    saldo insoluto representan, y cuántas gestiones hizo este mes. Mismo alcance que el resto de
+    Carteras (subcarteras_visibles): un supervisor solo entra a las que supervisa."""
+    model = Subcartera
+    context_object_name = 'subcartera'
+
+    def get_queryset(self):
+        return subcarteras_visibles(self.request.user).filter(cartera_id=self.kwargs['cartera_pk'])
+
+    def get_context_data(self, **kwargs):
+        import datetime
+        from django.utils import timezone
+        from actions.models import Action
+        from core.timeutils import rango_local
+        from lead.models import Lead
+
+        context = super().get_context_data(**kwargs)
+
+        today = timezone.localdate()
+        mes_ini_dt, _ = rango_local(today.replace(day=1), today + datetime.timedelta(days=1))
+
+        # Mismo criterio que el Dashboard: clientes ACTIVOS (lo que se esta trabajando hoy).
+        leads_base = Lead.objects.filter(subcartera=self.object, activo=Lead.ACTIVO)
+        context['total_clientes'] = leads_base.count()
+        context['total_saldo'] = leads_base.aggregate(total=Sum('saldo_insoluto'))['total'] or 0
+
+        gestiones_mes = Action.objects.filter(lead__subcartera=self.object, created_at__gte=mes_ini_dt)
+        context['total_gestiones'] = gestiones_mes.count()
+
+        # Gestiones del mes hechas por cada usuario (independiente de a quien tenga asignado el
+        # lead -- un supervisor puede gestionar clientes que no son suyos).
+        gestiones_por_usuario = dict(
+            gestiones_mes.values('user_id').annotate(n=Count('id')).values_list('user_id', 'n')
+        )
+
+        # Un cobrador puede no tener clientes asignados pero si gestiones (o viceversa) -- se arma
+        # la fila por la union de ambos conjuntos, no solo por quien tiene clientes.
+        por_clientes = {
+            fila['assigned_to_id']: fila
+            for fila in leads_base.exclude(assigned_to__isnull=True)
+            .values('assigned_to_id', 'assigned_to__username')
+            .annotate(n_clientes=Count('id', distinct=True), saldo=Sum('saldo_insoluto'))
+        }
+        usernames = {uid: f['assigned_to__username'] for uid, f in por_clientes.items()}
+        if gestiones_por_usuario:
+            faltantes = User.objects.filter(pk__in=gestiones_por_usuario.keys()).exclude(
+                pk__in=usernames.keys()
+            ).values_list('pk', 'username')
+            usernames.update(dict(faltantes))
+
+        filas = [
+            {
+                'username': usernames[uid],
+                'n_clientes': por_clientes.get(uid, {}).get('n_clientes', 0),
+                'saldo': por_clientes.get(uid, {}).get('saldo') or 0,
+                'n_gestiones': gestiones_por_usuario.get(uid, 0),
+            }
+            for uid in usernames
+        ]
+        context['por_usuario'] = sorted(filas, key=lambda f: -f['saldo'])
 
         return context
 

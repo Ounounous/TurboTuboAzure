@@ -38,7 +38,7 @@
           <tbody>
             {% for fila in desglose_subcarteras %}
               <tr>
-                <td style="font-weight:600">{{ fila.subcartera.cartera.nombre }} / {{ fila.subcartera.nombre }}</td>
+                <td style="font-weight:600"><a href="{% url 'cartera:subcartera_detail' fila.subcartera.cartera.pk fila.subcartera.pk %}" class="link">{{ fila.subcartera.cartera.nombre }} / {{ fila.subcartera.nombre }}</a></td>
                 <td class="num">{{ fila.n_clientes }}</td>
                 <td class="num">{{ fila.saldo_total|clp }}</td>
                 <td class="num">{{ fila.contactabilidad_pct }}%</td>
