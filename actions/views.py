@@ -1,6 +1,5 @@
 import datetime
 
-from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied
@@ -352,7 +351,6 @@ class MultiStepActionView(LoginRequiredMixin, View):
                 'phone_digits': re.sub(r'\D', '', selected_phone.phone_number) if selected_phone else '',
                 'selected_email': selected_email,
                 'has_pbx': bool(userprofile and userprofile.has_pbx_credentials),
-                'pbx_sip_domain': getattr(settings, 'PBX_SIP_DOMAIN', '') or '',
                 'lead_notes': lead.notes.select_related('author'),
                 'resultado_defaults': resultado_defaults,
             })
@@ -517,27 +515,18 @@ class OriginatePbxCallView(LoginRequiredMixin, View):
         if not destination:
             return JsonResponse({'ok': False, 'reason': 'invalid_number'}, status=400)
 
-        # Modo Zoiper directo (PBX_SIP_DOMAIN configurado): no se origina nada por la central --
-        # el navegador le pasa el URI sip: al softphone y Zoiper marca solo. Aca unicamente se
-        # registra la llamada pendiente, que es lo que despues le dice al sync que busque su
-        # grabacion (el cruce por CDR funciona igual, ver PBX_SIP_DOMAIN en settings.py).
-        sip_domain = getattr(settings, 'PBX_SIP_DOMAIN', '') or ''
-        sip_uri = f'sip:{destination}@{sip_domain}' if sip_domain else None
-
-        if not sip_uri:
-            # Modo central: pbxip timbra el anexo del cobrador y al contestar lo puentea.
-            client = master if master is not None else PbxClient(userprofile.pbx_email, userprofile.pbx_password)
-            try:
-                client.originate_call(userprofile.pbx_extension, destination)
-            except PbxError as exc:
-                logger.error(f"PBX originate_call failed for user {request.user.id}: {exc}")
-                return JsonResponse({'ok': False, 'reason': 'pbx_error', 'detail': str(exc)}, status=502)
+        client = master if master is not None else PbxClient(userprofile.pbx_email, userprofile.pbx_password)
+        try:
+            client.originate_call(userprofile.pbx_extension, destination)
+        except PbxError as exc:
+            logger.error(f"PBX originate_call failed for user {request.user.id}: {exc}")
+            return JsonResponse({'ok': False, 'reason': 'pbx_error', 'detail': str(exc)}, status=502)
 
         PendingPbxCall.objects.create(
             user=request.user, lead=lead, phone=phone, destination=destination,
         )
 
-        return JsonResponse({'ok': True, 'sip_uri': sip_uri})
+        return JsonResponse({'ok': True})
 
 class ActionDownloadExcelView(LoginRequiredMixin, View):
     @con_limite_concurrencia('export_excel', slots=2)

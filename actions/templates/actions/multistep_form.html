@@ -106,15 +106,7 @@
                       {% if 'whatsapp' in medio.nombre|lower %}
                         data-native-url="https://wa.me/{{ phone_digits }}"
                       {% else %}
-                        {% comment %}Con PBX_SIP_DOMAIN configurado el fallback tambien va por
-                        Zoiper (sip:), no por tel:, que en un navegador de escritorio no hace
-                        nada. OJO: {# #} solo comenta UNA linea -- en varias se filtra al HTML
-                        (aca, adentro de los atributos del boton).{% endcomment %}
-                        {% if pbx_sip_domain %}
-                          data-native-url="sip:{{ phone_digits }}@{{ pbx_sip_domain }}"
-                        {% else %}
-                          data-native-url="tel:{{ phone_digits }}"
-                        {% endif %}
+                        data-native-url="tel:{{ phone_digits }}"
                         {% if has_pbx %}data-pbx-call="1"{% endif %}
                       {% endif %}>
                 {% if 'whatsapp' in medio.nombre|lower %}💬 WhatsApp{% else %}☎️ Llamar{% endif %}
@@ -125,13 +117,7 @@
         {% if selected_phone and not selected_phone.whatsapp_activo %}
           <p class="alert alert-danger mt-1" style="font-size:12px; padding:6px 10px;">Número sin WhatsApp activo.</p>
         {% endif %}
-        {% if has_pbx %}
-          {% if pbx_sip_domain %}
-            <p class="text-sm mt-1" style="color:var(--text-muted)">☎️ marcará directo desde tu Zoiper (tenelo abierto y conectado).</p>
-          {% else %}
-            <p class="text-sm mt-1" style="color:var(--text-muted)">☎️ marcará por la central telefónica (pbxip.cl) a tu anexo, luego te conecta con el cliente.</p>
-          {% endif %}
-        {% endif %}
+        {% if has_pbx %}<p class="text-sm mt-1" style="color:var(--text-muted)">☎️ marcará por la central telefónica (pbxip.cl) a tu anexo, luego te conecta con el cliente.</p>{% endif %}
         <p class="text-sm mt-2 mb-1" style="color:var(--text-muted)">O elige el medio directamente (sin llamar):</p>
       {% else %}
         <div class="flex gap-3 items-center" id="medio-buttons">
@@ -228,18 +214,6 @@
         applyDefaultResultado(btn.dataset.medioId);
       }
 
-      // Un URI sip:/tel: lo atiende un programa instalado (Zoiper), no el navegador: hay que
-      // navegar, no abrir pestaña -- window.open deja una pestaña en blanco colgada. Para URLs
-      // http (WhatsApp web) sigue siendo window.open.
-      function abrirUrl(url) {
-        if (!url) { return; }
-        if (/^https?:/i.test(url)) {
-          window.open(url, '_blank');
-        } else {
-          window.location.href = url;
-        }
-      }
-
       function originatePbxCall(btn) {
         var actionForm = document.getElementById('action-form');
         var body = new URLSearchParams({
@@ -259,27 +233,20 @@
         }).then(function (resp) { return resp.json(); }).then(function (data) {
           btn.disabled = false;
           btn.textContent = originalText;
-          if (data.ok) {
-            // Modo Zoiper directo: el backend solo registro la llamada pendiente (para la
-            // grabacion) y nos devolvio el URI -- marcar es cosa del softphone.
-            if (data.sip_uri) {
-              abrirUrl(data.sip_uri);
+          if (!data.ok) {
+            // Advertencia: sin extension SIP no se podra cruzar/adjuntar la grabacion despues.
+            if (data.reason === 'no_extension' || data.reason === 'no_credentials') {
+              alert('No tenés una extensión SIP configurada. La llamada se abrirá en tu softphone, ' +
+                    'pero la grabación no se podrá adjuntar automáticamente. Pedile a un supervisor ' +
+                    'o admin que cargue tu extensión en Configuración → Usuarios.');
             }
-            // Modo central (sin sip_uri): pbxip ya esta timbrando el anexo, no hay nada que abrir.
-            return;
+            // Sin credenciales/extension o error de la central: cae de vuelta al tel: nativo.
+            window.open(btn.dataset.nativeUrl, '_blank');
           }
-          // Advertencia: sin extension SIP no se podra cruzar/adjuntar la grabacion despues.
-          if (data.reason === 'no_extension' || data.reason === 'no_credentials') {
-            alert('No tenés una extensión SIP configurada. La llamada se abrirá en tu softphone, ' +
-                  'pero la grabación no se podrá adjuntar automáticamente. Pedile a un supervisor ' +
-                  'o admin que cargue tu extensión en Configuración → Usuarios.');
-          }
-          // Sin credenciales/extension o error de la central: cae de vuelta al URI nativo.
-          abrirUrl(btn.dataset.nativeUrl);
         }).catch(function () {
           btn.disabled = false;
           btn.textContent = originalText;
-          abrirUrl(btn.dataset.nativeUrl);
+          window.open(btn.dataset.nativeUrl, '_blank');
         });
       }
 
@@ -294,7 +261,7 @@
           if (btn.dataset.pbxCall) {
             originatePbxCall(btn);
           } else if (btn.dataset.nativeUrl) {
-            abrirUrl(btn.dataset.nativeUrl);
+            window.open(btn.dataset.nativeUrl, '_blank');
           }
         });
       });
