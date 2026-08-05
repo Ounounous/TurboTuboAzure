@@ -109,6 +109,18 @@ PBX_ENCRYPTION_KEY = os.environ.get('PBX_ENCRYPTION_KEY', '')
 PBX_MASTER_EMAIL = os.environ.get('PBX_MASTER_EMAIL', '')
 PBX_MASTER_PASSWORD = os.environ.get('PBX_MASTER_PASSWORD', '')
 
+# Dominio SIP de pbxip.cl (el mismo que cada cobrador tiene configurado en su Zoiper). Es el
+# INTERRUPTOR entre los dos modos de marcado:
+#   - VACIO (default): modo central. El backend le pide a pbxip que timbre el anexo del cobrador
+#     y, al contestar, lo puentee con el cliente (dos patas: primero suena tu propio telefono).
+#   - CON VALOR: modo Zoiper directo. El navegador le pasa un URI `sip:<destino>@<dominio>` al
+#     softphone y Zoiper marca de una (una sola pata). El backend NO origina nada, solo registra
+#     el PendingPbxCall para que el sync de grabaciones sepa que debe buscarla despues.
+# En ambos modos la grabacion se cruza igual: find_matching_cdr (actions/pbx_matching.py) matchea
+# por src_extension + destino + ventana de tiempo, no por como se origino la llamada.
+# Cambiar esta variable NO requiere redeploy, solo reiniciar la app -- sirve de kill switch.
+PBX_SIP_DOMAIN = os.environ.get('PBX_SIP_DOMAIN', '')
+
 CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0')
 # Sin backend de resultados: el codigo nunca lee el retorno/estado de una tarea (no hay
 # AsyncResult.get()/.ready()/.state en ningun lado), asi que guardarlos era puro overhead que
