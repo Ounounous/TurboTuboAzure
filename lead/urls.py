@@ -19,5 +19,7 @@ urlpatterns = [
     path('download_excel/', views.DownloadExcelView.as_view(), name='download-excel'),
     path('assign/', AssignLeadsView.as_view(), name='leads_assign'),
     path('assign/plantilla/', views.DownloadAssignmentTemplateView.as_view(), name='assign_template'),
+    path('assign/mover-subcartera/', views.MoveSubcarteraUploadView.as_view(), name='leads_move_subcartera'),
+    path('assign/mover-subcartera/plantilla/', views.DownloadMoveSubcarteraTemplateView.as_view(), name='move_subcartera_template'),
     path('status-changes/<str:period>/', views.status_changes_by_date, name='status-changes'),
 ]

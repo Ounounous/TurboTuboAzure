@@ -1,6 +1,6 @@
 from django import forms
 from django.contrib.auth.models import User
-from cartera.models import Cartera
+from cartera.models import Cartera, Subcartera
 from .models import Lead, LeadFile
 
 class AddLeadForm(forms.ModelForm):
@@ -44,3 +44,22 @@ class QuickAssignForm(forms.Form):
 
 class UploadAssignmentFileForm(forms.Form):
     file = forms.FileField(label='Upload Assignment Excel file')
+
+
+class MoverSubcarteraForm(forms.Form):
+    """Mover un lead a otra subcartera de la MISMA cartera (en la ficha de detalle). El arbol de
+    gestion (medios/resultados) es por Cartera, no por Subcartera, asi que este movimiento nunca
+    lo cambia -- cruzar de Cartera es otro problema, este form no lo permite."""
+    subcartera = forms.ModelChoiceField(
+        queryset=Subcartera.objects.none(), label='Mover a',
+    )
+
+    def __init__(self, *args, **kwargs):
+        cartera = kwargs.pop('cartera', None)
+        super().__init__(*args, **kwargs)
+        if cartera:
+            self.fields['subcartera'].queryset = Subcartera.objects.filter(cartera=cartera).order_by('nombre')
+
+
+class UploadMoverSubcarteraFileForm(forms.Form):
+    file = forms.FileField(label='Excel de mover subcartera')

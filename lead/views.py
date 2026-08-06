@@ -19,7 +19,10 @@ logger = logging.getLogger(__name__)
 
 from openpyxl import load_workbook
 
-from .forms import AddFileForm, AddLeadForm, UploadExcelFileForm, UploadAssignmentFileForm, QuickAssignForm
+from .forms import (
+    AddFileForm, AddLeadForm, UploadExcelFileForm, UploadAssignmentFileForm, QuickAssignForm,
+    MoverSubcarteraForm, UploadMoverSubcarteraFileForm,
+)
 from .models import Lead, LeadAssignment, LeadFile, LeadNote, User
 from core.concurrency import con_limite_concurrencia
 from cartera.models import Cartera, Subcartera
@@ -333,6 +336,16 @@ class LeadDetailView(LoginRequiredMixin, DetailView):
             team = getattr(self.request.user.userprofile, 'active_team', None)
             context['quick_assign_form'] = QuickAssignForm(team=team)
 
+            # Mover de subcartera: cualquier supervisor que vea el lead puede moverlo a
+            # cualquier OTRA subcartera de la MISMA cartera (no hace falta que supervise el
+            # destino). Solo se ofrece si hay a donde moverlo -- con una sola subcartera en la
+            # cartera, el desplegable no tendria sentido.
+            subcarteras_cartera = Subcartera.objects.filter(
+                cartera=self.object.subcartera.cartera
+            ).order_by('nombre')
+            if subcarteras_cartera.count() > 1:
+                context['mover_subcartera_form'] = MoverSubcarteraForm(cartera=self.object.subcartera.cartera)
+
         return context
 
     def post(self, request, *args, **kwargs):
@@ -343,6 +356,22 @@ class LeadDetailView(LoginRequiredMixin, DetailView):
         lead = self.get_object()
         if not leads_visibles(request.user, base=Lead.objects.filter(pk=lead.pk)).exists():
             raise PermissionDenied
+
+        # Distingue del formulario de "Asignar a" de abajo -- mismo POST, misma URL.
+        if 'mover_subcartera' in request.POST:
+            form = MoverSubcarteraForm(request.POST, cartera=lead.subcartera.cartera)
+            if form.is_valid():
+                nueva = form.cleaned_data['subcartera']
+                if nueva.pk == lead.subcartera_id:
+                    messages.info(request, f'{lead.op} ya estaba en {nueva.nombre}.')
+                else:
+                    anterior = lead.subcartera.nombre
+                    lead.subcartera = nueva
+                    lead.save(update_fields=['subcartera'])
+                    messages.success(request, f'{lead.op} movido de {anterior} a {nueva.nombre}.')
+            else:
+                messages.error(request, 'Subcartera inválida.')
+            return redirect('leads:detail', pk=lead.pk)
 
         team = getattr(request.user.userprofile, 'active_team', None)
         form = QuickAssignForm(request.POST, team=team)
@@ -862,7 +891,10 @@ class AssignLeadsView(LoginRequiredMixin, View):
         # se vuelve inusable, y la asignacion individual ya vive en el detalle del cliente
         # (reasignar a cualquier cobrador del equipo). Aca queda solo la asignacion masiva por Excel.
         upload_form = UploadAssignmentFileForm()
-        return render(request, self.template_name, {'upload_form': upload_form})
+        move_upload_form = UploadMoverSubcarteraFileForm()
+        return render(request, self.template_name, {
+            'upload_form': upload_form, 'move_upload_form': move_upload_form,
+        })
 
     def post(self, request, *args, **kwargs):
         from .permissions import es_supervisor, leads_visibles
@@ -960,3 +992,124 @@ class AssignLeadsView(LoginRequiredMixin, View):
             return redirect('leads:list')
 
         return render(request, self.template_name, {'upload_form': upload_form})
+
+
+MOVE_SUBCARTERA_ALIASES = {
+    'cartera': 'cartera',
+    'subcartera': 'subcartera',
+    'op': 'op', 'operacion': 'op', 'id': 'op',
+}
+
+
+class DownloadMoveSubcarteraTemplateView(LoginRequiredMixin, View):
+    """Plantilla Excel para mover leads de subcartera (cartera/subcartera destino/op). No toca
+    el cobrador asignado -- para eso esta la plantilla de Asignaciones."""
+
+    def get(self, request, *args, **kwargs):
+        from .permissions import es_supervisor
+        if not es_supervisor(request.user):
+            raise PermissionDenied
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = 'Mover subcartera'
+        ws.append(['Cartera', 'Subcartera', 'OP'])
+        ws.append(['CARTERA-EJEMPLO', 'SUBCARTERA-DESTINO-EJEMPLO', 'OP-EJEMPLO'])
+
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+        response = HttpResponse(
+            content=output.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        response['Content-Disposition'] = 'attachment; filename=plantilla_mover_subcartera.xlsx'
+        return response
+
+
+class MoveSubcarteraUploadView(LoginRequiredMixin, View):
+    """
+    Carga masiva: mueve leads a otra subcartera de la MISMA cartera, sin tocar el cobrador
+    asignado (columnas Cartera/Subcartera-destino/OP, nada mas). "Subcartera" en el Excel es
+    donde el lead va a QUEDAR, no donde esta hoy -- se ubica al lead por Cartera+OP, igual que
+    en Asignaciones.
+
+    Alcance: cualquier supervisor que vea el lead (leads_visibles, por su subcartera ACTUAL)
+    puede moverlo a cualquier otra subcartera de esa cartera, aunque no la supervise el mismo --
+    decision explicita, mismo criterio que el movimiento manual desde la ficha del cliente.
+    A diferencia de Asignaciones, la subcartera destino debe existir de antemano (no se crea
+    sola): elegir entre subcarteras ya creadas, no tipear una nueva por error.
+    """
+
+    def post(self, request, *args, **kwargs):
+        from .permissions import es_supervisor, leads_visibles
+        if not es_supervisor(request.user):
+            raise PermissionDenied
+
+        upload_form = UploadMoverSubcarteraFileForm(request.POST, request.FILES)
+        if not upload_form.is_valid():
+            messages.error(request, 'Selecciona un archivo Excel válido.')
+            return redirect('leads:leads_assign')
+
+        from core.bulk_upload import procesar_carga
+        from core.carga_tracking import iniciar_lote, registrar_actualizacion
+
+        def validar_fila(fila, rownum):
+            errores = []
+            cartera_nombre = str(fila.get('cartera') or '').strip()
+            subcartera_nombre = str(fila.get('subcartera') or '').strip()
+            op = str(fila.get('op') or '').strip()
+
+            cartera = Cartera.objects.filter(nombre__iexact=cartera_nombre).first() if cartera_nombre else None
+            if not cartera:
+                errores.append(f'cartera "{cartera_nombre}" no encontrada')
+
+            lead = None
+            if cartera and op:
+                lead = Lead.objects.filter(op__iexact=op, subcartera__cartera=cartera).first()
+                if not lead:
+                    errores.append(f'no se encontró el lead OP={op} en cartera {cartera_nombre}')
+                elif not leads_visibles(request.user, base=Lead.objects.filter(pk=lead.pk)).exists():
+                    errores.append(f'no tienes permiso sobre la cartera {cartera_nombre} (OP={op})')
+
+            nueva_subcartera = None
+            if not subcartera_nombre:
+                errores.append('subcartera: vacía')
+            elif cartera:
+                nueva_subcartera = Subcartera.objects.filter(
+                    cartera=cartera, nombre__iexact=subcartera_nombre
+                ).first()
+                if not nueva_subcartera:
+                    errores.append(f'subcartera "{subcartera_nombre}" no existe en {cartera_nombre}')
+
+            if errores:
+                return None, errores
+            return {'lead': lead, 'nueva_subcartera': nueva_subcartera}, []
+
+        resultado = procesar_carga(
+            upload_form.cleaned_data['file'], MOVE_SUBCARTERA_ALIASES,
+            ('cartera', 'subcartera', 'op'), validar_fila,
+            nombre_archivo='errores_mover_subcartera.xlsx',
+        )
+        if not resultado.ok:
+            return resultado.respuesta_error
+
+        excel_file = upload_form.cleaned_data['file']
+        movidos = 0
+        with transaction.atomic():
+            lote = iniciar_lote(
+                'mover_subcartera', request.user,
+                archivo_nombre=getattr(excel_file, 'name', ''), total_filas=len(resultado.filas),
+            )
+            for f in resultado.filas:
+                lead = f['lead']
+                nueva = f['nueva_subcartera']
+                if lead.subcartera_id == nueva.pk:
+                    continue  # ya estaba ahi -- no genera ruido en el historial de la carga
+                registrar_actualizacion(lote, lead, {'subcartera_id': nueva.pk})
+                lead.subcartera = nueva
+                lead.save(update_fields=['subcartera'])
+                movidos += 1
+
+        messages.success(request, f'{movidos} lead(s) movido(s) de subcartera.')
+        return redirect('leads:leads_assign')

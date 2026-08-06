@@ -28,9 +28,39 @@
     </div>
   </div>
 
-  <p class="muted" style="font-size:12.5px;">
+  <p class="muted mb-6" style="font-size:12.5px;">
     ¿Necesitas asignar un solo cliente? Hazlo desde el detalle del cliente (botón "Asignar"),
     donde puedes reasignarlo a cualquier cobrador de tu equipo.
+  </p>
+
+  <div class="card p-4 mb-4">
+    <h2 class="mb-3 text-lg font-bold">Mover de subcartera desde Excel</h2>
+    <p class="muted mb-3" style="font-size:12.5px;">
+      Mueve clientes a otra subcartera de la <strong>misma cartera</strong>, sin tocar quién los tiene asignados.
+    </p>
+    <a href="{% url 'leads:move_subcartera_template' %}" class="btn btn-secondary mb-3">Descargar plantilla (.xlsx)</a>
+    <form method="post" action="{% url 'leads:leads_move_subcartera' %}" enctype="multipart/form-data">
+      {% csrf_token %}
+      {{ move_upload_form.as_p }}
+      <button type="submit" class="btn btn-primary mt-2">Subir archivo</button>
+    </form>
+    <div class="mt-3" style="font-size:12.5px;">
+      <p class="font-bold mb-1">Columnas</p>
+      <ul class="list-disc list-inside space-y-1">
+        <li><strong>Cartera</strong>, <strong>OP</strong> — identifican al cliente. Obligatorias.</li>
+        <li><strong>Subcartera</strong> — la subcartera <strong>destino</strong> (a la que se va a mover). Tiene que existir ya dentro de esa cartera.</li>
+      </ul>
+      <p class="muted mt-2">
+        Puedes mover cualquier cliente que veas (de cualquiera de tus subcarteras) a cualquier otra
+        subcartera de la misma cartera, aunque no la supervises tú. No se puede cruzar de una
+        cartera a otra — eso cambia el árbol de gestiones completo.
+        Si alguna fila tiene un error, no se mueve nada y se descarga el mismo Excel con el detalle.
+      </p>
+    </div>
+  </div>
+
+  <p class="muted" style="font-size:12.5px;">
+    ¿Necesitas mover un solo cliente? Hazlo desde el detalle del cliente (botón "Mover").
   </p>
 </div>
 {% endblock %}
