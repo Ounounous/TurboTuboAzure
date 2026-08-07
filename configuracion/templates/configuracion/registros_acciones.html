@@ -44,5 +44,14 @@
       </table>
     </div>
   </div>
+
+  <div class="flex flex-wrap items-center justify-center gap-3 mt-4">
+    <span class="font-semibold">Mostrar:</span>
+    <span class="pag">
+      <a href="?usuario={{ f_usuario|urlencode }}&accion={{ f_accion|urlencode }}&fecha={{ f_fecha|urlencode }}&limit=10" class="{% if limit == 10 %}on{% endif %}">10</a>
+      <a href="?usuario={{ f_usuario|urlencode }}&accion={{ f_accion|urlencode }}&fecha={{ f_fecha|urlencode }}&limit=50" class="{% if limit == 50 %}on{% endif %}">50</a>
+      <a href="?usuario={{ f_usuario|urlencode }}&accion={{ f_accion|urlencode }}&fecha={{ f_fecha|urlencode }}&limit=100" class="{% if limit == 100 %}on{% endif %}">100</a>
+    </span>
+  </div>
 </div>
 {% endblock %}

@@ -1,10 +1,11 @@
+import datetime
 import logging
 import re
 from datetime import timedelta
 
 from celery import shared_task
 from django.core.files.base import ContentFile
-from django.db import InterfaceError, OperationalError
+from django.db import InterfaceError, OperationalError, transaction
 from django.utils import timezone
 
 from .audio_compress import transcode_to_opus
@@ -48,6 +49,11 @@ CHUNK = 500
 # ninguna gestion se purga antes de 2 anios. Como Zona Sur es la "empresa de cobranza" del art.
 # 37, aplica de lleno.
 RETENCION_GESTIONES_DIAS = 730
+
+# Zona del reporte (UTC-4): con la que se interpretan fecha/hora del Excel de carga masiva, para
+# que la gestion caiga en el dia correcto. Mismo criterio que usaba la vista antes de mover la
+# carga al worker.
+REPORT_TZ = datetime.timezone(datetime.timedelta(hours=-4))
 
 
 def _safe_part(value):
@@ -706,3 +712,144 @@ def generar_zip_grabaciones(job_id):
 
     job.finished_at = timezone.now()
     job.save(update_fields=['estado', 'total', 'errores', 'archivo', 'finished_at'])
+
+
+# ---------------------------------------------------------------------------
+# Carga masiva de gestiones (asincrona)
+# ---------------------------------------------------------------------------
+
+def _huella_gestion(lead_id, medio_id, resultado_id, momento):
+    """Identifica una gestion para detectar re-subidas. `momento` es el datetime EFECTIVO de la
+    gestion (el que sale de fecha_gestion + hora_gestion del Excel), no el de la subida."""
+    return (lead_id, medio_id, resultado_id, momento)
+
+
+@shared_task(**RETRY_DB)
+def procesar_carga_gestiones(job_id):
+    """
+    Valida y guarda una carga masiva de gestiones en el WORKER (no en el proceso web). Un Excel de
+    decenas de miles de filas supera el limite de espera del proxy de Azure: el navegador recibia
+    504 mientras el servidor seguia guardando, y el reintento del usuario duplicaba todo.
+
+    Ademas evita duplicados CONTANDO OCURRENCIAS, no por simple existencia: si el archivo trae 4
+    filas identicas (caso real -- un envio masivo a los 4 correos del mismo deudor, mismo segundo)
+    y la base no tiene ninguna, se insertan las 4; si la base ya tiene esas 4, se saltan las 4.
+    Asi una re-subida (total o parcial) no duplica, y los duplicados legitimos del origen se
+    respetan.
+    """
+    from collections import Counter
+
+    from django.core.files.base import ContentFile
+
+    from core.bulk_upload import procesar_carga
+    from core.carga_tracking import iniciar_lote, registrar_creacion
+    from actions.models import Action, CargaGestionesJob
+    from actions.bulk_gestiones import BULK_COLUMN_ALIASES, construir_validador
+
+    try:
+        job = CargaGestionesJob.objects.get(pk=job_id)
+    except CargaGestionesJob.DoesNotExist:
+        logger.warning(f"procesar_carga_gestiones: job {job_id} no existe (¿se borró?)")
+        return
+
+    job.estado = CargaGestionesJob.PROCESANDO
+    job.save(update_fields=['estado'])
+
+    try:
+        validar_fila = construir_validador(job.solicitado_por)
+        with job.excel.open('rb') as excel_fileobj:
+            resultado = procesar_carga(
+                excel_fileobj, BULK_COLUMN_ALIASES,
+                ('cartera', 'subcartera', 'op', 'medio', 'resultado'), validar_fila,
+                nombre_archivo='errores_gestiones.xlsx',
+            )
+
+        if not resultado.ok:
+            # procesar_carga devuelve el Excel de errores como HttpResponse; se guarda su
+            # contenido en el job para que el usuario lo baje desde el listado.
+            job.archivo_errores.save(
+                f'errores_gestiones_{job.pk}.xlsx',
+                ContentFile(resultado.respuesta_error.content), save=False,
+            )
+            job.estado = CargaGestionesJob.CON_ERRORES
+            job.mensaje = (
+                'El archivo tiene filas con errores. No se cargó ninguna gestión: '
+                'descarga el Excel de errores, corrígelas y vuelve a subirlo.'
+            )
+            job.finished_at = timezone.now()
+            job.save(update_fields=['estado', 'mensaje', 'archivo_errores', 'finished_at'])
+            return
+
+        filas = resultado.filas
+        job.total_filas = len(filas)
+
+        # Momento efectivo de cada fila (el que va a quedar en Action.created_at).
+        momentos = []
+        for f in filas:
+            if f['fecha_gestion']:
+                hora = f['hora_gestion'] or datetime.time(12, 0)
+                momentos.append(datetime.datetime.combine(f['fecha_gestion'], hora, tzinfo=REPORT_TZ))
+            else:
+                momentos.append(None)
+
+        # Cuantas gestiones identicas HAY YA en la base, por huella. Se consulta una sola vez,
+        # acotado a los leads del archivo (no barre la tabla entera).
+        lead_ids = {f['lead'].pk for f in filas}
+        con_fecha = [m for m in momentos if m is not None]
+        ya_en_base = Counter()
+        if lead_ids and con_fecha:
+            existentes = Action.objects.filter(
+                lead_id__in=lead_ids, created_at__gte=min(con_fecha), created_at__lte=max(con_fecha),
+            ).values_list('lead_id', 'medio_id', 'resultado_id', 'created_at')
+            for lead_id, medio_id, resultado_id, created_at in existentes:
+                ya_en_base[_huella_gestion(lead_id, medio_id, resultado_id, created_at)] += 1
+
+        vistas_en_archivo = Counter()
+        creadas = 0
+        omitidas = 0
+
+        with transaction.atomic():
+            lote = iniciar_lote(
+                'gestiones', job.solicitado_por,
+                archivo_nombre=job.excel.name.rsplit('/', 1)[-1], total_filas=len(filas),
+            )
+            for f, momento in zip(filas, momentos):
+                if momento is not None:
+                    huella = _huella_gestion(f['lead'].pk, f['medio'].pk, f['resultado'].pk, momento)
+                    vistas_en_archivo[huella] += 1
+                    # Esta ocurrencia ya esta en la base -> es una re-subida, se salta.
+                    if vistas_en_archivo[huella] <= ya_en_base[huella]:
+                        omitidas += 1
+                        continue
+
+                action = Action(
+                    lead=f['lead'], medio=f['medio'], resultado=f['resultado'], user=f['user'],
+                    comment=f['comment'], phone=f['phone'], email=f['email'],
+                )
+                action.save()
+                if momento is not None:
+                    # created_at es auto_now_add: se sobreescribe para respetar la fecha real
+                    # de la campaña (y para que la huella de duplicados sea estable).
+                    Action.objects.filter(pk=action.pk).update(created_at=momento)
+                registrar_creacion(lote, action)
+                creadas += 1
+
+        job.creadas = creadas
+        job.omitidas_duplicadas = omitidas
+        job.estado = CargaGestionesJob.LISTO
+        partes = [f'{creadas} gestión(es) cargada(s).']
+        if omitidas:
+            partes.append(
+                f'{omitidas} fila(s) se omitieron porque esa gestión ya estaba cargada '
+                '(re-subida del mismo archivo).'
+            )
+        job.mensaje = ' '.join(partes)
+    except Exception:
+        logger.exception(f"procesar_carga_gestiones: falló el job {job_id}")
+        job.estado = CargaGestionesJob.ERROR
+        job.mensaje = 'Falla del servidor procesando el archivo. No se cargó nada. Reintenta o avisa a soporte.'
+
+    job.finished_at = timezone.now()
+    job.save(update_fields=[
+        'estado', 'total_filas', 'creadas', 'omitidas_duplicadas', 'mensaje', 'finished_at',
+    ])

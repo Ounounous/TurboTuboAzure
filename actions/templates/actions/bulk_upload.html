@@ -26,6 +26,60 @@
       <input type="file" name="excel_file" accept=".xlsx" required>
       <button type="submit" class="btn btn-primary">Cargar gestiones</button>
     </form>
+    <p class="muted mt-3" style="font-size:12.5px;">
+      El archivo se procesa en segundo plano: no necesitas esperar en esta página ni dejarla abierta.
+      Se valida entero antes de guardar nada — si alguna fila tiene error, no se carga ninguna gestión
+      y puedes descargar el Excel con el detalle. Volver a subir el mismo archivo no duplica gestiones.
+    </p>
+  </div>
+
+  <div class="card p-6 mb-6">
+    <h2 class="text-lg font-bold mb-3">Cargas recientes</h2>
+    <div class="overflow-x-auto">
+      <table class="table-dense">
+        <thead>
+          <tr>
+            <th>Fecha</th><th>Archivo</th><th>Usuario</th><th>Estado</th>
+            <th class="num">Cargadas</th><th class="num">Omitidas</th><th>Detalle</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for job in jobs %}
+            <tr>
+              <td style="font-variant-numeric:tabular-nums; color:var(--text-muted)">{{ job.created_at|date:"d-m-Y H:i" }}</td>
+              <td class="muted" style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ job.excel.name }}">{{ job.excel.name|cut:"cargas/gestiones/entrada/" }}</td>
+              <td>{{ job.solicitado_por.username|default:"—" }}</td>
+              <td>
+                {% if job.estado == 'listo' %}
+                  <span class="dot-st"><span class="d st-green"></span>Cargada</span>
+                {% elif job.estado == 'con_errores' %}
+                  <span class="dot-st"><span class="d st-red"></span>Se encontraron errores</span>
+                {% elif job.estado == 'error' %}
+                  <span class="dot-st"><span class="d st-red"></span>Falla del servidor</span>
+                {% else %}
+                  <span class="dot-st"><span class="d st-amber"></span>{{ job.get_estado_display }}</span>
+                {% endif %}
+              </td>
+              <td class="num">{% if job.estado == 'listo' %}{{ job.creadas }}{% else %}—{% endif %}</td>
+              <td class="num">{% if job.omitidas_duplicadas %}{{ job.omitidas_duplicadas }}{% else %}—{% endif %}</td>
+              <td style="font-size:12px;">
+                {{ job.mensaje|default:"" }}
+                {% if job.archivo_errores %}
+                  <a href="{% url 'actions:bulk_errores' job.pk %}" class="link">Descargar Excel de errores</a>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="7" class="muted" style="text-align:center; padding:16px;">Todavía no has subido ninguna carga de gestiones.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if jobs %}
+      <p class="muted mt-2" style="font-size:12px;">
+        ¿Una carga lleva mucho en "En cola" o "Procesando"? Recarga la página para ver su estado actualizado.
+      </p>
+    {% endif %}
   </div>
 
   <div class="card p-6">

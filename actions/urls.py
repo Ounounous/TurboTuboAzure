@@ -28,6 +28,7 @@ urlpatterns = [
     path('compromisos/rotos/', views.BrokenCommitmentsListView.as_view(), name='commitments_broken_list'),
     path('carga-masiva/', views.BulkActionUploadView.as_view(), name='bulk_upload'),
     path('carga-masiva/plantilla/', views.BulkActionTemplateView.as_view(), name='bulk_template'),
+    path('carga-masiva/<int:pk>/errores/', views.BulkActionErroresDownloadView.as_view(), name='bulk_errores'),
     path('pagos/', views.PaymentListView.as_view(), name='payments_list'),
     path('pagos/nuevo/<int:lead_id>/', views.PaymentCreateView.as_view(), name='payment_create'),
 ]

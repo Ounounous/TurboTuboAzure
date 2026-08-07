@@ -335,6 +335,13 @@ class RegistrosAccionesView(ConfiguracionRequiredMixin, View):
     ultimos 300 accesos, con filtros por usuario, tipo de accion y fecha."""
     template_name = 'configuracion/registros_acciones.html'
 
+    def get_limit(self):
+        try:
+            limit = int(self.request.GET.get('limit', 10))
+        except ValueError:
+            limit = 10
+        return limit if limit in (10, 50, 100) else 10
+
     def get(self, request, *args, **kwargs):
         from django.utils.dateparse import parse_date
         from .models import AccessLog
@@ -352,12 +359,14 @@ class RegistrosAccionesView(ConfiguracionRequiredMixin, View):
             if parsed:
                 registros = registros.filter(timestamp__date=parsed)
 
+        limit = self.get_limit()
         return render(request, self.template_name, {
-            'registros': registros[:300],
+            'registros': registros[:limit],
             'acciones': AccessLog.CHOICES_ACCION,
             'f_usuario': f_usuario,
             'f_accion': f_accion,
             'f_fecha': f_fecha,
+            'limit': limit,
         })
 
 
@@ -367,16 +376,24 @@ class CargasMasivasView(ConfiguracionRequiredMixin, View):
     (borra filas y revierte campos), no es cosa de supervisor."""
     template_name = 'configuracion/cargas_masivas.html'
 
+    def get_limit(self):
+        try:
+            limit = int(self.request.GET.get('limit', 10))
+        except ValueError:
+            limit = 10
+        return limit if limit in (10, 50, 100) else 10
+
     def get(self, request, *args, **kwargs):
         from core.models import CargaMasiva
-        lotes = CargaMasiva.objects.select_related('usuario', 'deshecha_por').prefetch_related('cambios')[:100]
+        limit = self.get_limit()
+        lotes = CargaMasiva.objects.select_related('usuario', 'deshecha_por').prefetch_related('cambios')[:limit]
         # Conteo de creados/actualizados por lote, sin una query aparte por fila.
         from core.models import CargaMasivaCambio
         for lote in lotes:
             cambios = list(lote.cambios.all())
             lote.n_creados = sum(1 for c in cambios if c.accion == CargaMasivaCambio.ACCION_CREADO)
             lote.n_actualizados = sum(1 for c in cambios if c.accion == CargaMasivaCambio.ACCION_ACTUALIZADO)
-        return render(request, self.template_name, {'lotes': lotes})
+        return render(request, self.template_name, {'lotes': lotes, 'limit': limit})
 
     def post(self, request, *args, **kwargs):
         from core.models import CargaMasiva

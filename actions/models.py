@@ -550,3 +550,51 @@ class GrabacionesExportJob(models.Model):
     @property
     def en_curso(self):
         return self.estado in (self.PENDIENTE, self.PROCESANDO)
+
+
+class CargaGestionesJob(models.Model):
+    """
+    Un pedido de carga masiva de gestiones. Se procesa en el WORKER de Celery, no en el proceso
+    web: un Excel de decenas de miles de filas tarda mucho mas que el limite de espera del proxy
+    de Azure, que devolvia 504 al navegador MIENTRAS el servidor seguia guardando -- el usuario
+    veia "error", reintentaba, y las gestiones quedaban duplicadas. Aca el request solo recibe el
+    archivo y contesta al toque; el resultado (exito, o el Excel de errores) queda en esta lista.
+    """
+    PENDIENTE = 'pendiente'
+    PROCESANDO = 'procesando'
+    LISTO = 'listo'
+    CON_ERRORES = 'con_errores'
+    ERROR = 'error'
+    CHOICES_ESTADO = [
+        (PENDIENTE, _('En cola')),
+        (PROCESANDO, _('Procesando')),
+        (LISTO, _('Cargada')),
+        (CON_ERRORES, _('Se encontraron errores')),
+        (ERROR, _('Falla del servidor')),
+    ]
+
+    solicitado_por = models.ForeignKey(User, on_delete=models.CASCADE, related_name='cargas_gestiones')
+    excel = models.FileField(upload_to='cargas/gestiones/entrada/%Y/%m/')
+    # El mismo Excel + una columna ERRORES, cuando la validacion rechaza el archivo.
+    archivo_errores = models.FileField(upload_to='cargas/gestiones/errores/%Y/%m/', blank=True)
+    estado = models.CharField(max_length=12, choices=CHOICES_ESTADO, default=PENDIENTE)
+    total_filas = models.PositiveIntegerField(default=0)
+    creadas = models.PositiveIntegerField(default=0)
+    # Filas que ya existian identicas en la base (mismo cliente, medio, resultado, fecha y hora):
+    # se saltan en vez de duplicarse. Ver _fingerprint en actions/tasks.py.
+    omitidas_duplicadas = models.PositiveIntegerField(default=0)
+    mensaje = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = _('Carga de gestiones')
+        verbose_name_plural = _('Cargas de gestiones')
+
+    def __str__(self):
+        return f"Carga gestiones #{self.pk} ({self.estado}) - {self.solicitado_por}"
+
+    @property
+    def en_curso(self):
+        return self.estado in (self.PENDIENTE, self.PROCESANDO)
