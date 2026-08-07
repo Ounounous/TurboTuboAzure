@@ -1,3 +1,4 @@
+from django.contrib.auth.models import User
 from django.db import models
 from lead.models import Lead
 
@@ -159,3 +160,52 @@ class AvalDemographics(models.Model):
 
     def __str__(self):
         return f"{self.aval_name} - {self.aval_rut}-{self.aval_dv} - {self.op} - {self.cartera}"
+
+
+class ContactExportJob(models.Model):
+    """
+    Export a Excel de telefonos o correos activos (filtrados igual que la pagina Clientes), para
+    alimentar motores externos (ej. la VM de envios). Se arma en el WORKER: el filtro puede
+    devolver miles de filas -- una por telefono/correo, no por lead -- y una consulta asi de
+    grande no debe frenar el proceso web.
+    """
+    TELEFONOS = 'telefonos'
+    CORREOS = 'correos'
+    CHOICES_TIPO = (
+        (TELEFONOS, 'Teléfonos'),
+        (CORREOS, 'Correos'),
+    )
+
+    PENDIENTE = 'pendiente'
+    PROCESANDO = 'procesando'
+    LISTO = 'listo'
+    VACIO = 'vacio'
+    ERROR = 'error'
+    CHOICES_ESTADO = (
+        (PENDIENTE, 'En cola'),
+        (PROCESANDO, 'Procesando'),
+        (LISTO, 'Listo para descargar'),
+        (VACIO, 'Sin datos con esos filtros'),
+        (ERROR, 'Falla del servidor'),
+    )
+
+    solicitado_por = models.ForeignKey(User, on_delete=models.CASCADE, related_name='exports_contactos')
+    tipo = models.CharField(max_length=10, choices=CHOICES_TIPO)
+    # Querystring de filtros (los mismos de Clientes) tal como estaba la pantalla al pedir el
+    # export -- el worker la vuelve a aplicar para que "descargar filtrados" traiga exactamente
+    # lo que se veia en pantalla.
+    filtros = models.TextField(blank=True)
+    archivo = models.FileField(upload_to='exports/demografia/%Y/%m/', blank=True)
+    estado = models.CharField(max_length=12, choices=CHOICES_ESTADO, default=PENDIENTE)
+    total_filas = models.PositiveIntegerField(default=0)
+    mensaje = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Export de contactos'
+        verbose_name_plural = 'Exports de contactos'
+
+    def __str__(self):
+        return f"Export {self.tipo} #{self.pk} ({self.estado}) - {self.solicitado_por}"

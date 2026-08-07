@@ -1,8 +1,10 @@
 from django.urls import path
+from .models import ContactExportJob
 from .views import (
     DemographicsIndexView, DownloadTemplateView, UploadIDItemView, UploadPhoneView,
     UploadIDDemographicsView, UploadAddressView, UploadAvalDemographicsView,
     PhoneStatusView, PhoneStatusBulkView, EmailStatusView, EmailStatusBulkView,
+    ContactExportView, ContactExportDownloadView,
 )
 
 app_name = 'demographics'
@@ -18,6 +20,15 @@ urlpatterns = [
     # Estado de demografía
     path('estado/telefonos/', PhoneStatusView.as_view(), name='phone_status'),
     path('estado/telefonos/bulk/', PhoneStatusBulkView.as_view(), name='phone_status_bulk'),
+    path(
+        'estado/telefonos/exportar/',
+        ContactExportView.as_view(tipo=ContactExportJob.TELEFONOS), name='phone_export',
+    ),
     path('estado/correos/', EmailStatusView.as_view(), name='email_status'),
     path('estado/correos/bulk/', EmailStatusBulkView.as_view(), name='email_status_bulk'),
+    path(
+        'estado/correos/exportar/',
+        ContactExportView.as_view(tipo=ContactExportJob.CORREOS), name='email_export',
+    ),
+    path('exportar/<int:pk>/descargar/', ContactExportDownloadView.as_view(), name='contact_export_download'),
 ]

@@ -1,3 +1,4 @@
+import logging
 import re
 import unicodedata
 from io import BytesIO
@@ -5,18 +6,21 @@ from io import BytesIO
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.db.models import Q
-from django.http import HttpResponse, Http404
+from django.http import HttpResponse, Http404, FileResponse
 from django.shortcuts import get_object_or_404, render, redirect
+from django.urls import reverse
 from django.views import View
 from django.contrib.auth.mixins import LoginRequiredMixin
 from openpyxl import Workbook, load_workbook
+from lead.filtering import filtros_activos
 from lead.models import Lead
-from lead.permissions import scope_por_lead
+from lead.permissions import es_admin_owner, leads_visibles, scope_por_lead
 from .models import (
-    IDItem, Phone, IDDemographics, AvalDemographics,
+    IDItem, Phone, IDDemographics, AvalDemographics, ContactExportJob,
     CHOICES_CONTACT_STATUS, CONTACT_BLACKLISTED, CONTACT_NON_EXISTENT, CONTACT_OUT_OF_SERVICE,
 )
+
+logger = logging.getLogger(__name__)
 
 SUPERVISOR_TYPES = ('admin', 'owner', 'supervisor')
 
@@ -475,8 +479,47 @@ class UploadAvalDemographicsView(SupervisorRequiredMixin, View):
 
 
 # =========================================================================================
-# Estado de demografía: pantallas para ver/cambiar el estado de teléfonos y correos.
+# Estado de demografía: pantallas para ver/cambiar el estado de teléfonos y correos, y su
+# export a Excel (filtrado igual que Clientes) para alimentar motores externos.
 # =========================================================================================
+
+def _filtro_context(user, params):
+    """Choices + valores actuales del panel de filtros avanzados (los mismos de Clientes),
+    compartido por las pantallas de Telefonos y Correos."""
+    from cartera.models import Subcartera
+    active = filtros_activos(params)
+    return {
+        'filters': active,
+        'advanced_open': any(v for k, v in active.items() if k != 'status'),
+        'status_lead_choices': Lead.CHOICES_STATUS,
+        'ciclo_choices': Lead.CHOICES_CICLO,
+        'ciclo_cartera_choices': Lead.CHOICES_CICLO_CARTERA,
+        'activo_choices': Lead.CHOICES_ACTIVO,
+        'tipo_cobranza_choices': Lead.CHOICES_TIPO_COBRANZA,
+        'aval_choices': Lead.CHOICES_AVAL,
+        'subcartera_choices': Subcartera.objects.filter(
+            leads__in=leads_visibles(user)
+        ).select_related('cartera').order_by('cartera__nombre', 'nombre').distinct(),
+    }
+
+
+def _url_limit_links(params):
+    """URLs '?...&limit=N' preservando el resto de los filtros -- para que cambiar de 10/50/100
+    no borre lo que ya se filtró (antes el pager solo conservaba 'q')."""
+    links = {}
+    for limit in (10, 50, 100):
+        copia = params.copy()
+        copia['limit'] = limit
+        links[limit] = '?' + copia.urlencode()
+    return links
+
+
+def _jobs_recientes(user, tipo):
+    jobs = ContactExportJob.objects.filter(tipo=tipo).select_related('solicitado_por')
+    if not es_admin_owner(user):
+        jobs = jobs.filter(solicitado_por=user)
+    return jobs[:20]
+
 
 class PhoneStatusView(SupervisorRequiredMixin, View):
     template_name = 'demographics/phone_status.html'
@@ -489,18 +532,23 @@ class PhoneStatusView(SupervisorRequiredMixin, View):
         return limit if limit in (10, 50, 100) else 10
 
     def get(self, request, *args, **kwargs):
+        from .exports import telefonos_filtrados
         q = request.GET.get('q', '').strip()
-        # Alcance por cartera: un supervisor solo ve/edita los datos de sus carteras.
-        phones = scope_por_lead(Phone.objects.select_related('lead__subcartera__cartera'), request.user)
-        if q:
-            phones = phones.filter(
-                Q(phone_number__icontains=q) | Q(lead__op__icontains=q) | Q(lead__name__icontains=q)
-            )
+        # Alcance por cartera (supervisor: solo sus carteras) + buscador libre + panel avanzado
+        # (los mismos filtros de Clientes) -- ver demographics/exports.py.
+        phones_qs = telefonos_filtrados(request.user, request.GET)
         limit = self.get_limit()
-        phones = phones.order_by('lead__op', 'phone_number')[:limit]
-        return render(request, self.template_name, {
+        total_count = phones_qs.count()
+        phones = phones_qs[:limit]
+        url_limit = _url_limit_links(request.GET)
+        context = {
             'q': q, 'phones': phones, 'status_choices': CHOICES_CONTACT_STATUS, 'limit': limit,
-        })
+            'total_count': total_count, 'querystring': request.GET.urlencode(),
+            'jobs': _jobs_recientes(request.user, ContactExportJob.TELEFONOS),
+            'url_limit_10': url_limit[10], 'url_limit_50': url_limit[50], 'url_limit_100': url_limit[100],
+        }
+        context.update(_filtro_context(request.user, request.GET))
+        return render(request, self.template_name, context)
 
     def post(self, request, *args, **kwargs):
         # scope_por_lead acota al supervisor a sus carteras -- antes cualquier supervisor podia
@@ -590,31 +638,6 @@ class PhoneStatusBulkView(SupervisorRequiredMixin, View):
 class EmailStatusView(SupervisorRequiredMixin, View):
     template_name = 'demographics/email_status.html'
 
-    def _emails(self, q):
-        items = []
-        # Alcance por cartera (supervisor: solo sus carteras).
-        idd = scope_por_lead(
-            IDDemographics.objects.select_related('lead__subcartera__cartera'), self.request.user
-        ).exclude(principal_email='')
-        avals = scope_por_lead(
-            AvalDemographics.objects.select_related('id_demographics__lead__subcartera__cartera'),
-            self.request.user, lead_field='id_demographics__lead',
-        ).exclude(aval_email='').exclude(aval_email__isnull=True)
-        if q:
-            idd = idd.filter(Q(principal_email__icontains=q) | Q(lead__op__icontains=q) | Q(lead__name__icontains=q))
-            avals = avals.filter(
-                Q(aval_email__icontains=q) | Q(id_demographics__lead__op__icontains=q)
-                | Q(id_demographics__lead__name__icontains=q)
-            )
-        for d in idd[:200]:
-            items.append({'kind': 'principal', 'pk': d.pk, 'email': d.principal_email,
-                          'status': d.principal_email_status, 'lead': d.lead})
-        for a in avals[:200]:
-            items.append({'kind': 'aval', 'pk': a.pk, 'email': a.aval_email,
-                          'status': a.aval_email_status, 'lead': a.id_demographics.lead})
-        items.sort(key=lambda x: (x['lead'].op if x['lead'] else '', x['email']))
-        return items
-
     def get_limit(self):
         try:
             limit = int(self.request.GET.get('limit', 10))
@@ -623,11 +646,21 @@ class EmailStatusView(SupervisorRequiredMixin, View):
         return limit if limit in (10, 50, 100) else 10
 
     def get(self, request, *args, **kwargs):
+        from .exports import correos_filtrados
         q = request.GET.get('q', '').strip()
         limit = self.get_limit()
-        return render(request, self.template_name, {
-            'q': q, 'emails': self._emails(q)[:limit], 'status_choices': CHOICES_CONTACT_STATUS, 'limit': limit,
-        })
+        # Alcance por cartera + buscador libre + panel avanzado (los mismos filtros de
+        # Clientes) -- ver demographics/exports.py.
+        emails = correos_filtrados(request.user, request.GET)
+        url_limit = _url_limit_links(request.GET)
+        context = {
+            'q': q, 'emails': emails[:limit], 'status_choices': CHOICES_CONTACT_STATUS, 'limit': limit,
+            'total_count': len(emails), 'querystring': request.GET.urlencode(),
+            'jobs': _jobs_recientes(request.user, ContactExportJob.CORREOS),
+            'url_limit_10': url_limit[10], 'url_limit_50': url_limit[50], 'url_limit_100': url_limit[100],
+        }
+        context.update(_filtro_context(request.user, request.GET))
+        return render(request, self.template_name, context)
 
     def post(self, request, *args, **kwargs):
         kind = request.POST.get('kind')
@@ -718,3 +751,51 @@ class EmailStatusBulkView(SupervisorRequiredMixin, View):
 
         messages.success(request, f"{actualizados} correo(s) actualizado(s).")
         return redirect('demographics:email_status')
+
+
+class ContactExportView(SupervisorRequiredMixin, View):
+    """Encola el export de telefonos o correos (worker), con los mismos filtros que estaba
+    mostrando la pantalla al pedirlo. El tipo ('telefonos'/'correos') viene fijo por URL."""
+    tipo = None
+
+    def post(self, request, *args, **kwargs):
+        from .tasks import generar_export_contactos
+
+        querystring = request.POST.get('querystring', '')
+        job = ContactExportJob.objects.create(
+            solicitado_por=request.user, tipo=self.tipo, filtros=querystring,
+        )
+        try:
+            generar_export_contactos.delay(job.pk)
+        except Exception:
+            logger.exception('No se pudo encolar generar_export_contactos; queda pendiente.')
+
+        messages.success(
+            request,
+            'Estamos generando el Excel con estos filtros. Aparecera para descargar abajo, en '
+            '"Exports recientes", en cuanto este listo (no necesitas esperar aqui).'
+        )
+        redirect_name = 'demographics:phone_status' if self.tipo == ContactExportJob.TELEFONOS else 'demographics:email_status'
+        target = reverse(redirect_name)
+        if querystring:
+            target += '?' + querystring
+        return redirect(target)
+
+
+class ContactExportDownloadView(SupervisorRequiredMixin, View):
+    """Descarga el Excel ya generado. Solo el dueño del job (o admin/owner)."""
+
+    def get(self, request, *args, **kwargs):
+        job = get_object_or_404(ContactExportJob, pk=kwargs.get('pk'))
+        if job.solicitado_por_id != request.user.pk and not es_admin_owner(request.user):
+            raise PermissionDenied
+        redirect_name = 'demographics:phone_status' if job.tipo == ContactExportJob.TELEFONOS else 'demographics:email_status'
+        if job.estado != ContactExportJob.LISTO or not job.archivo:
+            messages.error(request, 'Ese archivo todavía no está listo.')
+            return redirect(redirect_name)
+
+        return FileResponse(
+            job.archivo.open('rb'), as_attachment=True,
+            filename=f'{job.tipo}_{job.pk}.xlsx',
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )

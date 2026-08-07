@@ -1,0 +1,78 @@
+{# Mismos filtros que la pagina Clientes (lead/filtering.py), reusados en Telefonos/Correos. #}
+<details class="mt-3 mb-4" {% if advanced_open %}open{% endif %}>
+  <summary class="cursor-pointer font-semibold">Filtros avanzados (igual que Clientes)</summary>
+  <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 mt-3">
+    <div><label class="block mb-1" for="f_op">ID (OP)</label><input type="text" name="op" id="f_op" value="{{ filters.op }}" class="w-full"></div>
+    <div><label class="block mb-1" for="f_rut">RUT</label><input type="text" name="rut" id="f_rut" value="{{ filters.rut }}" class="w-full"></div>
+    <div><label class="block mb-1" for="f_name">Nombre</label><input type="text" name="name" id="f_name" value="{{ filters.name }}" class="w-full"></div>
+    <div><label class="block mb-1" for="f_status">Status</label>
+      <select name="status" id="f_status" class="w-full"><option value="">--- Todos ---</option>
+        {% for val, label in status_lead_choices %}<option value="{{ val }}" {% if filters.status == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select></div>
+    <div><label class="block mb-1" for="f_ciclo">Ciclo</label>
+      <select name="ciclo" id="f_ciclo" class="w-full"><option value="">--- Todos ---</option>
+        {% for val, label in ciclo_choices %}<option value="{{ val }}" {% if filters.ciclo == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select></div>
+    <div><label class="block mb-1" for="f_ciclo_cartera">Ciclo Cartera</label>
+      <select name="ciclo_cartera" id="f_ciclo_cartera" class="w-full"><option value="">--- Todos ---</option>
+        {% for val, label in ciclo_cartera_choices %}<option value="{{ val }}" {% if filters.ciclo_cartera == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select></div>
+    <div><label class="block mb-1" for="f_activo">Activo</label>
+      <select name="activo" id="f_activo" class="w-full"><option value="">--- Todos ---</option>
+        {% for val, label in activo_choices %}<option value="{{ val }}" {% if filters.activo == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select></div>
+    <div><label class="block mb-1" for="f_tipo_cobranza">Tipo Cobranza</label>
+      <select name="tipo_cobranza" id="f_tipo_cobranza" class="w-full"><option value="">--- Todos ---</option>
+        {% for val, label in tipo_cobranza_choices %}<option value="{{ val }}" {% if filters.tipo_cobranza == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select></div>
+    <div><label class="block mb-1" for="f_aval">Tiene Aval</label>
+      <select name="tiene_aval" id="f_aval" class="w-full"><option value="">--- Todos ---</option>
+        {% for val, label in aval_choices %}<option value="{{ val }}" {% if filters.tiene_aval == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select></div>
+    <div><label class="block mb-1" for="f_cartera">Cartera</label><input type="text" name="cartera" id="f_cartera" value="{{ filters.cartera }}" class="w-full"></div>
+    <div><label class="block mb-1" for="f_subcartera">Subcartera</label>
+      <select name="subcartera" id="f_subcartera" class="w-full"><option value="">--- Todas ---</option>
+        {% for sub in subcartera_choices %}
+          <option value="{{ sub.pk }}" {% if filters.subcartera == sub.pk|stringformat:"s" %}selected{% endif %}>{{ sub.cartera.nombre }} / {{ sub.nombre }}</option>
+        {% endfor %}
+      </select></div>
+  </div>
+
+  <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 mt-3">
+    <div>
+      <label class="block mb-1">S. insoluto</label>
+      <div class="flex gap-2">
+        <input type="number" name="insoluto_min" value="{{ filters.insoluto_min }}" placeholder="Mín." class="w-full">
+        <input type="number" name="insoluto_max" value="{{ filters.insoluto_max }}" placeholder="Máx." class="w-full">
+      </div>
+    </div>
+    <div>
+      <label class="block mb-1">S. deuda</label>
+      <div class="flex gap-2">
+        <input type="number" name="deuda_min" value="{{ filters.deuda_min }}" placeholder="Mín." class="w-full">
+        <input type="number" name="deuda_max" value="{{ filters.deuda_max }}" placeholder="Máx." class="w-full">
+      </div>
+    </div>
+    <div>
+      <label class="block mb-1">Cuota</label>
+      <div class="flex gap-2">
+        <input type="number" name="cuota_min" value="{{ filters.cuota_min }}" placeholder="Mín." class="w-full">
+        <input type="number" name="cuota_max" value="{{ filters.cuota_max }}" placeholder="Máx." class="w-full">
+      </div>
+    </div>
+    <div>
+      <label class="block mb-1">Cuotas atrasadas</label>
+      <div class="flex gap-2">
+        <input type="number" name="atrasadas_min" value="{{ filters.atrasadas_min }}" placeholder="Mín." class="w-full">
+        <input type="number" name="atrasadas_max" value="{{ filters.atrasadas_max }}" placeholder="Máx." class="w-full">
+      </div>
+    </div>
+    <div>
+      <label class="block mb-1">Días desde última gestión</label>
+      <div class="flex gap-2">
+        <input type="number" name="dias_min" value="{{ filters.dias_min }}" placeholder="Mín." class="w-full">
+        <input type="number" name="dias_max" value="{{ filters.dias_max }}" placeholder="Máx." class="w-full">
+      </div>
+    </div>
+  </div>
+</details>

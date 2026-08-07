@@ -1,0 +1,40 @@
+{% if jobs %}
+  <h2 class="text-lg font-bold mb-2">Exports recientes</h2>
+  <div class="card mb-6" style="border:1px solid var(--border); border-radius:10px;">
+    <div class="overflow-x-auto">
+      <table class="table-dense">
+        <thead>
+          <tr><th>Pedido</th><th>Usuario</th><th>Estado</th><th class="num">Filas</th><th>Acción</th></tr>
+        </thead>
+        <tbody>
+          {% for job in jobs %}
+            <tr>
+              <td style="font-variant-numeric:tabular-nums; color:var(--text-muted)">{{ job.created_at|date:"d-m-Y H:i" }}</td>
+              <td>{{ job.solicitado_por.username|default:"—" }}</td>
+              <td>
+                {% if job.estado == 'listo' %}
+                  <span class="dot-st"><span class="d st-green"></span>Listo</span>
+                {% elif job.estado == 'error' %}
+                  <span class="dot-st"><span class="d st-red"></span>Falla del servidor</span>
+                {% elif job.estado == 'vacio' %}
+                  <span class="muted">Sin datos con esos filtros</span>
+                {% else %}
+                  <span class="dot-st"><span class="d st-amber"></span>{{ job.get_estado_display }}</span>
+                {% endif %}
+              </td>
+              <td class="num">{% if job.estado == 'listo' %}{{ job.total_filas }}{% else %}—{% endif %}</td>
+              <td>
+                {% if job.estado == 'listo' and job.archivo %}
+                  <a href="{% url 'demographics:contact_export_download' job.pk %}" class="btn btn-primary" style="font-size:11px; padding:3px 8px;">Descargar</a>
+                {% else %}
+                  <span class="muted">—</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <p class="muted mb-6" style="font-size:12px;">¿Un export lleva rato "En cola" o "Procesando"? Recarga la página para ver su estado actualizado.</p>
+{% endif %}

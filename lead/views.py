@@ -9,7 +9,6 @@ from django.urls import reverse, reverse_lazy
 from django.http import HttpResponse, JsonResponse
 from django.views.generic import ListView, DetailView, DeleteView, UpdateView, CreateView, View
 from django.utils.timezone import now, localtime, localdate
-from datetime import timedelta
 from .models import StatusChangeLog, Team
 import openpyxl
 from io import BytesIO
@@ -27,6 +26,7 @@ from .models import Lead, LeadAssignment, LeadFile, LeadNote, User
 from core.concurrency import con_limite_concurrencia
 from cartera.models import Cartera, Subcartera
 from demographics.models import IDDemographics, AvalDemographics, IDItem, Phone
+from . import filtering
 
 
 class _SupervisorGate(LoginRequiredMixin):
@@ -50,32 +50,11 @@ class _AdminOwnerGate(LoginRequiredMixin):
 class LeadListView(LoginRequiredMixin, ListView):
     model = Lead
 
-    # Filtros por columna (además del buscador general por ID/RUT). Nombre del parámetro GET ->
-    # lookup en el queryset. Pensado para ser expandible: agregar una columna es una línea acá.
-    COLUMN_FILTERS = {
-        'op': 'op__icontains',
-        'name': 'name__icontains',
-        'rut': 'rut__icontains',
-        'status': 'status',
-        'ciclo': 'ciclo',
-        'ciclo_cartera': 'ciclo_cartera',
-        'activo': 'activo',
-        'tipo_cobranza': 'tipo_cobranza',
-        'tiene_aval': 'tiene_aval',
-        'cartera': 'subcartera__cartera__nombre__icontains',
-        # Opciones cerradas (select), no texto libre: el valor es el id de la subcartera, no el
-        # nombre -- evita ambiguedad si dos carteras distintas tienen una subcartera con el mismo
-        # nombre (ej. "ZONA SUR" en mas de una cartera).
-        'subcartera': 'subcartera_id',
-    }
-
-    # Columnas numericas con filtro de rango (parametros "<clave>_min"/"<clave>_max" en la URL).
-    RANGE_FILTERS = {
-        'insoluto': 'saldo_insoluto',
-        'deuda': 'saldo_deuda',
-        'cuota': 'valor_cuota',
-        'atrasadas': 'cuotas_atrasadas',
-    }
+    # Filtros por columna y de rango: compartidos con los exports de demografia (Telefonos/
+    # Correos), ver lead/filtering.py -- un solo lugar decide que es "los mismos filtros de
+    # Clientes".
+    COLUMN_FILTERS = filtering.COLUMN_FILTERS
+    RANGE_FILTERS = filtering.RANGE_FILTERS
 
     # Columnas ordenables: clave del parámetro ?sort= -> campo del modelo.
     SORT_FIELDS = {
@@ -103,57 +82,7 @@ class LeadListView(LoginRequiredMixin, ListView):
             # Última gestión (Action) del lead — NO cuenta las notas (LeadNote es otro modelo).
             last_action_at=Max('actions__created_at')
         )
-
-        # Solo favoritos del usuario.
-        if self.request.GET.get('fav') == '1':
-            queryset = queryset.filter(favorited_by=self.request.user)
-
-        # Buscador general: ID (op), nombre y RUT en un solo campo.
-        q = self.request.GET.get('q', '').strip()
-        if q:
-            queryset = queryset.filter(
-                Q(op__icontains=q) | Q(name__icontains=q) | Q(rut__icontains=q)
-            )
-
-        # Filtros por columna (panel avanzado, expandible).
-        for param, lookup in self.COLUMN_FILTERS.items():
-            value = self.request.GET.get(param, '').strip()
-            if value:
-                queryset = queryset.filter(**{lookup: value})
-
-        # Rangos min/max sobre las columnas de plata y cuotas atrasadas.
-        for param, field in self.RANGE_FILTERS.items():
-            min_raw = self.request.GET.get(f'{param}_min', '').strip()
-            max_raw = self.request.GET.get(f'{param}_max', '').strip()
-            if min_raw:
-                try:
-                    queryset = queryset.filter(**{f'{field}__gte': int(min_raw)})
-                except ValueError:
-                    pass
-            if max_raw:
-                try:
-                    queryset = queryset.filter(**{f'{field}__lte': int(max_raw)})
-                except ValueError:
-                    pass
-
-        # "Días desde última gestión": min = al menos N días sin gestionar (incluye los que
-        # NUNCA se han gestionado, ya que tambien califican como "al menos N dias"); max = como
-        # maximo N dias (excluye los nunca gestionados, que no tienen una gestion "reciente").
-        dias_min = self.request.GET.get('dias_min', '').strip()
-        dias_max = self.request.GET.get('dias_max', '').strip()
-        if dias_min:
-            try:
-                corte = localdate() - timedelta(days=int(dias_min))
-                queryset = queryset.filter(Q(last_action_at__date__lte=corte) | Q(last_action_at__isnull=True))
-            except ValueError:
-                pass
-        if dias_max:
-            try:
-                corte = localdate() - timedelta(days=int(dias_max))
-                queryset = queryset.filter(last_action_at__date__gte=corte)
-            except ValueError:
-                pass
-
+        queryset = filtering.aplicar_filtros_clientes(queryset, self.request.GET, self.request.user)
         return self._apply_sort(queryset)
 
     def _apply_sort(self, queryset):
@@ -245,9 +174,7 @@ class LeadListView(LoginRequiredMixin, ListView):
         context['only_fav'] = self.request.GET.get('fav') == '1'
         context['sort'] = self.request.GET.get('sort', 'nombre')
         context['dir'] = self.request.GET.get('dir', 'asc')
-        range_params = [f'{p}_min' for p in self.RANGE_FILTERS] + [f'{p}_max' for p in self.RANGE_FILTERS]
-        range_params += ['dias_min', 'dias_max']
-        active_filters = {p: self.request.GET.get(p, '') for p in list(self.COLUMN_FILTERS) + range_params}
+        active_filters = filtering.filtros_activos(self.request.GET)
         context['filters'] = active_filters
         context['advanced_open'] = any(v for k, v in active_filters.items() if k != 'status')
 

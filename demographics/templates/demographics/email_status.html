@@ -12,9 +12,23 @@
     <strong>No existe</strong> / <strong>Fuera de servicio</strong>: aún se puede intentar, pero cuentan para dejar al cliente inubicable.
   </p>
 
-  <form method="get" class="mb-4 flex flex-wrap gap-3">
-    <input type="text" name="q" value="{{ q }}" placeholder="Buscar por correo, ID o nombre…" style="min-width:260px;">
-    <button type="submit" class="btn btn-primary">Buscar</button>
+  <form method="get" class="mb-2">
+    <div class="flex flex-wrap gap-3 items-center">
+      <input type="text" name="q" value="{{ q }}" placeholder="Buscar por correo, ID o nombre…" style="min-width:260px;">
+      <button type="submit" class="btn btn-primary">Buscar</button>
+      {% if q or advanced_open %}<a href="{% url 'demographics:email_status' %}" class="btn btn-secondary">Limpiar</a>{% endif %}
+    </div>
+    {% include 'demographics/_filtros_clientes.html' %}
+  </form>
+
+  <div class="mb-2 muted" style="font-size:12.5px;">
+    {{ total_count }} correo(s) con estos filtros{% if total_count > limit %} · mostrando {{ limit }}{% endif %}
+  </div>
+
+  <form method="post" action="{% url 'demographics:email_export' %}" class="mb-4">
+    {% csrf_token %}
+    <input type="hidden" name="querystring" value="{{ querystring }}">
+    <button type="submit" class="btn btn-primary">Descargar Excel (con estos filtros)</button>
   </form>
 
   {% if emails %}
@@ -55,16 +69,16 @@
     <div class="flex flex-wrap items-center justify-center gap-3 mb-6">
       <span class="font-semibold">Mostrar:</span>
       <span class="pag">
-        <a href="?q={{ q|urlencode }}&limit=10" class="{% if limit == 10 %}on{% endif %}">10</a>
-        <a href="?q={{ q|urlencode }}&limit=50" class="{% if limit == 50 %}on{% endif %}">50</a>
-        <a href="?q={{ q|urlencode }}&limit=100" class="{% if limit == 100 %}on{% endif %}">100</a>
+        <a href="{{ url_limit_10 }}" class="{% if limit == 10 %}on{% endif %}">10</a>
+        <a href="{{ url_limit_50 }}" class="{% if limit == 50 %}on{% endif %}">50</a>
+        <a href="{{ url_limit_100 }}" class="{% if limit == 100 %}on{% endif %}">100</a>
       </span>
     </div>
-  {% elif q %}
-    <p class="empty-state mb-6">No se encontraron correos para "{{ q }}".</p>
   {% else %}
-    <p class="muted mb-6">Busca un correo, ID o nombre para ver y cambiar estados.</p>
+    <p class="empty-state mb-6">No se encontraron correos con esos filtros.</p>
   {% endif %}
+
+  {% include 'demographics/_exports_recientes.html' %}
 
   <hr class="my-6">
   <h2 class="text-lg font-bold mb-2">Carga masiva (Excel)</h2>
