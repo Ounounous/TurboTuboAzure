@@ -1,0 +1,67 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Reportes Tanner por rango{% endblock %}
+
+{% block content %}
+<div class="py-6 px-6">
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-1">
+    <h1 class="text-xl font-bold">Reportes Tanner por rango</h1>
+    <a href="{% url 'actions:index' %}" class="btn btn-secondary">Volver a Gestiones</a>
+  </div>
+  <p class="muted mb-4" style="font-size:12.5px;">
+    Cada ZIP trae un <strong>.txt por día</strong> con el nombre oficial que exige Tanner
+    (listo para enviar tal cual) y además un <strong>consolidado</strong> con todos los días juntos.
+    Los días sin gestiones no generan archivo.
+  </p>
+
+  {% if jobs %}
+    <div class="card" style="border:1px solid var(--border); border-radius:10px;">
+      <div class="overflow-x-auto">
+        <table class="table-dense">
+          <thead>
+            <tr>
+              <th>Pedido</th><th>Rango</th><th>Subcartera</th><th>Usuario</th>
+              <th>Estado</th><th class="num">Gestiones</th><th class="num">Días</th><th>Acción</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for job in jobs %}
+              <tr>
+                <td style="font-variant-numeric:tabular-nums; color:var(--text-muted)">{{ job.created_at|date:"d-m-Y H:i" }}</td>
+                <td style="font-variant-numeric:tabular-nums">{{ job.fecha_desde|date:"d-m-Y" }} → {{ job.fecha_hasta|date:"d-m-Y" }}</td>
+                <td>{% if job.subcartera %}{{ job.subcartera.nombre }}{% else %}<span class="muted">Toda la cartera (oficial)</span>{% endif %}</td>
+                <td>{{ job.solicitado_por.username|default:"—" }}</td>
+                <td>
+                  {% if job.estado == 'listo' %}
+                    <span class="dot-st"><span class="d st-green"></span>Listo</span>
+                  {% elif job.estado == 'error' %}
+                    <span class="dot-st"><span class="d st-red"></span>Falla del servidor</span>
+                  {% elif job.estado == 'vacio' %}
+                    <span class="muted">Sin gestiones en el rango</span>
+                  {% else %}
+                    <span class="dot-st"><span class="d st-amber"></span>{{ job.get_estado_display }}</span>
+                  {% endif %}
+                </td>
+                <td class="num">{% if job.estado == 'listo' %}{{ job.total_gestiones }}{% else %}—{% endif %}</td>
+                <td class="num">{% if job.estado == 'listo' %}{{ job.dias_con_datos }}{% else %}—{% endif %}</td>
+                <td>
+                  {% if job.estado == 'listo' and job.archivo %}
+                    <a href="{% url 'actions:tanner_rango_download' job.pk %}" class="btn btn-primary" style="font-size:11px; padding:3px 8px;">Descargar ZIP</a>
+                  {% else %}
+                    <span class="muted">—</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <p class="muted mt-2" style="font-size:12px;">
+      ¿Un reporte lleva rato en "En cola" o "Procesando"? Recarga la página para ver su estado actualizado.
+    </p>
+  {% else %}
+    <p class="empty-state">Todavía no has pedido ningún reporte por rango.</p>
+  {% endif %}
+</div>
+{% endblock %}

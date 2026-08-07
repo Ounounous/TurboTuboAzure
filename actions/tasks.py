@@ -853,3 +853,88 @@ def procesar_carga_gestiones(job_id):
     job.save(update_fields=[
         'estado', 'total_filas', 'creadas', 'omitidas_duplicadas', 'mensaje', 'finished_at',
     ])
+
+
+@shared_task(**RETRY_DB)
+def generar_reporte_tanner_rango(job_id):
+    """
+    Arma el ZIP del reporte Tanner de un rango de fechas en el WORKER. Adentro va un .txt POR DIA
+    con su nombre oficial (listo para enviar a Tanner tal cual) mas un consolidado con todos los
+    dias juntos. Los dias sin gestiones se saltan: no se genera un archivo vacio.
+
+    Se procesa dia por dia (no una consulta gigante) por dos razones: el formato exige un archivo
+    por dia, y asi la memoria queda acotada al dia mas cargado, no al rango entero.
+    """
+    import tempfile
+    import zipfile
+
+    from django.core.files.base import File
+
+    from actions.models import ReporteTannerJob
+    from actions.tanner_report import contenido_del_dia, nombre_archivo
+
+    try:
+        job = ReporteTannerJob.objects.select_related('subcartera', 'solicitado_por').get(pk=job_id)
+    except ReporteTannerJob.DoesNotExist:
+        logger.warning(f"generar_reporte_tanner_rango: job {job_id} no existe (¿se borró?)")
+        return
+
+    job.estado = ReporteTannerJob.PROCESANDO
+    job.save(update_fields=['estado'])
+
+    spool = None
+    try:
+        spool = tempfile.SpooledTemporaryFile(max_size=8 * 1024 * 1024)
+        total = 0
+        dias_con_datos = 0
+
+        with zipfile.ZipFile(spool, 'w', zipfile.ZIP_DEFLATED) as zf:
+            consolidado = []
+            fecha = job.fecha_desde
+            while fecha <= job.fecha_hasta:
+                contenido, cantidad = contenido_del_dia(
+                    fecha, job.solicitado_por, job.subcartera_id,
+                )
+                if cantidad:
+                    zf.writestr(nombre_archivo(fecha, job.subcartera), contenido)
+                    consolidado.append(contenido)
+                    total += cantidad
+                    dias_con_datos += 1
+                fecha += datetime.timedelta(days=1)
+
+            if consolidado:
+                sufijo = ''
+                if job.subcartera:
+                    sufijo = '_' + re.sub(r'[^A-Za-z0-9]+', '', job.subcartera.nombre)
+                nombre_consolidado = (
+                    f"CONSOLIDADO_{job.fecha_desde:%Y%m%d}_a_{job.fecha_hasta:%Y%m%d}{sufijo}.txt"
+                )
+                zf.writestr(nombre_consolidado, ''.join(consolidado))
+
+        job.total_gestiones = total
+        job.dias_con_datos = dias_con_datos
+
+        if total == 0:
+            job.estado = ReporteTannerJob.VACIO
+            job.mensaje = 'No hay gestiones de Tanner en ese rango de fechas.'
+        else:
+            spool.seek(0)
+            nombre_zip = f"tanner_{job.fecha_desde:%Y%m%d}_a_{job.fecha_hasta:%Y%m%d}.zip"
+            job.archivo.save(nombre_zip, File(spool), save=False)
+            job.estado = ReporteTannerJob.LISTO
+            job.mensaje = (
+                f'{total} gestión(es) en {dias_con_datos} día(s) con datos. '
+                'El ZIP trae un .txt por día (nombre oficial de Tanner) y un consolidado.'
+            )
+    except Exception:
+        logger.exception(f"generar_reporte_tanner_rango: falló el job {job_id}")
+        job.estado = ReporteTannerJob.ERROR
+        job.mensaje = 'Falla del servidor generando el reporte. Reintenta o avisa a soporte.'
+    finally:
+        if spool is not None:
+            spool.close()
+
+    job.finished_at = timezone.now()
+    job.save(update_fields=[
+        'estado', 'total_gestiones', 'dias_con_datos', 'mensaje', 'archivo', 'finished_at',
+    ])

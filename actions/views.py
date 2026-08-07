@@ -849,35 +849,26 @@ class RecordingsExportDownloadView(SupervisorRequiredMixin, View):
         return response
 
 
-TANNER_GESTOR_CODIGO = '40'  # ZONASUR, tabla de gestores del instructivo Tanner
-TANNER_TIPO_GESTION_DEFAULT = '1'  # Cobranza
-TANNER_ORIGEN_GESTION_DEFAULT = '2'  # Outbound
-
-
-def _format_tanner_phone(raw_number):
-    digits = re.sub(r'\D', '', raw_number or '')
-    if not digits:
-        return ''
-    if digits.startswith('56'):
-        return digits
-    if len(digits) == 9:
-        return '56' + digits
-    return digits
+from .tanner_report import (
+    TANNER_GESTOR_CODIGO, TANNER_ORIGEN_GESTION_DEFAULT, TANNER_TIPO_GESTION_DEFAULT,
+    construir_lineas, gestiones_del_dia, nombre_archivo as _tanner_nombre_archivo,
+    nombre_ejecutivo as _ejecutivo_nombre_tanner,
+)
 
 
 class TannerReportView(SupervisorRequiredMixin, View):
     """
-    Genera el archivo de gestiones para Tanner tal como lo exige su instructivo:
-    14 columnas separadas por '|', sin encabezado, un solo dia por archivo, formato
-    FechaGestiones_BaseGestiones2_40.txt. Se envia manualmente por correo a
+    Genera el archivo de gestiones para Tanner tal como lo exige su instructivo: 14 columnas
+    separadas por '|', sin encabezado, un solo dia por archivo. Se envia manualmente por correo a
     gestionescobranza@tanner.cl (no se automatiza el envio, solo se genera el archivo).
 
     Sin el parametro `subcartera`, es el reporte OFICIAL: TODO Tanner junto, sin importar quien lo
     baje -- el envio regulatorio a Tanner es UNO solo por dia para toda la cartera, asi que
     cualquier supervisor (no solo admin/owner) puede generar el archivo completo. Con `subcartera`
-    (opcional, un id), un supervisor puede bajar SOLO esa subcartera suya -- util cuando supervisa
-    2+ y quiere revisar una por separado en el mismo formato, sin tener que esperar al combinado;
-    ahi si se acota por scope_por_lead, para que no pueda pedir la subcartera de otro supervisor.
+    (opcional, un id), un supervisor puede bajar SOLO esa subcartera suya.
+
+    El formato vive en actions/tanner_report.py, compartido con el reporte por RANGO de fechas
+    (que corre en el worker): es un archivo regulatorio, no puede haber dos implementaciones.
     """
 
     def get(self, request, *args, **kwargs):
@@ -887,68 +878,106 @@ class TannerReportView(SupervisorRequiredMixin, View):
 
         fecha = parse_date(fecha_str)
         if not fecha:
-            return JsonResponse({'error': 'Fecha inválida. Usa el formato YYYY-MM-DD.'}, status=400)
-
-        report_tz = datetime.timezone(datetime.timedelta(hours=-4))
-        start = datetime.datetime.combine(fecha, datetime.time.min, tzinfo=report_tz)
-        end = datetime.datetime.combine(fecha, datetime.time.max, tzinfo=report_tz)
-
-        actions = Action.objects.filter(
-            subcartera__cartera__nombre__iexact='Tanner',
-            created_at__gte=start,
-            created_at__lte=end,
-        ).select_related('lead', 'medio', 'resultado', 'user__userprofile', 'phone')
+            return JsonResponse({'error': 'Fecha invalida. Usa el formato YYYY-MM-DD.'}, status=400)
 
         subcartera_id = request.GET.get('subcartera')
-        if subcartera_id:
-            # Solo aca se acota al alcance real del usuario: pedir "mi subcartera" no debe poder
-            # devolver la de otro supervisor.
-            actions = scope_por_lead(actions, request.user).filter(subcartera_id=subcartera_id)
-
+        actions = gestiones_del_dia(fecha, request.user, subcartera_id)
         if not actions.exists():
             return JsonResponse({'error': 'No hay gestiones de Tanner para esa fecha.'}, status=404)
 
-        lines = []
-        for action in actions:
-            lead = action.lead
-            rut_cliente = f"{lead.rut}{lead.dv}"
-            compromiso = action.fecha_compromiso.strftime('%d-%m-%Y') if action.fecha_compromiso else ''
-            observacion = (action.comment or '').replace('|', ' ').replace('\n', ' ')[:255]
-            local_dt = action.created_at.astimezone(report_tz)
-
-            row = [
-                lead.op,
-                rut_cliente,
-                TANNER_GESTOR_CODIGO,
-                compromiso,
-                action.resultado.codigo,
-                observacion,
-                action.medio.codigo,
-                local_dt.strftime('%d-%m-%Y'),
-                local_dt.strftime('%H:%M:%S'),
-                _ejecutivo_nombre(action.user),
-                _format_tanner_phone(action.phone.phone_number) if action.phone else '',
-                action.email or '',
-                TANNER_TIPO_GESTION_DEFAULT,
-                TANNER_ORIGEN_GESTION_DEFAULT,
-            ]
-            lines.append('|'.join(str(value) for value in row))
-
-        content = '\r\n'.join(lines) + '\r\n'
-        # Sufijo _subcartera solo cuando se filtra: el archivo SIN filtrar (el combinado, oficial)
-        # mantiene el nombre exacto que exige el instructivo de Tanner -- no se le agrega nada.
-        sufijo = ""
-        if subcartera_id:
-            sub = Subcartera.objects.filter(pk=subcartera_id).first()
-            if sub:
-                sufijo = f"_{re.sub(r'[^A-Za-z0-9]+', '', sub.nombre)}"
-        filename = f"{fecha.strftime('%Y%m%d')}_BaseGestiones2_{TANNER_GESTOR_CODIGO}{sufijo}.txt"
+        content = '\r\n'.join(construir_lineas(actions)) + '\r\n'
+        subcartera = Subcartera.objects.filter(pk=subcartera_id).first() if subcartera_id else None
+        filename = _tanner_nombre_archivo(fecha, subcartera)
 
         response = HttpResponse(content, content_type='text/plain; charset=utf-8')
         response['Content-Disposition'] = f'attachment; filename={filename}'
         from configuracion.models import AccessLog, registrar_acceso
         registrar_acceso(request.user, AccessLog.EXPORTAR_TANNER, detail=f"Fecha {fecha:%d-%m-%Y}")
         return response
+
+
+class TannerReportRangeView(SupervisorRequiredMixin, View):
+    """
+    Pide el reporte Tanner de un RANGO de fechas: el worker arma un ZIP con un .txt por dia (con
+    su nombre oficial, listo para enviar) mas un consolidado. Encolar en vez de generar en el
+    request: un rango largo supera el limite de espera del proxy de Azure.
+    """
+
+    def post(self, request, *args, **kwargs):
+        from .models import ReporteTannerJob
+        from .tasks import generar_reporte_tanner_rango
+
+        desde = parse_date(request.POST.get('desde', ''))
+        hasta = parse_date(request.POST.get('hasta', ''))
+        if not desde or not hasta:
+            messages.error(request, 'Indica la fecha de inicio y la de termino.')
+            return redirect('actions:index')
+        if desde > hasta:
+            messages.error(request, 'La fecha de inicio no puede ser posterior a la de termino.')
+            return redirect('actions:index')
+
+        subcartera = None
+        subcartera_id = request.POST.get('subcartera')
+        if subcartera_id:
+            # Mismo criterio que la descarga de un dia: solo una subcartera que el usuario
+            # realmente supervise (admin/owner ven todas).
+            subcartera = subcarteras_visibles(request.user).filter(pk=subcartera_id).first()
+            if not subcartera:
+                messages.error(request, 'Esa subcartera no existe o no la supervisas.')
+                return redirect('actions:index')
+
+        job = ReporteTannerJob.objects.create(
+            solicitado_por=request.user, fecha_desde=desde, fecha_hasta=hasta, subcartera=subcartera,
+        )
+        try:
+            generar_reporte_tanner_rango.delay(job.pk)
+        except Exception:
+            logger.exception('No se pudo encolar generar_reporte_tanner_rango; queda pendiente.')
+
+        messages.success(
+            request,
+            'Estamos generando el reporte Tanner del rango. Aparecera para descargar en '
+            '"Reportes Tanner por rango" en cuanto este listo (no necesitas esperar aqui).'
+        )
+        return redirect('actions:tanner_rango_list')
+
+
+class TannerReportRangeListView(SupervisorRequiredMixin, ListView):
+    """Lista los reportes Tanner por rango pedidos (los propios; admin/owner ven todos)."""
+    template_name = 'actions/tanner_rango_list.html'
+    context_object_name = 'jobs'
+    paginate_by = 20
+
+    def get_queryset(self):
+        from .models import ReporteTannerJob
+        qs = ReporteTannerJob.objects.select_related('solicitado_por', 'subcartera')
+        if not es_admin_owner(self.request.user):
+            qs = qs.filter(solicitado_por=self.request.user)
+        return qs
+
+
+class TannerReportRangeDownloadView(SupervisorRequiredMixin, View):
+    """Descarga el ZIP ya generado. Solo el dueno del job (o admin/owner)."""
+
+    def get(self, request, *args, **kwargs):
+        from .models import ReporteTannerJob
+        job = get_object_or_404(ReporteTannerJob, pk=kwargs.get('pk'))
+        if job.solicitado_por_id != request.user.pk and not es_admin_owner(request.user):
+            raise PermissionDenied
+        if job.estado != ReporteTannerJob.LISTO or not job.archivo:
+            messages.error(request, 'Ese reporte todavia no esta listo.')
+            return redirect('actions:tanner_rango_list')
+
+        from configuracion.models import AccessLog, registrar_acceso
+        registrar_acceso(
+            request.user, AccessLog.EXPORTAR_TANNER,
+            detail=f"Rango {job.fecha_desde:%d-%m-%Y} a {job.fecha_hasta:%d-%m-%Y}",
+        )
+        return FileResponse(
+            job.archivo.open('rb'), as_attachment=True,
+            filename=f'tanner_{job.fecha_desde:%Y%m%d}_a_{job.fecha_hasta:%Y%m%d}.zip',
+            content_type='application/zip',
+        )
 
 
 def _rango_semana_mes(today):

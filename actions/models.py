@@ -598,3 +598,52 @@ class CargaGestionesJob(models.Model):
     @property
     def en_curso(self):
         return self.estado in (self.PENDIENTE, self.PROCESANDO)
+
+
+class ReporteTannerJob(models.Model):
+    """
+    Reporte Tanner por RANGO de fechas. El instructivo exige un archivo por dia, asi que ponerse
+    al dia con envios atrasados obligaba a bajar dia por dia a mano. Aca se pide el rango una vez
+    y el WORKER arma un ZIP con un .txt por dia (cada uno con su nombre oficial, listo para
+    enviar) mas un consolidado con todo junto. Se procesa en el worker porque un rango largo
+    supera el limite de espera del proxy de Azure.
+    """
+    PENDIENTE = 'pendiente'
+    PROCESANDO = 'procesando'
+    LISTO = 'listo'
+    VACIO = 'vacio'
+    ERROR = 'error'
+    CHOICES_ESTADO = [
+        (PENDIENTE, _('En cola')),
+        (PROCESANDO, _('Procesando')),
+        (LISTO, _('Listo para descargar')),
+        (VACIO, _('Sin gestiones en el rango')),
+        (ERROR, _('Falla del servidor')),
+    ]
+
+    solicitado_por = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reportes_tanner')
+    fecha_desde = models.DateField()
+    fecha_hasta = models.DateField()
+    # Sin subcartera = reporte oficial de TODA la cartera Tanner (lo que se le envia a Tanner).
+    subcartera = models.ForeignKey(
+        'cartera.Subcartera', on_delete=models.SET_NULL, null=True, blank=True, related_name='+',
+    )
+    archivo = models.FileField(upload_to='reportes/tanner/%Y/%m/', blank=True)
+    estado = models.CharField(max_length=12, choices=CHOICES_ESTADO, default=PENDIENTE)
+    total_gestiones = models.PositiveIntegerField(default=0)
+    dias_con_datos = models.PositiveIntegerField(default=0)
+    mensaje = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = _('Reporte Tanner por rango')
+        verbose_name_plural = _('Reportes Tanner por rango')
+
+    def __str__(self):
+        return f"Reporte Tanner #{self.pk} ({self.fecha_desde} a {self.fecha_hasta})"
+
+    @property
+    def en_curso(self):
+        return self.estado in (self.PENDIENTE, self.PROCESANDO)

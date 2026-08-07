@@ -191,6 +191,29 @@
               <button type="submit" class="btn btn-secondary">Descargar .txt</button>
             </form>
           {% endif %}
+
+          <hr class="my-3">
+          <p class="font-semibold mb-1" style="font-size:12.5px;">Rango de fechas (varios días)</p>
+          <p class="muted mb-3" style="font-size:12.5px;">
+            Se genera en segundo plano: un .txt por día con su nombre oficial, más un consolidado, todo en un ZIP.
+          </p>
+          <form method="POST" action="{% url 'actions:tanner_rango' %}" class="flex flex-wrap gap-3 items-end">
+            {% csrf_token %}
+            <div><label class="font-semibold block mb-1" for="tanner_desde">Desde</label><input type="date" id="tanner_desde" name="desde" required></div>
+            <div><label class="font-semibold block mb-1" for="tanner_hasta">Hasta</label><input type="date" id="tanner_hasta" name="hasta" required></div>
+            {% if tanner_subcarteras %}
+              <div><label class="font-semibold block mb-1" for="tanner_rango_sub">Subcartera</label>
+                <select id="tanner_rango_sub" name="subcartera">
+                  <option value="">--- Toda la cartera (oficial) ---</option>
+                  {% for sub in tanner_subcarteras %}<option value="{{ sub.id }}">{{ sub.nombre }}</option>{% endfor %}
+                </select>
+              </div>
+            {% endif %}
+            <button type="submit" class="btn btn-primary">Generar ZIP</button>
+          </form>
+          <p class="mt-2" style="font-size:12.5px;">
+            <a href="{% url 'actions:tanner_rango_list' %}" class="link">Ver mis reportes por rango</a>
+          </p>
         </div>
         <div class="card p-4">
           <h3 class="font-bold mb-1">Reporte Nuevo Capital</h3>
