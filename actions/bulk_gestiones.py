@@ -164,13 +164,28 @@ def construir_validador(usuario):
 
         telefono = fila.get('telefono')
         phone_obj = None
-        if telefono:
-            digits = re.sub(r'\D', '', str(telefono))
-            if digits:
-                for p in Phone.objects.filter(lead=lead):
-                    if re.sub(r'\D', '', p.phone_number or '') == digits:
-                        phone_obj = p
-                        break
+        digits = re.sub(r'\D', '', str(telefono)) if telefono else ''
+        if digits:
+            for p in Phone.objects.filter(lead=lead):
+                if re.sub(r'\D', '', p.phone_number or '') == digits:
+                    phone_obj = p
+                    break
+
+        # Una gestion por un canal telefonico (manual, discador, terreno, IVR, SMS, WhatsApp,
+        # bot) TIENE que reportar el numero: Tanner lo exige y antes se perdia en silencio --
+        # si el numero no estaba en la demografia del cliente, phone_obj quedaba en None y la
+        # gestion se cargaba igual, con la columna Telefono vacia en el reporte.
+        if medio is not None and medio.canal == Medio.CANAL_TELEFONO:
+            if not digits:
+                errores.append(
+                    f'el medio "{medio.nombre}" es telefónico y la fila no trae teléfono; '
+                    'agrégalo en la columna "telefono"'
+                )
+            elif phone_obj is None:
+                errores.append(
+                    f'el teléfono "{telefono}" no está cargado en la demografía del cliente '
+                    f'OP={fila.get("op")}; súbelo primero en Demografía → Teléfonos'
+                )
 
         email = str(fila.get('email') or '').strip() or None
         if email and '@' not in email:

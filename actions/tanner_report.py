@@ -33,10 +33,20 @@ def formatear_telefono(raw_number):
 
 
 def nombre_ejecutivo(user):
+    """NOMBRE APELLIDO en mayusculas, como lo espera Tanner.
+
+    Si el usuario no tiene nombre/apellido cargados se cae al username, que suele venir sin
+    separador ("ivanpottstock" -> "IVANPOTTSTOCK"). Eso no se puede partir sin adivinar donde
+    termina el nombre, asi que se emite tal cual: la solucion real es cargarle nombre y apellido
+    al usuario en Configuracion -> Usuarios.
+    """
     if not user:
         return ''
-    full = user.get_full_name().strip()
-    return (full or user.username).upper()
+    nombre = (user.first_name or '').strip()
+    apellido = (user.last_name or '').strip()
+    if nombre or apellido:
+        return ' '.join(parte for parte in (nombre, apellido) if parte).upper()
+    return (user.username or '').strip().upper()
 
 
 def nombre_archivo(fecha, subcartera=None):
@@ -77,7 +87,10 @@ def construir_lineas(actions):
         lead = action.lead
         rut_cliente = f"{lead.rut}{lead.dv}"
         compromiso = action.fecha_compromiso.strftime('%d-%m-%Y') if action.fecha_compromiso else ''
-        observacion = (action.comment or '').replace('|', ' ').replace('\n', ' ')[:255]
+        # Tanner recibe la observacion con un espacio final (asi la emitia el sistema anterior y
+        # asi quedo en los archivos ya aceptados). Se agrega SOLO al exportar; la gestion guardada
+        # no se toca.
+        observacion = (action.comment or '').replace('|', ' ').replace('\n', ' ')[:255] + ' '
         local_dt = action.created_at.astimezone(REPORT_TZ)
 
         row = [
@@ -89,7 +102,11 @@ def construir_lineas(actions):
             observacion,
             action.medio.codigo,
             local_dt.strftime('%d-%m-%Y'),
-            local_dt.strftime('%H:%M:%S'),
+            # Segundos siempre en :00 -- es el formato que Tanner viene recibiendo (el sistema
+            # anterior nunca envio segundos reales). Solo afecta al EXPORTE: la gestion se sigue
+            # guardando con su hora exacta, que es la que se ve en la ficha y en los reportes
+            # internos.
+            local_dt.strftime('%H:%M:00'),
             nombre_ejecutivo(action.user),
             formatear_telefono(action.phone.phone_number) if action.phone else '',
             action.email or '',
