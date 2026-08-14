@@ -6,9 +6,13 @@ el request) y el reporte por RANGO de fechas, que corre en el WORKER de Celery
 (actions.tasks.generar_reporte_tanner_rango). Tener una sola implementacion evita que los dos
 formatos se desincronicen -- es un archivo regulatorio, no puede haber dos versiones.
 
-Formato: 14 columnas separadas por '|', SIN encabezado, un dia por archivo,
+Formato: 15 columnas separadas por '|', SIN encabezado, un dia por archivo,
 nombre FechaGestiones_BaseGestiones2_40.txt. Cada linea lleva su propia fecha y hora, por eso
 concatenar varios dias en un solo archivo no rompe nada.
+
+Las columnas 1-14 son las que lista el instructivo; la 15 ("Reporte Texto" de la paleta oficial)
+no esta en esa lista pero SI viene en el archivo de ejemplo de Tanner y en todo lo que se le ha
+enviado y aceptado -- ver reporte_texto() mas abajo.
 """
 import datetime
 import re
@@ -16,6 +20,33 @@ import re
 TANNER_GESTOR_CODIGO = '40'  # ZONASUR, tabla de gestores del instructivo Tanner
 TANNER_TIPO_GESTION_DEFAULT = '1'  # Cobranza
 TANNER_ORIGEN_GESTION_DEFAULT = '2'  # Outbound
+
+# Columna 15 ("Reporte Texto" en la paleta oficial de Tanner). No aparece en la lista de columnas
+# del instructivo, pero SI viene en el archivo de ejemplo que entrega Tanner y en todo lo que se
+# le ha enviado y aceptado -- por eso se emite.
+#
+# La regla sale de la paleta oficial (Paleta Respuesta Tanner-.xlsx), cruzando Accion x Estado:
+# son 165 combinaciones y ninguna es ambigua. Se reduce a esto:
+#   - medios de mensajeria (SMS, Email, WhatsApp, IVR): '2' si el mensaje se entrego, '1' si no.
+#   - medios de voz/presencial (manual, discador, terreno): vacio.
+# El valor '4' que aparece en los archivos reales corresponde a gestiones ENTRANTES (el cliente
+# respondio), que hoy no se pueden distinguir porque el arbol no separa las acciones "RECIBIDO".
+TANNER_REPORTE_ENTREGADO = '2'
+TANNER_REPORTE_NO_ENTREGADO = '1'
+TANNER_REPORTE_SIN_TEXTO = ''
+
+# Medios cuyo resultado describe la entrega de un mensaje (codigos del instructivo Tanner).
+MEDIOS_MENSAJERIA = {'4', '5', '6', '7', '8'}  # IVR, SMS, Email, WhatsApp, Bot
+
+
+def reporte_texto(medio_codigo, resultado_nombre):
+    """Columna 15 del reporte, segun la paleta oficial de Tanner."""
+    if str(medio_codigo) not in MEDIOS_MENSAJERIA:
+        return TANNER_REPORTE_SIN_TEXTO
+    nombre = (resultado_nombre or '').upper()
+    if 'NO ENTREGADO' in nombre or 'INCOMPLETO' in nombre:
+        return TANNER_REPORTE_NO_ENTREGADO
+    return TANNER_REPORTE_ENTREGADO
 
 # Zona del reporte (UTC-4): define a que dia pertenece cada gestion.
 REPORT_TZ = datetime.timezone(datetime.timedelta(hours=-4))
@@ -81,7 +112,7 @@ def gestiones_del_dia(fecha, user, subcartera_id=None):
 
 
 def construir_lineas(actions):
-    """Las 14 columnas del instructivo, una linea por gestion."""
+    """Las 15 columnas del reporte, una linea por gestion."""
     lineas = []
     for action in actions:
         lead = action.lead
@@ -112,6 +143,7 @@ def construir_lineas(actions):
             action.email or '',
             TANNER_TIPO_GESTION_DEFAULT,
             TANNER_ORIGEN_GESTION_DEFAULT,
+            reporte_texto(action.medio.codigo, action.resultado.nombre),
         ]
         lineas.append('|'.join(str(value) for value in row))
     return lineas
