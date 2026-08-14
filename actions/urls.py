@@ -25,6 +25,7 @@ urlpatterns = [
     path('reporte-tanner/rango/', views.TannerReportRangeView.as_view(), name='tanner_rango'),
     path('reporte-tanner/rango/lista/', views.TannerReportRangeListView.as_view(), name='tanner_rango_list'),
     path('reporte-tanner/rango/<int:pk>/descargar/', views.TannerReportRangeDownloadView.as_view(), name='tanner_rango_download'),
+    path('reporte-tanner/a-omega/', views.TannerOmegaReportView.as_view(), name='tanner_omega'),
     path('reporte-nuevocapital/', views.NuevoCapitalReportView.as_view(), name='nuevocapital_report'),
     path('compromisos/', views.PaymentCommitmentListView.as_view(), name='commitments_list'),
     path('compromisos/exportar/', views.PaymentCommitmentExportExcelView.as_view(), name='commitments_export'),

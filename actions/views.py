@@ -14,7 +14,7 @@ from django.http import JsonResponse
 from django.http import HttpResponse, FileResponse
 from django.views import View
 from django.utils.dateparse import parse_date
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
 from .models import Action, Medio, Resultado, PendingPbxCall, CallRecording, PaymentCommitment, Payment
 from .pbx_client import PbxClient, PbxError, get_pbx_master_client
 from lead.models import Lead
@@ -978,6 +978,80 @@ class TannerReportRangeDownloadView(SupervisorRequiredMixin, View):
             filename=f'tanner_{job.fecha_desde:%Y%m%d}_a_{job.fecha_hasta:%Y%m%d}.zip',
             content_type='application/zip',
         )
+
+
+class TannerOmegaReportView(SupervisorRequiredMixin, View):
+    """
+    "Gestiones Tanner a Omega": convierte las gestiones de un dia de Tanner al formato de carga
+    masiva del sistema anterior (Omega) -- RUT, FECHA, ACCION, ESTADO, EMAIL, TELEFONO,
+    COMENTARIO, SUBESTADO. Para el traspaso de cobradores a produccion real: mientras Omega siga
+    en uso, las gestiones hechas en TurboTubo tienen que poder subirse ahi tambien.
+
+    El mapeo de codigo Tanner -> (Accion, SubEstado, Estado) de Omega vive en
+    actions/omega_report.py, validado contra 55.266 gestiones reales del sistema anterior. Las
+    gestiones cuyo resultado no tiene equivalente confirmado se EXCLUYEN del archivo (no se
+    adivina) y se avisan en la respuesta.
+    """
+
+    def get(self, request, *args, **kwargs):
+        from .omega_report import construir_filas, gestiones_del_dia, rut_sin_dv
+
+        fecha_str = request.GET.get('fecha')
+        if not fecha_str:
+            return JsonResponse({'error': 'Debes indicar una fecha (YYYY-MM-DD).'}, status=400)
+        fecha = parse_date(fecha_str)
+        if not fecha:
+            return JsonResponse({'error': 'Fecha inválida. Usa el formato YYYY-MM-DD.'}, status=400)
+
+        actions = gestiones_del_dia(fecha)
+        if not actions.exists():
+            return JsonResponse({'error': 'No hay gestiones de Tanner para esa fecha.'}, status=404)
+
+        filas, bloqueados = construir_filas(actions)
+        if not filas:
+            detalle = ', '.join(sorted({a.resultado.nombre for a in bloqueados}))
+            return JsonResponse({
+                'error': f'Ninguna gestión de ese día tiene un resultado con equivalente '
+                         f'confirmado en Omega. Resultados sin mapear: {detalle}.'
+            }, status=404)
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = 'Datos'
+        ws.append(['RUT', 'FECHA', 'ACCION', 'ESTADO', 'EMAIL', 'TELEFONO', 'COMENTARIO', 'SUBESTADO'])
+        for fila in filas:
+            ws.append(fila)
+        for row in ws.iter_rows(min_row=2, min_col=2, max_col=2):
+            row[0].number_format = 'm/d/yy h:mm'
+
+        if bloqueados:
+            # La respuesta es el archivo mismo (navegacion directa del navegador, sin pantalla
+            # intermedia): el aviso de que gestiones quedaron fuera va en una segunda hoja, para
+            # que quien lo abra lo vea de inmediato en vez de asumir que el archivo esta completo.
+            ws2 = wb.create_sheet('Excluidas (sin mapeo a Omega)')
+            ws2.append(['OP', 'RUT', 'Código resultado', 'Resultado', 'Motivo'])
+            for a in bloqueados:
+                ws2.append([
+                    a.lead.op, rut_sin_dv(a.lead), a.resultado.codigo, a.resultado.nombre,
+                    'Sin equivalente confirmado en Omega — súbela a mano si corresponde.',
+                ])
+            ws2.column_dimensions['D'].width = 40
+            ws2.column_dimensions['E'].width = 55
+
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        filename = f"{fecha:%Y%m%d}_tanner_a_omega.xlsx"
+        response = HttpResponse(
+            output.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        response['Content-Disposition'] = f'attachment; filename={filename}'
+
+        from configuracion.models import AccessLog, registrar_acceso
+        registrar_acceso(request.user, AccessLog.EXPORTAR_TANNER_OMEGA, detail=f"Fecha {fecha:%d-%m-%Y}")
+        return response
 
 
 def _rango_semana_mes(today):

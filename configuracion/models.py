@@ -16,6 +16,7 @@ class AccessLog(models.Model):
     VER_FICHA = 'ver_ficha'
     EXPORTAR_CLIENTES = 'exportar_clientes'
     EXPORTAR_TANNER = 'exportar_tanner'
+    EXPORTAR_TANNER_OMEGA = 'exportar_tanner_omega'
     EXPORTAR_NUEVOCAPITAL = 'exportar_nuevocapital'
     EXPORTAR_COMPROMISOS = 'exportar_compromisos'
     EXPORTAR_GESTIONES = 'exportar_gestiones'
@@ -25,6 +26,7 @@ class AccessLog(models.Model):
         (VER_FICHA, 'Vio ficha del cliente'),
         (EXPORTAR_CLIENTES, 'Exportó clientes'),
         (EXPORTAR_TANNER, 'Exportó reporte Tanner'),
+        (EXPORTAR_TANNER_OMEGA, 'Exportó gestiones Tanner a Omega'),
         (EXPORTAR_NUEVOCAPITAL, 'Exportó reporte Nuevo Capital'),
         (EXPORTAR_COMPROMISOS, 'Exportó compromisos'),
         (EXPORTAR_GESTIONES, 'Exportó gestiones'),

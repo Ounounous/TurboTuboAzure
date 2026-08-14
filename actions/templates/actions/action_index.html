@@ -165,7 +165,7 @@
         </form>
       </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div class="card p-4">
           <h3 class="font-bold mb-1">Reporte Tanner</h3>
           <p class="muted mb-3" style="font-size:12.5px;">Formato oficial (.txt), un día. Combina todas las subcarteras de Tanner.</p>
@@ -222,6 +222,21 @@
             <div><label class="font-semibold block mb-1" for="fecha_nc">Fecha</label><input type="date" id="fecha_nc" name="fecha" required></div>
             <button type="submit" class="btn btn-primary">Descargar .xlsx</button>
           </form>
+        </div>
+        <div class="card p-4">
+          <h3 class="font-bold mb-1">Gestiones Tanner a Omega</h3>
+          <p class="muted mb-3" style="font-size:12.5px;">
+            Solo cartera Tanner, un día. Convierte las gestiones al formato de carga masiva del
+            sistema anterior (Omega), para subirlas allá durante el traspaso.
+          </p>
+          <form method="GET" action="{% url 'actions:tanner_omega' %}" class="flex flex-wrap gap-3 items-end">
+            <div><label class="font-semibold block mb-1" for="fecha_tanner_omega">Fecha</label><input type="date" id="fecha_tanner_omega" name="fecha" required></div>
+            <button type="submit" class="btn btn-primary">Descargar .xlsx</button>
+          </form>
+          <p class="muted mt-2" style="font-size:11.5px;">
+            Si alguna gestión no tiene equivalente confirmado en Omega, queda fuera del archivo
+            y listada en una segunda hoja ("Excluidas").
+          </p>
         </div>
       </div>
     </div>
