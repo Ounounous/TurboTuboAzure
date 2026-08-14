@@ -32,7 +32,7 @@ def editar(commitment, nueva_fecha, nuevo_monto, user, comentario=''):
     original = commitment.action
     nueva_accion = Action.objects.create(
         lead=commitment.lead, medio=original.medio, resultado=original.resultado, user=user,
-        phone=original.phone, email=original.email,
+        phone=original.phone, email=original.email, origen=original.origen,
         fecha_compromiso=nueva_fecha, monto_compromiso=nuevo_monto,
         comment=comentario or f'Compromiso editado (reemplaza al del {commitment.fecha_compromiso:%d-%m-%Y}).',
     )

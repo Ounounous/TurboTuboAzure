@@ -13,15 +13,20 @@ class ResultadoAdmin(admin.ModelAdmin):
     list_display = (
         'cartera', 'codigo', 'nombre', 'tipo_contacto', 'contactabilidad',
         'crea_compromiso', 'requiere_fecha_pago', 'efecto_pago',
-        'efecto_demografia', 'desactiva_whatsapp', 'descarga_grabacion', 'permite_manual', 'actualizado_por',
+        'efecto_demografia', 'desactiva_whatsapp', 'descarga_grabacion', 'siempre_entrante',
+        'permite_manual', 'actualizado_por',
     )
     list_filter = (
         'cartera', 'tipo_contacto', 'contactabilidad', 'efecto_pago',
-        'efecto_demografia', 'desactiva_whatsapp', 'descarga_grabacion', 'permite_manual',
+        'efecto_demografia', 'desactiva_whatsapp', 'descarga_grabacion', 'siempre_entrante',
+        'permite_manual',
     )
     search_fields = ('nombre', 'codigo', 'cartera__nombre')
     list_select_related = ('cartera', 'actualizado_por')
-    list_editable = ('descarga_grabacion', 'efecto_pago', 'efecto_demografia', 'desactiva_whatsapp', 'permite_manual')
+    list_editable = (
+        'descarga_grabacion', 'efecto_pago', 'efecto_demografia', 'desactiva_whatsapp',
+        'siempre_entrante', 'permite_manual',
+    )
     readonly_fields = ('actualizado_por',)
 
     def save_model(self, request, obj, form, change):

@@ -825,6 +825,7 @@ def procesar_carga_gestiones(job_id):
                 action = Action(
                     lead=f['lead'], medio=f['medio'], resultado=f['resultado'], user=f['user'],
                     comment=f['comment'], phone=f['phone'], email=f['email'],
+                    origen=f.get('origen', Action.ORIGEN_SALIENTE),
                 )
                 action.save()
                 if momento is not None:

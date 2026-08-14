@@ -14,7 +14,7 @@ from django.utils.dateparse import parse_date
 from demographics.models import Phone
 from demographics.views import find_lead
 
-from .models import Medio, Resultado
+from .models import Action, Medio, Resultado
 
 BULK_COLUMN_ALIASES = {
     'cartera': 'cartera',
@@ -29,16 +29,18 @@ BULK_COLUMN_ALIASES = {
     'fecha_gestion': 'fecha_gestion', 'fecha': 'fecha_gestion',
     'hora_gestion': 'hora_gestion', 'hora': 'hora_gestion',
     'usuario': 'usuario', 'user': 'usuario', 'ejecutivo': 'usuario',
+    # Opcional, solo lo usa Tanner (ver Action.origen / es_entrante). Vacio = saliente.
+    'origen': 'origen', 'quien_contacto': 'origen', 'inbound': 'origen',
 }
 
 BULK_TEMPLATE_HEADERS = [
     'cartera', 'subcartera', 'op', 'medio', 'resultado', 'sub_estado',
-    'comentario', 'telefono', 'email', 'fecha_gestion', 'hora_gestion', 'usuario',
+    'comentario', 'telefono', 'email', 'fecha_gestion', 'hora_gestion', 'usuario', 'origen',
 ]
 
 BULK_TEMPLATE_EXAMPLE = [
     'Nuevo Capital', 'ZONA SUR', 'NC-001', 'IVR', 'CONTACTADO', 'DIRECTO',
-    'Campaña IVR 14-07', '56977665544', '', '2026-07-14', '15:30', '',
+    'Campaña IVR 14-07', '56977665544', '', '2026-07-14', '15:30', '', '',
 ]
 
 
@@ -77,6 +79,19 @@ def parse_hora(value):
         except ValueError:
             continue
     return None
+
+
+# Textos aceptados en la columna opcional "origen" (Excel). Vacio = saliente (default de Action).
+_ORIGEN_ENTRANTE_ALIASES = {'entrante', 'inbound', 'in', 'si', 'sí', 'true', '1', 'cliente'}
+
+
+def parse_origen(value):
+    """'' -> saliente (default); reconoce variantes de 'entrante'. Nunca rechaza la fila: un
+    valor no reconocido tambien cae a saliente, que es el comportamiento previo a este campo."""
+    texto = str(value or '').strip().lower()
+    if texto in _ORIGEN_ENTRANTE_ALIASES:
+        return Action.ORIGEN_ENTRANTE
+    return Action.ORIGEN_SALIENTE
 
 
 def construir_validador(usuario):
@@ -204,6 +219,7 @@ def construir_validador(usuario):
             'comment': str(fila.get('comentario') or ''),
             'phone': phone_obj, 'email': email if not phone_obj else None,
             'fecha_gestion': fecha_gestion, 'hora_gestion': parse_hora(fila.get('hora_gestion')),
+            'origen': parse_origen(fila.get('origen')),
         }, []
 
     return validar_fila

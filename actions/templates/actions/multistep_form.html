@@ -141,6 +141,25 @@
       </select>
     </div>
 
+    {% if action_form.mostrar_origen %}
+    <div class="form-group mb-4">
+      <label class="font-semibold block mb-1">¿Quién inició el contacto?</label>
+      {{ action_form.origen.errors }}
+      <div class="flex flex-wrap gap-4" style="font-size:14px;">
+        {% for radio in action_form.origen %}
+          <label class="inline-flex items-center gap-2" style="cursor:pointer;">
+            {{ radio.tag }} {{ radio.choice_label }}
+          </label>
+        {% endfor %}
+      </div>
+      <p class="muted" style="font-size:12px; margin-top:4px;">
+        Déjalo en "Nosotros contactamos" salvo que el cliente haya llamado o escrito él.
+      </p>
+    </div>
+    {% else %}
+      {{ action_form.origen }}
+    {% endif %}
+
     <div class="form-group mb-4">
       <label class="font-semibold block mb-1" for="id_resultado">Resultado:</label>
       {{ action_form.resultado.errors }}

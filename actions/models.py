@@ -140,6 +140,18 @@ class Resultado(models.Model):
     efecto_demografia = models.CharField(max_length=15, choices=CHOICES_EFECTO_DEMOGRAFIA, blank=True)
     # Si el resultado apaga WhatsApp del numero usado (ej. "SIN WHATSAPP") sin cambiar su estado.
     desactiva_whatsapp = models.BooleanField(default=False)
+    # Resultados que SOLO pueden darse si el cliente contacto (ej. Tanner "SIN RESPUESTA
+    # CLIENTE", "SIN DINERO"): el origen de la gestion es entrante por definicion, sin que el
+    # gestor tenga que marcarlo. Para el resto el origen se toma de Action.origen, que el gestor
+    # elige (por defecto saliente). Ver actions/tanner_report.py.
+    siempre_entrante = models.BooleanField(
+        default=False,
+        help_text=_(
+            'Marca este resultado como una respuesta del cliente: la gestión se reporta como '
+            'entrante (inbound) aunque el gestor no lo indique. Úsalo solo en resultados que no '
+            'pueden ocurrir sin que el cliente conteste.'
+        )
+    )
     descarga_grabacion = models.BooleanField(
         default=False,
         help_text=_(
@@ -181,12 +193,26 @@ class Action(models.Model):
         ('aval', _('Aval')),
     ]
 
+    # Quien inicio el contacto. Tanner lo exige en el reporte (columna 14: 1=INBOUND,
+    # 2=OUTBOUND) y hasta ahora se emitia siempre "saliente", que es lo correcto para la mayoria
+    # de las gestiones pero no para las que nacen de una respuesta del cliente.
+    ORIGEN_SALIENTE = 'saliente'
+    ORIGEN_ENTRANTE = 'entrante'
+    CHOICES_ORIGEN = [
+        (ORIGEN_SALIENTE, _('Nosotros contactamos')),
+        (ORIGEN_ENTRANTE, _('El cliente nos contactó')),
+    ]
+
     lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name='actions')
     op = models.CharField(max_length=16, editable=False, null=True, blank=True)
     subcartera = models.ForeignKey('cartera.Subcartera', on_delete=models.PROTECT, editable=False, null=True, blank=True)
     team = models.ForeignKey(Team, on_delete=models.CASCADE, editable=False, null=True, blank=True)
 
     target = models.CharField(_('Target'), max_length=10, choices=CHOICES_TARGET, null=True, blank=True)
+    origen = models.CharField(
+        _('Origen de la gestión'), max_length=10, choices=CHOICES_ORIGEN, default=ORIGEN_SALIENTE,
+        help_text=_('Quién inició el contacto. Lo exige el reporte de Tanner.')
+    )
     medio = models.ForeignKey(Medio, on_delete=models.PROTECT, related_name='acciones', verbose_name=_('Medio'))
     resultado = models.ForeignKey(Resultado, on_delete=models.PROTECT, related_name='acciones', verbose_name=_('Resultado'))
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, verbose_name=_('User'))
@@ -272,6 +298,23 @@ class Action(models.Model):
         if self.lead_id and self.resultado_id:
             from mlmetadata.capture import registrar_gestion
             registrar_gestion(self, status_antes)
+
+    @property
+    def es_entrante(self):
+        """True si la gestion nacio de un contacto del cliente.
+
+        Tres fuentes, en orden:
+        1. El MEDIO ya es entrante por definicion (Nuevo Capital tiene medios "LLAMADA RECIBIDA",
+           "WHATSAPP RECIBIDO", etc. con es_inbound=True). Ahi no hay nada que preguntar.
+        2. El RESULTADO solo puede darse si el cliente contesto (Resultado.siempre_entrante, ej.
+           Tanner "SIN RESPUESTA CLIENTE"): entrante aunque el gestor no lo marque.
+        3. Lo que eligio el gestor en el formulario (Action.origen), que por defecto es saliente.
+        """
+        if self.medio_id and self.medio.es_inbound:
+            return True
+        if self.resultado_id and self.resultado.siempre_entrante:
+            return True
+        return self.origen == self.ORIGEN_ENTRANTE
 
     def __str__(self):
         return f"{self.medio.nombre} for {self.lead.op} on {self.created_at}"

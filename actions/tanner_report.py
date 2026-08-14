@@ -34,19 +34,42 @@ TANNER_ORIGEN_GESTION_DEFAULT = '2'  # Outbound
 TANNER_REPORTE_ENTREGADO = '2'
 TANNER_REPORTE_NO_ENTREGADO = '1'
 TANNER_REPORTE_SIN_TEXTO = ''
+TANNER_REPORTE_ENTRANTE = '4'
+
+# Codigos de las columnas 13 y 14 (tablas 4 y 5 del instructivo Tanner).
+TANNER_TIPO_COBRANZA = '1'
+TANNER_TIPO_COMERCIAL = '2'
+TANNER_ORIGEN_INBOUND = '1'
+TANNER_ORIGEN_OUTBOUND = '2'
 
 # Medios cuyo resultado describe la entrega de un mensaje (codigos del instructivo Tanner).
 MEDIOS_MENSAJERIA = {'4', '5', '6', '7', '8'}  # IVR, SMS, Email, WhatsApp, Bot
 
 
-def reporte_texto(medio_codigo, resultado_nombre):
-    """Columna 15 del reporte, segun la paleta oficial de Tanner."""
+def reporte_texto(medio_codigo, resultado_nombre, entrante=False):
+    """Columna 15 del reporte.
+
+    En los archivos que el sistema anterior envio y Tanner acepto, una gestion ENTRANTE lleva
+    siempre '4', sin importar el medio. Para las salientes manda la paleta oficial: los medios de
+    mensajeria marcan si el mensaje se entrego ('2') o no ('1'), y los de voz/presencial van
+    vacios.
+    """
+    if entrante:
+        return TANNER_REPORTE_ENTRANTE
     if str(medio_codigo) not in MEDIOS_MENSAJERIA:
         return TANNER_REPORTE_SIN_TEXTO
     nombre = (resultado_nombre or '').upper()
     if 'NO ENTREGADO' in nombre or 'INCOMPLETO' in nombre:
         return TANNER_REPORTE_NO_ENTREGADO
     return TANNER_REPORTE_ENTREGADO
+
+
+def tipo_y_origen(entrante=False):
+    """Columnas 13 y 14. Una gestion entrante se reporta como 2|1, que es lo que el sistema
+    anterior envio para todas las respuestas del cliente; el resto va como cobranza saliente."""
+    if entrante:
+        return TANNER_TIPO_COMERCIAL, TANNER_ORIGEN_INBOUND
+    return TANNER_TIPO_GESTION_DEFAULT, TANNER_ORIGEN_GESTION_DEFAULT
 
 # Zona del reporte (UTC-4): define a que dia pertenece cada gestion.
 REPORT_TZ = datetime.timezone(datetime.timedelta(hours=-4))
@@ -123,6 +146,8 @@ def construir_lineas(actions):
         # no se toca.
         observacion = (action.comment or '').replace('|', ' ').replace('\n', ' ')[:255] + ' '
         local_dt = action.created_at.astimezone(REPORT_TZ)
+        entrante = action.es_entrante
+        tipo_gestion, origen_gestion = tipo_y_origen(entrante)
 
         row = [
             lead.op,
@@ -141,9 +166,9 @@ def construir_lineas(actions):
             nombre_ejecutivo(action.user),
             formatear_telefono(action.phone.phone_number) if action.phone else '',
             action.email or '',
-            TANNER_TIPO_GESTION_DEFAULT,
-            TANNER_ORIGEN_GESTION_DEFAULT,
-            reporte_texto(action.medio.codigo, action.resultado.nombre),
+            tipo_gestion,
+            origen_gestion,
+            reporte_texto(action.medio.codigo, action.resultado.nombre, entrante),
         ]
         lineas.append('|'.join(str(value) for value in row))
     return lineas

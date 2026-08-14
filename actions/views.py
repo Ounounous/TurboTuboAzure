@@ -1516,7 +1516,7 @@ class NuevoCapitalReportView(SupervisorRequiredMixin, View):
         for action in actions:
             lead = action.lead
             local_dt = action.created_at.astimezone(report_tz)
-            origen = '1' if action.medio.es_inbound else '2'  # In=1 / Out=2
+            origen = '1' if action.es_entrante else '2'  # In=1 / Out=2
             sub_estado = action.resultado.tipo_contacto or ''
             compromiso = action.fecha_compromiso.strftime('%d-%m-%Y') if action.fecha_compromiso else ''
 

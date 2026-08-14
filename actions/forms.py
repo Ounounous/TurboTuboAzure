@@ -96,6 +96,7 @@ class ActionForm(forms.ModelForm):
         model = Action
         fields = [
             'medio',
+            'origen',
             'resultado',
             'comment',
             'fecha_compromiso',
@@ -104,10 +105,12 @@ class ActionForm(forms.ModelForm):
         widgets = {
             'fecha_compromiso': forms.DateInput(attrs={'type': 'date'}),
             'monto_compromiso': forms.NumberInput(attrs={'min': 0, 'placeholder': 'Monto en pesos'}),
+            'origen': forms.RadioSelect,
         }
         labels = {
             'fecha_compromiso': 'Fecha de compromiso de pago',
             'monto_compromiso': 'Monto del compromiso ($)',
+            'origen': '¿Quién inició el contacto?',
         }
 
     def __init__(self, *args, **kwargs):
@@ -144,6 +147,16 @@ class ActionForm(forms.ModelForm):
         self.fields['resultado'].required = True
         self.fields['fecha_compromiso'].required = False
         self.fields['monto_compromiso'].required = False
+
+        # Solo Tanner tiene la ambiguedad de origen en su reporte (un mismo resultado puede
+        # darse por contacto saliente o entrante, ver actions/tanner_report.py). Galgo y Cartera
+        # Propia no reportan origen; Nuevo Capital ya lo resuelve con medios separados
+        # ("LLAMADA RECIBIDA", etc, Medio.es_inbound) sin necesitar que el gestor elija nada.
+        # Para esas carteras el campo queda oculto y guarda el default (saliente).
+        self.mostrar_origen = bool(cartera) and (cartera.nombre or '').strip().upper() == 'TANNER'
+        if not self.mostrar_origen:
+            self.fields['origen'].widget = forms.HiddenInput()
+            self.fields['origen'].required = False
         # localdate(), no date.today(): el servidor puede correr en otro huso horario (ej. UTC en
         # Azure) -- localdate() usa TIME_ZONE=America/Santiago (settings.py), date.today() usaria
         # la hora del sistema y desfasaria "hoy" cerca de la medianoche.
