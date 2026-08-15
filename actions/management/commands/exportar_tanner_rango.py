@@ -54,7 +54,7 @@ class Command(BaseCommand):
         total = dias_con_datos = 0
         fecha = desde
         while fecha <= hasta:
-            contenido, cantidad = contenido_del_dia(fecha, user)
+            contenido, cantidad, advertencia = contenido_del_dia(fecha, user)
             if cantidad:
                 ruta = os.path.join(salida, nombre_archivo(fecha))
                 # newline='' para no convertir el \r\n del formato en \r\r\n en Windows.
@@ -64,6 +64,8 @@ class Command(BaseCommand):
                 total += cantidad
                 dias_con_datos += 1
                 self.stdout.write(f"  {nombre_archivo(fecha)}  ->  {cantidad} gestion(es)")
+            if advertencia:
+                self.stdout.write(self.style.WARNING(f"  ATENCIÓN {fecha:%d-%m-%Y}: {advertencia}"))
             fecha += datetime.timedelta(days=1)
 
         if not consolidado:

@@ -889,11 +889,12 @@ def generar_reporte_tanner_rango(job_id):
         total = 0
         dias_con_datos = 0
 
+        advertencias = []
         with zipfile.ZipFile(spool, 'w', zipfile.ZIP_DEFLATED) as zf:
             consolidado = []
             fecha = job.fecha_desde
             while fecha <= job.fecha_hasta:
-                contenido, cantidad = contenido_del_dia(
+                contenido, cantidad, advertencia = contenido_del_dia(
                     fecha, job.solicitado_por, job.subcartera_id,
                 )
                 if cantidad:
@@ -901,6 +902,8 @@ def generar_reporte_tanner_rango(job_id):
                     consolidado.append(contenido)
                     total += cantidad
                     dias_con_datos += 1
+                if advertencia:
+                    advertencias.append(f"{fecha:%d-%m-%Y}: {advertencia}")
                 fecha += datetime.timedelta(days=1)
 
             if consolidado:
@@ -927,6 +930,14 @@ def generar_reporte_tanner_rango(job_id):
                 f'{total} gestión(es) en {dias_con_datos} día(s) con datos. '
                 'El ZIP trae un .txt por día (nombre oficial de Tanner) y un consolidado.'
             )
+            if advertencias:
+                # No bloquea la generacion (el archivo ya se envio/esta listo) -- pero deja
+                # constancia visible en la lista de reportes, para revisar antes de mandarlo.
+                job.mensaje += ' ATENCIÓN: ' + ' | '.join(advertencias)
+                logger.warning(
+                    f"generar_reporte_tanner_rango: job {job_id} con resultados sin código: "
+                    f"{' | '.join(advertencias)}"
+                )
     except Exception:
         logger.exception(f"generar_reporte_tanner_rango: falló el job {job_id}")
         job.estado = ReporteTannerJob.ERROR

@@ -852,7 +852,7 @@ class RecordingsExportDownloadView(SupervisorRequiredMixin, View):
 from .tanner_report import (
     TANNER_GESTOR_CODIGO, TANNER_ORIGEN_GESTION_DEFAULT, TANNER_TIPO_GESTION_DEFAULT,
     construir_lineas, gestiones_del_dia, nombre_archivo as _tanner_nombre_archivo,
-    nombre_ejecutivo as _ejecutivo_nombre_tanner,
+    nombre_ejecutivo as _ejecutivo_nombre_tanner, resultados_sin_codigo,
 )
 
 
@@ -881,8 +881,8 @@ class TannerReportView(SupervisorRequiredMixin, View):
             return JsonResponse({'error': 'Fecha invalida. Usa el formato YYYY-MM-DD.'}, status=400)
 
         subcartera_id = request.GET.get('subcartera')
-        actions = gestiones_del_dia(fecha, request.user, subcartera_id)
-        if not actions.exists():
+        actions = list(gestiones_del_dia(fecha, request.user, subcartera_id))
+        if not actions:
             return JsonResponse({'error': 'No hay gestiones de Tanner para esa fecha.'}, status=404)
 
         content = '\r\n'.join(construir_lineas(actions)) + '\r\n'
@@ -891,8 +891,22 @@ class TannerReportView(SupervisorRequiredMixin, View):
 
         response = HttpResponse(content, content_type='text/plain; charset=utf-8')
         response['Content-Disposition'] = f'attachment; filename={filename}'
+
+        detail = f"Fecha {fecha:%d-%m-%Y}"
+        sin_codigo = resultados_sin_codigo(actions)
+        if sin_codigo:
+            # Es una descarga directa (la respuesta ES el archivo, sin pantalla siguiente donde
+            # mostrar un aviso) -- el rastro auditable queda en AccessLog y en el log del server,
+            # que es lo que ya existe para revisar despues. El archivo se genera igual: no enviar
+            # nada a Tanner por un solo resultado mal configurado seria peor.
+            nombres = sorted({a.resultado.nombre for a in sin_codigo})
+            detail += f" — {len(sin_codigo)} gestión(es) con código de resultado vacío: {', '.join(nombres)}"
+            logger.warning(
+                f"TannerReportView {fecha}: {len(sin_codigo)} gestión(es) con Resultado.codigo "
+                f"vacío en el archivo generado — {', '.join(nombres)}"
+            )
         from configuracion.models import AccessLog, registrar_acceso
-        registrar_acceso(request.user, AccessLog.EXPORTAR_TANNER, detail=f"Fecha {fecha:%d-%m-%Y}")
+        registrar_acceso(request.user, AccessLog.EXPORTAR_TANNER, detail=detail)
         return response
 
 

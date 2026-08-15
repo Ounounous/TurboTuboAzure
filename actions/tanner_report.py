@@ -174,9 +174,32 @@ def construir_lineas(actions):
     return lineas
 
 
+def resultados_sin_codigo(actions):
+    """Gestiones cuyo Resultado.codigo esta vacio. A diferencia de omega_report.py (que valida
+    contra un mapeo fijo y excluye lo que no reconoce), este archivo emite action.resultado.codigo
+    TAL CUAL en la columna 5 -- un codigo vacio (Resultado.codigo es editable en el admin y admite
+    blank) sale como columna vacia, y Tanner puede rechazar el archivo completo por eso. No se
+    excluye la gestion (haria un archivo incompleto sin que nadie lo sepa); se avisa."""
+    return [a for a in actions if not (a.resultado.codigo or '').strip()]
+
+
 def contenido_del_dia(fecha, user, subcartera_id=None):
-    """(contenido_txt, cantidad_de_gestiones) de un dia. Contenido vacio si no hubo gestiones."""
-    lineas = construir_lineas(gestiones_del_dia(fecha, user, subcartera_id))
+    """(contenido_txt, cantidad_de_gestiones, advertencia) de un dia. Contenido vacio si no hubo
+    gestiones. `advertencia` no vacia si alguna gestion salio con Resultado.codigo vacio -- el
+    archivo se genera igual (no se bloquea, seria peor no enviar nada), pero hay que revisarlo
+    antes de mandarlo a Tanner."""
+    acciones = list(gestiones_del_dia(fecha, user, subcartera_id))
+    lineas = construir_lineas(acciones)
     if not lineas:
-        return '', 0
-    return '\r\n'.join(lineas) + '\r\n', len(lineas)
+        return '', 0, ''
+
+    advertencia = ''
+    sin_codigo = resultados_sin_codigo(acciones)
+    if sin_codigo:
+        nombres = sorted({a.resultado.nombre for a in sin_codigo})
+        advertencia = (
+            f'{len(sin_codigo)} gestión(es) tienen un resultado sin código configurado y '
+            f'salieron con la columna 5 (Cód. resultado) vacía: {", ".join(nombres)}. '
+            f'Revísalo en el árbol de la cartera antes de enviar el archivo a Tanner.'
+        )
+    return '\r\n'.join(lineas) + '\r\n', len(lineas), advertencia
