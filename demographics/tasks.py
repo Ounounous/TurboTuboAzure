@@ -3,14 +3,25 @@ from io import BytesIO
 
 from celery import shared_task
 from django.core.files.base import ContentFile
+from django.db import InterfaceError, OperationalError
 from django.http import QueryDict
 from django.utils import timezone
 from openpyxl import Workbook
 
 logger = logging.getLogger(__name__)
 
+# Reintentos con backoff exponencial ante errores transitorios de BD (conexion caida/reinicio).
+# Mismo patron que actions/tasks.py -- sin esto, un hipo de Postgres manda el job directo a ERROR
+# en vez de reintentarse solo, y el usuario tiene que volver a pedir el export a mano.
+RETRY_DB = dict(
+    autoretry_for=(OperationalError, InterfaceError),
+    retry_backoff=True,
+    retry_backoff_max=600,
+    max_retries=3,
+)
 
-@shared_task
+
+@shared_task(**RETRY_DB)
 def generar_export_contactos(job_id):
     """
     Arma el Excel de telefonos o correos filtrados en el WORKER: con miles de filas (una por
