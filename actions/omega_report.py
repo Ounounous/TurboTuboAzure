@@ -193,3 +193,45 @@ def construir_filas(actions):
             subestado,
         ])
     return filas, bloqueados
+
+
+def construir_workbook(fecha):
+    """
+    Arma el Excel de un dia completo (mismas 8 columnas, misma segunda hoja de excluidas que ya
+    generaba la vista sincrona). Compartido por la vista de descarga y la tarea del worker, para
+    que las dos rutas no puedan divergir en formato -- ver actions/tasks.py:generar_reporte_omega.
+
+    Devuelve (wb|None, total_filas, total_excluidas). wb es None si no hay ninguna fila que
+    incluir (ni gestiones ese dia, ni gestiones bloqueadas que avisar).
+    """
+    from openpyxl import Workbook
+
+    actions = gestiones_del_dia(fecha)
+    if not actions.exists():
+        return None, 0, 0
+
+    filas, bloqueados = construir_filas(actions)
+    if not filas and not bloqueados:
+        return None, 0, 0
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'Datos'
+    ws.append(['RUT', 'FECHA', 'ACCION', 'ESTADO', 'EMAIL', 'TELEFONO', 'COMENTARIO', 'SUBESTADO'])
+    for fila in filas:
+        ws.append(fila)
+    for row in ws.iter_rows(min_row=2, min_col=2, max_col=2):
+        row[0].number_format = 'm/d/yy h:mm'
+
+    if bloqueados:
+        ws2 = wb.create_sheet('Excluidas (sin mapeo a Omega)')
+        ws2.append(['OP', 'RUT', 'Código resultado', 'Resultado', 'Motivo'])
+        for a in bloqueados:
+            ws2.append([
+                a.lead.op, rut_sin_dv(a.lead), a.resultado.codigo, a.resultado.nombre,
+                'Sin equivalente confirmado en Omega — súbela a mano si corresponde.',
+            ])
+        ws2.column_dimensions['D'].width = 40
+        ws2.column_dimensions['E'].width = 55
+
+    return wb, len(filas), len(bloqueados)

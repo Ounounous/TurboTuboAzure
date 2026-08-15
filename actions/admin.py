@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.utils.html import format_html
 from .models import (
     Action, Medio, Resultado, PendingPbxCall, CallRecording, PaymentCommitment, Payment,
-    GrabacionesExportJob, CargaGestionesJob, ReporteTannerJob,
+    GrabacionesExportJob, CargaGestionesJob, ReporteTannerJob, ReporteOmegaJob,
 )
 
 
@@ -192,4 +192,18 @@ class ReporteTannerJobAdmin(admin.ModelAdmin):
     readonly_fields = (
         'solicitado_por', 'fecha_desde', 'fecha_hasta', 'subcartera', 'archivo',
         'total_gestiones', 'dias_con_datos', 'mensaje', 'created_at', 'finished_at',
+    )
+
+
+@admin.register(ReporteOmegaJob)
+class ReporteOmegaJobAdmin(admin.ModelAdmin):
+    list_display = (
+        'id', 'estado', 'solicitado_por', 'fecha', 'total_filas', 'total_excluidas',
+        'created_at', 'finished_at',
+    )
+    list_filter = ('estado',)
+    search_fields = ('solicitado_por__username',)
+    readonly_fields = (
+        'solicitado_por', 'fecha', 'archivo', 'total_filas', 'total_excluidas', 'mensaje',
+        'created_at', 'finished_at',
     )

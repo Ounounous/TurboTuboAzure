@@ -690,3 +690,47 @@ class ReporteTannerJob(models.Model):
     @property
     def en_curso(self):
         return self.estado in (self.PENDIENTE, self.PROCESANDO)
+
+
+class ReporteOmegaJob(models.Model):
+    """
+    "Gestiones Tanner a Omega" de UN dia. Se procesa en el WORKER, no en el proceso web: armaba el
+    Excel del dia completo dentro del mismo request-response, igual que el reporte Tanner antes de
+    moverse al worker -- un dia de mucho volumen puede repetir el mismo 504 del proxy de Azure.
+    """
+    PENDIENTE = 'pendiente'
+    PROCESANDO = 'procesando'
+    LISTO = 'listo'
+    VACIO = 'vacio'
+    ERROR = 'error'
+    CHOICES_ESTADO = [
+        (PENDIENTE, _('En cola')),
+        (PROCESANDO, _('Procesando')),
+        (LISTO, _('Listo para descargar')),
+        (VACIO, _('Sin gestiones de Tanner ese día')),
+        (ERROR, _('Falla del servidor')),
+    ]
+
+    solicitado_por = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reportes_omega')
+    fecha = models.DateField()
+    archivo = models.FileField(upload_to='reportes/omega/%Y/%m/', blank=True)
+    estado = models.CharField(max_length=12, choices=CHOICES_ESTADO, default=PENDIENTE)
+    total_filas = models.PositiveIntegerField(default=0)
+    # Gestiones cuyo resultado no tiene equivalente confirmado en Omega -- se excluyen del
+    # archivo principal y quedan listadas en la segunda hoja "Excluidas". Ver actions/omega_report.py.
+    total_excluidas = models.PositiveIntegerField(default=0)
+    mensaje = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = _('Reporte Tanner a Omega')
+        verbose_name_plural = _('Reportes Tanner a Omega')
+
+    def __str__(self):
+        return f"Reporte Omega #{self.pk} ({self.fecha})"
+
+    @property
+    def en_curso(self):
+        return self.estado in (self.PENDIENTE, self.PROCESANDO)

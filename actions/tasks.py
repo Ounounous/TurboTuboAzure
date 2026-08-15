@@ -939,3 +939,61 @@ def generar_reporte_tanner_rango(job_id):
     job.save(update_fields=[
         'estado', 'total_gestiones', 'dias_con_datos', 'mensaje', 'archivo', 'finished_at',
     ])
+
+
+@shared_task(**RETRY_DB)
+def generar_reporte_omega(job_id):
+    """
+    Arma el Excel "Gestiones Tanner a Omega" de UN dia en el WORKER. Antes se armaba en el proceso
+    web dentro del mismo request-response; un dia de mucho volumen de campana puede tardar lo
+    suficiente para repetir el 504 del proxy de Azure que ya obligo a mover la carga masiva y el
+    reporte por rango al worker.
+    """
+    from io import BytesIO
+
+    from django.core.files.base import ContentFile
+
+    from actions.models import ReporteOmegaJob
+    from actions.omega_report import construir_workbook
+
+    try:
+        job = ReporteOmegaJob.objects.select_related('solicitado_por').get(pk=job_id)
+    except ReporteOmegaJob.DoesNotExist:
+        logger.warning(f"generar_reporte_omega: job {job_id} no existe (¿se borró?)")
+        return
+
+    job.estado = ReporteOmegaJob.PROCESANDO
+    job.save(update_fields=['estado'])
+
+    try:
+        wb, total_filas, total_excluidas = construir_workbook(job.fecha)
+
+        if wb is None:
+            job.estado = ReporteOmegaJob.VACIO
+            job.mensaje = 'No hay gestiones de Tanner para esa fecha.'
+        else:
+            output = BytesIO()
+            wb.save(output)
+            job.total_filas = total_filas
+            job.total_excluidas = total_excluidas
+            job.archivo.save(f"{job.fecha:%Y%m%d}_tanner_a_omega.xlsx", ContentFile(output.getvalue()), save=False)
+            job.estado = ReporteOmegaJob.LISTO
+            if total_filas == 0:
+                job.mensaje = (
+                    f'Ninguna gestión de ese día tiene un resultado con equivalente confirmado en '
+                    f'Omega. Las {total_excluidas} gestión(es) del día quedaron listadas en la hoja '
+                    f'"Excluidas".'
+                )
+            else:
+                job.mensaje = f'{total_filas} fila(s).'
+                if total_excluidas:
+                    job.mensaje += f' {total_excluidas} gestión(es) excluida(s), ver hoja "Excluidas".'
+    except Exception:
+        logger.exception(f"generar_reporte_omega: falló el job {job_id}")
+        job.estado = ReporteOmegaJob.ERROR
+        job.mensaje = 'Falla del servidor generando el archivo. Reintenta o avisa a soporte.'
+
+    job.finished_at = timezone.now()
+    job.save(update_fields=[
+        'estado', 'total_filas', 'total_excluidas', 'mensaje', 'archivo', 'finished_at',
+    ])
