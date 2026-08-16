@@ -126,12 +126,14 @@ REST_FRAMEWORK = {
     },
 }
 
-# Freno de efectos demograficos del webhook de escritura (api/freno_demografico.py, Fase 4):
-# cuantos Action con Resultado.efecto_demografia configurado, creados via webhook por un mismo
-# ApiClient, se toleran en la ventana antes de dejar de procesar sus eventos. Ver plan de riesgos,
-# "Efecto demografico en cascada" -- un motor mal calibrado reportando rebotes en masa puede
-# apagar miles de telefonos/correos de un golpe.
+# Frenos de contencion del webhook de escritura (api/freno_demografico.py, Fase 4 + auditoria de
+# riesgos hallazgo 2): cuantos eventos se toleran en la ventana antes de dejar de procesar. Ver
+# plan de riesgos, "Efecto demografico en cascada" -- un motor mal calibrado reportando rebotes en
+# masa puede apagar miles de telefonos/correos de un golpe. El de VOLUMEN cuenta cualquier evento
+# aplicado (no solo los que tocan demografia) -- sin el, una descalibracion masiva sobre resultados
+# sin efecto_demografia (hoy ningun mapeo Tanner/Galgo lo tiene) no la frenaba nada.
 WEBHOOK_FRENO_DEMOGRAFICO_UMBRAL = int(os.environ.get('WEBHOOK_FRENO_DEMOGRAFICO_UMBRAL', '50'))
+WEBHOOK_FRENO_VOLUMEN_UMBRAL = int(os.environ.get('WEBHOOK_FRENO_VOLUMEN_UMBRAL', '200'))
 WEBHOOK_FRENO_DEMOGRAFICO_VENTANA_MINUTOS = int(os.environ.get('WEBHOOK_FRENO_DEMOGRAFICO_VENTANA_MINUTOS', '10'))
 
 CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0')

@@ -232,6 +232,17 @@ class Action(models.Model):
     create_payment = models.BooleanField(_('Create Payment'), default=False)
     convert_debt_free = models.BooleanField(_('Convert Debt Free'), default=False)
 
+    # Gestiones que vienen de un envio masivo (SMS/email/WhatsApp por campana, via el webhook de
+    # api/tasks.py) en vez de un gestor humano hablando con el deudor. "Entregado"/"no entregado"
+    # no es informacion nueva sobre contactabilidad real -- un gestor humano SI puede degradar el
+    # status a proposito (ej. marcar "no contactado" tras un intento fallido), pero una campana
+    # masiva nunca debe poder bajar a un lead que ya esta en compromiso/pagando. Ver
+    # status_logic.apply_status(permitir_degradar=...).
+    origen_masivo = models.BooleanField(
+        _('Origen masivo'), default=False,
+        help_text=_('Gestión creada por un envío de campaña (SMS/email/WhatsApp), no por un gestor humano.'),
+    )
+
     def save(self, *args, **kwargs):
         # Status antes de que apply_status lo pise, para la metadata anonimizada (mlmetadata) --
         # se lee antes del bloque atomico para no depender de su resultado.
@@ -287,7 +298,10 @@ class Action(models.Model):
             # El status del lead se calcula solo, a partir del resultado de la gestion.
             if self.lead_id and self.resultado_id:
                 from .status_logic import apply_status, aplicar_efecto_demografico, compute_status
-                apply_status(self.lead, compute_status(self.resultado, self.fecha_compromiso), changed_by=self.user)
+                apply_status(
+                    self.lead, compute_status(self.resultado, self.fecha_compromiso),
+                    changed_by=self.user, permitir_degradar=not self.origen_masivo,
+                )
                 # El resultado puede marcar el dato usado (no existe / blacklist / apaga whatsapp) y,
                 # si el lead se queda sin datos activos, dejarlo inubicable.
                 aplicar_efecto_demografico(self)

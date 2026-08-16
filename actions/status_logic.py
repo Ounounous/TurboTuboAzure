@@ -22,8 +22,19 @@ def compute_status(resultado, fecha_compromiso):
     return Lead.NO_CONTACTADO
 
 
-def apply_status(lead, new_status, changed_by=None):
-    """Actualiza status actual + historico (si new_status es mejor) y deja registro en el log."""
+def apply_status(lead, new_status, changed_by=None, permitir_degradar=True):
+    """
+    Actualiza status actual + historico (si new_status es mejor) y deja registro en el log.
+
+    permitir_degradar=False (usado por gestiones de campana masiva, ver Action.origen_masivo):
+    si new_status tiene un rango MENOR al status actual del lead, no se aplica -- "no entregado"
+    de un SMS masivo no es informacion nueva sobre contactabilidad real, y no debe poder bajar a
+    un lead que un gestor humano ya avanzo a compromiso/pagando. Un gestor humano SI puede
+    degradar a proposito (ej. "no contactado" tras un intento fallido real), por eso el default
+    sigue siendo True -- este parametro es la excepcion, no la regla general.
+    """
+    if not permitir_degradar and Lead.STATUS_RANK[new_status] < Lead.STATUS_RANK.get(lead.status, 0):
+        return
     lead.status = new_status
     if Lead.STATUS_RANK[new_status] > Lead.STATUS_RANK.get(lead.status_historico, 0):
         lead.status_historico = new_status
