@@ -11,6 +11,7 @@ from userprofile.forms import LoginForm
 
 urlpatterns = [
     path('', index, name='index'),
+    path('api/1.0/', include('api.urls')),
     path('dashboard/actions/', include('actions.urls')),
     path('dashboard/carteras/', include('cartera.urls')),
     path('dashboard/configuracion/', include('configuracion.urls')),

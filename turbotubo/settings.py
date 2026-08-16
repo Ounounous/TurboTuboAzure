@@ -59,7 +59,9 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'rest_framework',
     'actions',
+    'api',
     'cartera',
     'configuracion',
     'core',
@@ -108,6 +110,21 @@ PBX_ENCRYPTION_KEY = os.environ.get('PBX_ENCRYPTION_KEY', '')
 # credenciales). Se deja en el entorno, nunca en el codigo.
 PBX_MASTER_EMAIL = os.environ.get('PBX_MASTER_EMAIL', '')
 PBX_MASTER_PASSWORD = os.environ.get('PBX_MASTER_PASSWORD', '')
+
+# API de solo lectura (/api/1.0/) para motores de campaña externos -- ver CONTRATO_API_v1.md.
+# Sin SessionAuthentication/BasicAuthentication: la API es maquina a maquina (api.ApiKeyAuthentication),
+# nunca comparte sesion con /dashboard/. Throttle scope 'api_lectura' aplica a todos los endpoints
+# desde el primer dia (ver plan de riesgos, seccion "Carga sobre produccion").
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': ['api.authentication.ApiKeyAuthentication'],
+    'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.IsAuthenticated'],
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 50,
+    'DEFAULT_THROTTLE_CLASSES': ['rest_framework.throttling.ScopedRateThrottle'],
+    'DEFAULT_THROTTLE_RATES': {
+        'api_lectura': '120/min',
+    },
+}
 
 CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0')
 # Sin backend de resultados: el codigo nunca lee el retorno/estado de una tarea (no hay
