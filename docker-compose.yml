@@ -7,7 +7,9 @@ services:
       POSTGRES_USER: turbotubo
       POSTGRES_PASSWORD: turbotubo
     ports:
-      - "5432:5432"
+      # Solo loopback: sin esto, Docker Desktop publica en 0.0.0.0 y salta el firewall de
+      # Windows (NAT de WSL2/Hyper-V), exponiendo Postgres con password trivial a toda la red.
+      - "127.0.0.1:5432:5432"
     volumes:
       - turbotubo_pgdata:/var/lib/postgresql/data
 
@@ -15,7 +17,7 @@ services:
     image: redis:7
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
 
 volumes:
   turbotubo_pgdata:
