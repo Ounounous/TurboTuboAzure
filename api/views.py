@@ -1,5 +1,6 @@
 import logging
 
+from django.db.models import Prefetch
 from rest_framework import permissions, status, viewsets
 from rest_framework.exceptions import NotFound
 from rest_framework.response import Response
@@ -8,6 +9,7 @@ from rest_framework.views import APIView
 from actions.models import Medio, Resultado
 from cartera.models import Cartera
 from configuracion.models import AccessLog, registrar_acceso
+from demographics.models import IDDemographics, Phone
 from lead.models import Lead
 
 from .hmac_signing import FirmaInvalida, verificar
@@ -73,8 +75,10 @@ class LeadViewSet(ClienteCarteraScopedMixin, viewsets.ReadOnlyModelViewSet):
     """
     GET /api/1.0/leads/?cartera=<id>&subcartera=<id>&status=<status>&op=<op>
 
-    Nunca escribe. El detalle incluye demografía (solo teléfonos/correo en estado 'active');
-    el listado no, para no traer N+1 de teléfonos en cada página.
+    Nunca escribe. Tanto el listado como el detalle incluyen demografía (solo teléfono/correo en
+    estado 'active') -- un motor de campañas necesita el dato de contacto para armar una audiencia
+    real, no solo para consultar un lead a la vez. Sin N+1: la demografía se trae con Prefetch,
+    2 queries extra fijas por página (IDDemographics + Phone), sin importar cuántos leads traiga.
     """
     permission_classes = [HasApiKey]
     throttle_scope = 'api_lectura'
@@ -83,9 +87,16 @@ class LeadViewSet(ClienteCarteraScopedMixin, viewsets.ReadOnlyModelViewSet):
         return LeadDetailSerializer if self.action == 'retrieve' else LeadListSerializer
 
     def get_queryset(self):
+        telefonos_activos = Prefetch(
+            'principal_phones', queryset=Phone.objects.filter(phone_number_status=Phone.ACTIVE),
+        )
+        demografia = Prefetch(
+            'iddemographics_set',
+            queryset=IDDemographics.objects.prefetch_related(telefonos_activos),
+        )
         qs = Lead.objects.filter(
             subcartera__cartera__in=self.carteras_permitidas(),
-        ).select_related('subcartera', 'subcartera__cartera')
+        ).select_related('subcartera', 'subcartera__cartera').prefetch_related(demografia)
 
         params = self.request.query_params
         if params.get('cartera'):
