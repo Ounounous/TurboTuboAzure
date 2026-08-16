@@ -192,6 +192,16 @@ class Command(BaseCommand):
     def _borrar(self):
         carteras = Cartera.objects.filter(nombre__in=CARTERAS)
         n = carteras.count()
+
+        # MapeoResultadoCampana (api app, Fase 4) protege su Medio/Resultado con PROTECT -- si se
+        # sembró sobre una cartera demo (ej. via sembrar_mapeo_galgo --cartera "Galgo DEMO"),
+        # Cartera.delete() fallaría en cascada sin esto. Import perezoso: lead no depende de api.
+        try:
+            from api.models import MapeoResultadoCampana
+            MapeoResultadoCampana.objects.filter(cartera__in=carteras).delete()
+        except LookupError:
+            pass  # app 'api' no instalada en este ambiente
+
         Lead.objects.filter(subcartera__cartera__in=carteras).delete()
         carteras.delete()
         User.objects.filter(username__in=[u for u, _ in COLECTORES]).delete()

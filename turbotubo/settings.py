@@ -126,6 +126,14 @@ REST_FRAMEWORK = {
     },
 }
 
+# Freno de efectos demograficos del webhook de escritura (api/freno_demografico.py, Fase 4):
+# cuantos Action con Resultado.efecto_demografia configurado, creados via webhook por un mismo
+# ApiClient, se toleran en la ventana antes de dejar de procesar sus eventos. Ver plan de riesgos,
+# "Efecto demografico en cascada" -- un motor mal calibrado reportando rebotes en masa puede
+# apagar miles de telefonos/correos de un golpe.
+WEBHOOK_FRENO_DEMOGRAFICO_UMBRAL = int(os.environ.get('WEBHOOK_FRENO_DEMOGRAFICO_UMBRAL', '50'))
+WEBHOOK_FRENO_DEMOGRAFICO_VENTANA_MINUTOS = int(os.environ.get('WEBHOOK_FRENO_DEMOGRAFICO_VENTANA_MINUTOS', '10'))
+
 CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0')
 # Sin backend de resultados: el codigo nunca lee el retorno/estado de una tarea (no hay
 # AsyncResult.get()/.ready()/.state en ningun lado), asi que guardarlos era puro overhead que

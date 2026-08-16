@@ -9,6 +9,7 @@ from .models import (
 class MedioAdmin(admin.ModelAdmin):
     list_display = ('nombre', 'cartera', 'canal', 'codigo', 'es_llamada', 'es_inbound', 'permite_manual')
     list_filter = ('cartera', 'canal', 'es_llamada', 'es_inbound', 'permite_manual')
+    search_fields = ('nombre', 'codigo', 'cartera__nombre')
     list_editable = ('permite_manual',)
 
 

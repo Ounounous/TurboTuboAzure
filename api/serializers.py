@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from actions.models import Medio, Resultado
+from api.models import MapeoResultadoCampana
 from cartera.models import Cartera, Subcartera
 from demographics.models import IDDemographics, Phone
 from lead.models import Lead
@@ -81,3 +82,15 @@ class LeadDetailSerializer(LeadListSerializer):
         if not id_demo:
             return None
         return DemographicsSerializer(id_demo).data
+
+
+class EventoWebhookSerializer(serializers.Serializer):
+    """Mensaje 'evento' del Contrato API v1, sección 1.2 -- valida forma, no contenido de negocio
+    (op existente, mapeo configurado, etc. se resuelven en el worker, no aquí)."""
+    tipo = serializers.ChoiceField(choices=['evento'])
+    event_id = serializers.CharField(max_length=64)
+    op = serializers.CharField(max_length=16)
+    target = serializers.ChoiceField(choices=['principal', 'aval'], required=False, default='principal')
+    canal = serializers.ChoiceField(choices=[c for c, _ in MapeoResultadoCampana.CANALES])
+    resultado = serializers.ChoiceField(choices=[r for r, _ in MapeoResultadoCampana.RESULTADOS_CORTOS])
+    ocurrido_at = serializers.DateTimeField()

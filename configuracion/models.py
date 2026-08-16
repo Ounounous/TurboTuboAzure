@@ -21,6 +21,7 @@ class AccessLog(models.Model):
     EXPORTAR_COMPROMISOS = 'exportar_compromisos'
     EXPORTAR_GESTIONES = 'exportar_gestiones'
     DESCARGAR_GRABACIONES = 'descargar_grabaciones'
+    FRENO_DEMOGRAFICO_WEBHOOK = 'freno_demografico_webhook'
 
     CHOICES_ACCION = (
         (VER_FICHA, 'Vio ficha del cliente'),
@@ -31,6 +32,7 @@ class AccessLog(models.Model):
         (EXPORTAR_COMPROMISOS, 'Exportó compromisos'),
         (EXPORTAR_GESTIONES, 'Exportó gestiones'),
         (DESCARGAR_GRABACIONES, 'Descargó grabaciones'),
+        (FRENO_DEMOGRAFICO_WEBHOOK, 'Freno de efectos demográficos activado (webhook API)'),
     )
 
     user = models.ForeignKey(
