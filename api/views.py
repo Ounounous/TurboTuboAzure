@@ -124,9 +124,10 @@ class WebhookEventoView(APIView):
 
     Encola en Celery y responde 202: nunca procesa el evento en el proceso web (Action.save()
     dispara compromiso + status + efecto demográfico + captura ML). Valida en el request:
-    - Firma HMAC (X-Signature + X-Signature-Timestamp) contra el secreto del ApiClient.
-    - Idempotencia por event_id: un event_id repetido responde 200 sin crear un job nuevo, sin
-      revalidar la firma del cuerpo otra vez (evita filtrar por timing si el payload cambió).
+    - Firma HMAC (X-Signature + X-Signature-Timestamp) contra el secreto del ApiClient --
+      SIEMPRE, antes que cualquier otra cosa (ver nota de idempotencia abajo).
+    - Idempotencia por event_id: un event_id repetido, con firma válida, responde 200 sin crear
+      un job nuevo.
     Todo lo que depende de datos (op existe, mapeo configurado, freno demográfico) se resuelve en
     el worker -- este endpoint no toca Lead/Action/Resultado.
     """
@@ -150,14 +151,12 @@ class WebhookEventoView(APIView):
         cuerpo_crudo = request.body
         event_id = request.data.get('event_id', '') if isinstance(request.data, dict) else ''
 
-        # Idempotente ANTES de validar la firma: si el event_id ya existe, no importa si esta
-        # segunda copia trae una firma distinta -- el contrato dice "un event_id repetido nunca
-        # crea un segundo Action", punto. Reintentos del motor externo no deben fallar por esto.
-        if event_id:
-            existente = WebhookEventoJob.objects.filter(event_id=event_id).first()
-            if existente:
-                return Response({'ok': True, 'event_id': event_id, 'estado': existente.estado, 'duplicado': True})
-
+        # Firma ANTES que idempotencia (auditoría de riesgos, hallazgo 5): con el orden inverso,
+        # cualquiera que solo tuviera la API key (sin HMAC) podía enumerar event_id y leer el
+        # estado interno de procesamiento de un job sin firmar nada -- un oráculo de estado sobre
+        # datos que nunca debieron ser visibles sin la firma. El motor legítimo reintenta el MISMO
+        # event_id con una firma recién calculada (mismo secreto, timestamp actual) -- eso sigue
+        # verificando correcto, así que mover esto no rompe reintentos reales.
         firma = request.META.get('HTTP_X_SIGNATURE', '')
         firma_ts = request.META.get('HTTP_X_SIGNATURE_TIMESTAMP', '')
         try:
@@ -165,6 +164,11 @@ class WebhookEventoView(APIView):
         except FirmaInvalida as exc:
             logger.warning(f'WebhookEventoView: firma inválida de cliente "{client.nombre}" -- {exc}')
             return Response({'detail': str(exc)}, status=status.HTTP_401_UNAUTHORIZED)
+
+        if event_id:
+            existente = WebhookEventoJob.objects.filter(event_id=event_id).first()
+            if existente:
+                return Response({'ok': True, 'event_id': event_id, 'estado': existente.estado, 'duplicado': True})
 
         serializer = EventoWebhookSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

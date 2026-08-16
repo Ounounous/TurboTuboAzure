@@ -115,15 +115,28 @@ PBX_MASTER_PASSWORD = os.environ.get('PBX_MASTER_PASSWORD', '')
 # Sin SessionAuthentication/BasicAuthentication: la API es maquina a maquina (api.ApiKeyAuthentication),
 # nunca comparte sesion con /dashboard/. Throttle scope 'api_lectura' aplica a todos los endpoints
 # desde el primer dia (ver plan de riesgos, seccion "Carga sobre produccion").
+# ApiClientRateThrottle (no ScopedRateThrottle de DRF): la identidad es el ApiClient autenticado,
+# no la IP -- request.user queda AnonymousUser a proposito (auth maquina a maquina), asi que
+# ScopedRateThrottle caia siempre a la IP, y sin NUM_PROXIES configurado esa IP sale del
+# X-Forwarded-For crudo que el propio cliente controla (bypass total del limite, auditoria de
+# riesgos hallazgo 4).
+# Cuantos proxies de confianza hay delante de la app (Azure App Service: uno). Sin esto, DRF
+# get_ident() (usado por cualquier throttle que caiga a IP -- hoy ninguno para api_lectura, pero
+# es la config correcta por si se agrega otro) toma el X-Forwarded-For CRUDO y completo, que el
+# cliente controla enteramente. Con NUM_PROXIES=1, toma el penultimo valor (el que agrega el
+# proxy de confianza, no falsificable) -- mismo criterio que userprofile/forms.py::_client_ip.
+API_NUM_PROXIES = int(os.environ.get('API_NUM_PROXIES', '1'))
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': ['api.authentication.ApiKeyAuthentication'],
     'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.IsAuthenticated'],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 50,
-    'DEFAULT_THROTTLE_CLASSES': ['rest_framework.throttling.ScopedRateThrottle'],
+    'DEFAULT_THROTTLE_CLASSES': ['api.throttling.ApiClientRateThrottle'],
     'DEFAULT_THROTTLE_RATES': {
         'api_lectura': '120/min',
     },
+    'NUM_PROXIES': API_NUM_PROXIES,
 }
 
 # Frenos de contencion del webhook de escritura (api/freno_demografico.py, Fase 4 + auditoria de
