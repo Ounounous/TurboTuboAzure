@@ -187,3 +187,56 @@ def _rechazar(job, detalle):
     job.detalle = detalle
     job.finished_at = timezone.now()
     job.save(update_fields=['estado', 'detalle', 'finished_at'])
+
+
+# Cuanto tiempo tolera un WebhookEventoJob en PENDIENTE (no se pudo encolar, ver
+# api/views.py::WebhookEventoView -- responde 202 igual aunque .delay() falle) o en PROCESANDO
+# (el worker murio entre marcar PROCESANDO y terminar de procesar) antes de considerarse
+# atascado. Ambos escenarios estan documentados en la auditoria de riesgos, hallazgos 8 y 15.
+MINUTOS_PENDIENTE_ATASCADO = 5
+MINUTOS_PROCESANDO_ATASCADO = 60
+
+
+@shared_task(**RETRY_DB)
+def reencolar_webhook_eventos_atascados():
+    """
+    Tarea periodica (Celery Beat, ver cargar_tareas_programadas.py): barre WebhookEventoJob que
+    quedaron sin avanzar.
+
+    - PENDIENTE hace mas de MINUTOS_PENDIENTE_ATASCADO: procesar_evento_webhook.delay() fallo al
+      encolar (ej. Redis caido en el momento del POST) y el receptor respondio 202 igual --
+      auditoria de riesgos hallazgo 15. Se reintenta el encolado.
+    - PROCESANDO hace mas de MINUTOS_PROCESANDO_ATASCADO: el worker murio (kill, OOM, deploy)
+      entre marcar PROCESANDO y terminar -- auditoria de riesgos hallazgo 8. Se vuelve a
+      PENDIENTE y se reencola; procesar_evento_webhook es seguro de reintentar en este punto
+      porque el Action solo se crea DENTRO del transaction.atomic() final, asi que un job en
+      PROCESANDO nunca tiene un Action a medio crear.
+    """
+    from api.models import WebhookEventoJob
+
+    ahora = timezone.now()
+
+    pendientes_viejos = WebhookEventoJob.objects.filter(
+        estado=WebhookEventoJob.PENDIENTE,
+        created_at__lt=ahora - timezone.timedelta(minutes=MINUTOS_PENDIENTE_ATASCADO),
+    )
+    n_pendientes = 0
+    for job in pendientes_viejos:
+        logger.warning(f'reencolar_webhook_eventos_atascados: job {job.pk} llevaba PENDIENTE, reencolando')
+        procesar_evento_webhook.delay(job.pk)
+        n_pendientes += 1
+
+    procesando_viejos = WebhookEventoJob.objects.filter(
+        estado=WebhookEventoJob.PROCESANDO,
+        created_at__lt=ahora - timezone.timedelta(minutes=MINUTOS_PROCESANDO_ATASCADO),
+    )
+    n_procesando = 0
+    for job in procesando_viejos:
+        logger.warning(f'reencolar_webhook_eventos_atascados: job {job.pk} llevaba PROCESANDO >{MINUTOS_PROCESANDO_ATASCADO}min, reseteando a PENDIENTE y reencolando')
+        job.estado = WebhookEventoJob.PENDIENTE
+        job.save(update_fields=['estado'])
+        procesar_evento_webhook.delay(job.pk)
+        n_procesando += 1
+
+    if n_pendientes or n_procesando:
+        logger.warning(f'reencolar_webhook_eventos_atascados: {n_pendientes} PENDIENTE + {n_procesando} PROCESANDO reencolados')

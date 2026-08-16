@@ -22,6 +22,10 @@ TAREAS = [
     ('Sincronizar grabaciones PBX', 'actions.tasks.sync_pbx_recordings',
      'interval', (5, 'minutes'),
      'Baja las grabaciones de pbxip.cl de las llamadas recientes (ventana de 24h).'),
+    ('Reencolar eventos de webhook atascados', 'api.tasks.reencolar_webhook_eventos_atascados',
+     'interval', (10, 'minutes'),
+     'Reintenta WebhookEventoJob que quedaron PENDIENTE (fallo el encolado) o PROCESANDO '
+     '(worker murio a medio camino) sin avanzar -- auditoria de riesgos, hallazgos 8 y 15.'),
 
     # --- diarias ---
     ('Purgar gestiones por ciclo de vida', 'actions.tasks.purgar_gestiones_ciclo_vida',
