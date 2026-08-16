@@ -24,10 +24,12 @@ RETRY_DB = dict(
     max_retries=3,
 )
 
-# Fase 4 del plan solo habilita Galgo -- Tanner tiene dos archivos regulatorios de por medio
-# (ver CONTRATO_API_v1.md sección 3.2 y plan de riesgos sección 07); se habilita en Fase 5 recién
-# con las tres precauciones (código+tipo_contacto, bloqueo 129-153, no-regresión byte a byte).
-CARTERAS_ARBOL_HABILITADO = {'galgo'}
+# Fase 5 habilita Tanner (además de Galgo, Fase 4) con las tres precauciones del plan de riesgos
+# sección 07: resultado resuelto por código+tipo_contacto (nunca nombre libre, ver
+# MapeoResultadoCampana + sembrar_mapeo_tanner.py), bloqueo defensivo de 129-153 (abajo), y
+# no-regresión byte a byte verificada aparte (test_no_regresion_tanner.py) antes de habilitar.
+# Nuevo Capital todavía no tiene precauciones definidas -- se agrega en su propia fase.
+CARTERAS_ARBOL_HABILITADO = {'galgo', 'tanner'}
 
 
 @shared_task(**RETRY_DB)
@@ -76,6 +78,16 @@ def procesar_evento_webhook(job_id):
     except MapeoResultadoCampana.DoesNotExist:
         _rechazar(job, f'Sin mapeo configurado para cartera={cartera.nombre} canal={payload["canal"]} resultado={payload["resultado"]}.')
         return
+
+    # Precaución obligatoria nº2 (plan de riesgos, Tanner): defensa en profundidad -- aunque
+    # sembrar_mapeo_tanner.py ya verifica esto al crear el mapeo, se re-verifica aquí en cada
+    # evento para que un MapeoResultadoCampana mal editado a mano (ej. desde /admin) nunca pueda
+    # materializar un código bloqueado (129-153, PAC/venta directa) en un Action real.
+    if cartera.arbol_tipo == 'tanner':
+        from actions.arbol_templates import TANNER_CODIGOS_NO_MANUAL
+        if mapeo.resultado.codigo in TANNER_CODIGOS_NO_MANUAL:
+            _rechazar(job, f'Resultado {mapeo.resultado} tiene código bloqueado {mapeo.resultado.codigo!r} (TANNER_CODIGOS_NO_MANUAL).')
+            return
 
     if verificar_freno(job.cliente, mapeo.resultado):
         job.estado = WebhookEventoJob.DETENIDO_FRENO
