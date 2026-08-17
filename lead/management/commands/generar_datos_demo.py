@@ -10,7 +10,7 @@ Pensado para el ambiente Docker local (Fase 0): despues de `docker-compose up` +
 Solo corre con DEBUG=True -- nunca contra una base real.
 
 Idempotente (get_or_create en todo). Para limpiar:
-    python manage.py generar_datos_demo --borrar
+    python manage.py generar_datos_demo --borrar --si-estoy-seguro
 """
 import datetime
 import random
@@ -71,12 +71,25 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument('--borrar', action='store_true', help='Elimina los datos de demo.')
+        parser.add_argument(
+            '--si-estoy-seguro', action='store_true', dest='confirmado',
+            help='Requerido junto con --borrar: segunda confirmación explícita, independiente de DEBUG.',
+        )
 
     def handle(self, *args, **options):
         if not settings.DEBUG:
             raise CommandError('generar_datos_demo solo puede correr con DEBUG=True (nunca en producción).')
 
         if options['borrar']:
+            # Segunda guarda independiente de DEBUG (auditoría de riesgos, hallazgo 17): si
+            # DEBUG=True quedara accidentalmente activo en un ambiente con datos reales, --borrar
+            # por sí solo ya bastaría para ejecutar el DELETE -- exigir una confirmación explícita
+            # aparte reduce la chance de que un --borrar tipeado sin pensar (ej. copiado de otra
+            # terminal) se ejecute de verdad.
+            if not options['confirmado']:
+                raise CommandError(
+                    '--borrar requiere también --si-estoy-seguro (segunda confirmación explícita).'
+                )
             return self._borrar()
 
         with transaction.atomic():
