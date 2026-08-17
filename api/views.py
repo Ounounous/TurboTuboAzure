@@ -2,7 +2,7 @@ import logging
 
 from django.db.models import Prefetch
 from rest_framework import permissions, status, viewsets
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -75,6 +75,11 @@ class LeadViewSet(ClienteCarteraScopedMixin, viewsets.ReadOnlyModelViewSet):
     """
     GET /api/1.0/leads/?cartera=<id>&subcartera=<id>&status=<status>&op=<op>
 
+    cartera o subcartera son OBLIGATORIOS (excepto para retrieve, un lead puntual por id) --
+    auditoría de riesgos, hallazgo 12: sin esto, un cliente con acceso a "todas las carteras"
+    (ApiClient.carteras vacío) podía barrer la base entera con /leads/ sin filtros, cientos de
+    páginas contra la misma base que sirve el dashboard de producción, sin réplica de lectura.
+
     Nunca escribe. Tanto el listado como el detalle incluyen demografía (solo teléfono/correo en
     estado 'active') -- un motor de campañas necesita el dato de contacto para armar una audiencia
     real, no solo para consultar un lead a la vez. Sin N+1: la demografía se trae con Prefetch,
@@ -87,6 +92,10 @@ class LeadViewSet(ClienteCarteraScopedMixin, viewsets.ReadOnlyModelViewSet):
         return LeadDetailSerializer if self.action == 'retrieve' else LeadListSerializer
 
     def get_queryset(self):
+        params = self.request.query_params
+        if self.action == 'list' and not params.get('cartera') and not params.get('subcartera'):
+            raise ValidationError('Se requiere el parámetro "cartera" o "subcartera" -- /leads/ no admite listar sin filtro de cartera.')
+
         telefonos_activos = Prefetch(
             'principal_phones', queryset=Phone.objects.filter(phone_number_status=Phone.ACTIVE),
         )
@@ -98,7 +107,6 @@ class LeadViewSet(ClienteCarteraScopedMixin, viewsets.ReadOnlyModelViewSet):
             subcartera__cartera__in=self.carteras_permitidas(),
         ).select_related('subcartera', 'subcartera__cartera').prefetch_related(demografia)
 
-        params = self.request.query_params
         if params.get('cartera'):
             qs = qs.filter(subcartera__cartera_id=params['cartera'])
         if params.get('subcartera'):

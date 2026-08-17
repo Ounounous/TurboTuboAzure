@@ -82,10 +82,12 @@ class LeadListSerializer(serializers.ModelSerializer):
         )
 
     def get_demografia(self, obj):
-        id_demo = obj.iddemographics_set.all()[0] if obj.iddemographics_set.all() else None
-        if not id_demo:
+        # lista(), no [0] con un segundo .all() -- ambos son en memoria (prefetch ya resuelto,
+        # cacheado por Django), pero una sola evaluación es más clara (auditoría, hallazgo 12).
+        demografias = list(obj.iddemographics_set.all())
+        if not demografias:
             return None
-        return DemographicsSerializer(id_demo).data
+        return DemographicsSerializer(demografias[0]).data
 
 
 class LeadDetailSerializer(LeadListSerializer):
