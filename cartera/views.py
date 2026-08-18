@@ -84,6 +84,14 @@ class CarteraDetailView(CarteraViewRequiredMixin, DetailView):
         context['medios'] = Medio.objects.filter(cartera=self.object).order_by('nombre')
         context['resultados'] = Resultado.objects.filter(cartera=self.object).order_by('nombre')
 
+        # Reportes automaticos (ver actions/models.py: ReporteAutomaticoConfig) -- solo
+        # admin/owner los gestiona, mismo flag que el arbol de gestiones.
+        if context['puede_gestionar_subcarteras']:
+            from actions.models import ReporteAutomaticoConfig
+            context['reportes_automaticos'] = ReporteAutomaticoConfig.objects.filter(
+                cartera=self.object,
+            ).prefetch_related('subcarteras')
+
         return context
 
 

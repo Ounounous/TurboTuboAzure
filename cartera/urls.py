@@ -1,6 +1,7 @@
 from django.urls import path
 
 from . import views
+from actions import views_reportes_automaticos as reportes_views
 
 app_name = 'cartera'
 
@@ -14,4 +15,9 @@ urlpatterns = [
     path('<int:cartera_pk>/subcarteras/<int:pk>/', views.SubcarteraDetailView.as_view(), name='subcartera_detail'),
     path('<int:cartera_pk>/subcarteras/<int:pk>/eliminar/', views.SubcarteraDeleteView.as_view(), name='delete_subcartera'),
     path('<int:cartera_pk>/subcarteras/<int:pk>/marcar-default/', views.SubcarteraSetDefaultView.as_view(), name='set_default_subcartera'),
+    path('<int:cartera_pk>/reportes-automaticos/', reportes_views.ReporteAutomaticoListCreateView.as_view(), name='reportes_automaticos'),
+    path('<int:cartera_pk>/reportes-automaticos/<int:pk>/editar/', reportes_views.ReporteAutomaticoUpdateView.as_view(), name='reporte_automatico_edit'),
+    path('<int:cartera_pk>/reportes-automaticos/<int:pk>/toggle/', reportes_views.ReporteAutomaticoToggleView.as_view(), name='reporte_automatico_toggle'),
+    path('<int:cartera_pk>/reportes-automaticos/<int:pk>/eliminar/', reportes_views.ReporteAutomaticoDeleteView.as_view(), name='reporte_automatico_delete'),
+    path('<int:cartera_pk>/reportes-automaticos/<int:pk>/enviar-prueba/', reportes_views.ReporteAutomaticoTestSendView.as_view(), name='reporte_automatico_test_send'),
 ]
