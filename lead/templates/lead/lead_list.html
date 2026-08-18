@@ -132,11 +132,11 @@
                 <th class="sortable num"><a href="{{ sort_links.deuda.url }}" style="color:inherit;text-decoration:none;">S. deuda <span class="ar">{{ sort_links.deuda.arrow }}</span></a></th>
                 <th class="sortable num"><a href="{{ sort_links.cuota.url }}" style="color:inherit;text-decoration:none;">Cuota <span class="ar">{{ sort_links.cuota.arrow }}</span></a></th>
                 <th class="sortable num"><a href="{{ sort_links.atrasadas.url }}" style="color:inherit;text-decoration:none;">Atr. <span class="ar">{{ sort_links.atrasadas.arrow }}</span></a></th>
+                <th class="sortable"><a href="{{ sort_links.status.url }}" style="color:inherit;text-decoration:none;">Status <span class="ar">{{ sort_links.status.arrow }}</span></a></th>
+                <th class="sortable"><a href="{{ sort_links.dias.url }}" style="color:inherit;text-decoration:none;">Últ. gestión <span class="ar">{{ sort_links.dias.arrow }}</span></a></th>
                 <th class="sortable"><a href="{{ sort_links.cartera.url }}" style="color:inherit;text-decoration:none;">Cartera <span class="ar">{{ sort_links.cartera.arrow }}</span></a></th>
                 <th>Subcartera</th>
                 {% if is_supervisor %}<th>Asignado a</th>{% endif %}
-                <th class="sortable"><a href="{{ sort_links.status.url }}" style="color:inherit;text-decoration:none;">Status <span class="ar">{{ sort_links.status.arrow }}</span></a></th>
-                <th class="sortable"><a href="{{ sort_links.dias.url }}" style="color:inherit;text-decoration:none;">Últ. gestión <span class="ar">{{ sort_links.dias.arrow }}</span></a></th>
               </tr>
             </thead>
             <tbody>
@@ -163,9 +163,6 @@
                   <td class="num">{{ lead.saldo_deuda|clp }}</td>
                   <td class="num">{{ lead.valor_cuota|clp }}</td>
                   <td class="num">{{ lead.cuotas_atrasadas }}</td>
-                  <td>{{ lead.subcartera.cartera.nombre }}</td>
-                  <td>{{ lead.subcartera.nombre }}</td>
-                  {% if is_supervisor %}<td>{% if lead.asignado_a_display %}{{ lead.asignado_a_display }}{% else %}<span class="muted">No asignado</span>{% endif %}</td>{% endif %}
                   <td><span class="dot-st"><span class="d st-{{ lead.status_color }}"></span>{{ lead.get_status_display }}</span></td>
                   <td>
                     {% if lead.dias_ultima_gestion is None %}
@@ -174,6 +171,9 @@
                       <span class="dias {% if lead.dias_ultima_gestion <= 3 %}ok{% elif lead.dias_ultima_gestion < 10 %}warn{% else %}late{% endif %}">{{ lead.dias_ultima_gestion }} d</span>
                     {% endif %}
                   </td>
+                  <td>{{ lead.subcartera.cartera.nombre }}</td>
+                  <td>{{ lead.subcartera.nombre }}</td>
+                  {% if is_supervisor %}<td>{% if lead.asignado_a_display %}{{ lead.asignado_a_display }}{% else %}<span class="muted">No asignado</span>{% endif %}</td>{% endif %}
                 </tr>
               {% endfor %}
             </tbody>
