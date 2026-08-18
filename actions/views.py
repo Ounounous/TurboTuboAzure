@@ -851,8 +851,9 @@ class RecordingsExportDownloadView(SupervisorRequiredMixin, View):
 
 from .tanner_report import (
     TANNER_GESTOR_CODIGO, TANNER_ORIGEN_GESTION_DEFAULT, TANNER_TIPO_GESTION_DEFAULT,
-    construir_lineas, gestiones_del_dia, nombre_archivo as _tanner_nombre_archivo,
-    nombre_ejecutivo as _ejecutivo_nombre_tanner, resultados_sin_codigo,
+    construir_lineas, formatear_telefono as _format_tanner_phone, gestiones_del_dia,
+    nombre_archivo as _tanner_nombre_archivo, nombre_ejecutivo as _ejecutivo_nombre_tanner,
+    resultados_sin_codigo,
 )
 
 

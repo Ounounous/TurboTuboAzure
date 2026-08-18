@@ -134,6 +134,30 @@ def gestiones_del_dia(fecha, user, subcartera_id=None):
     return actions.order_by('created_at')
 
 
+def gestiones_del_dia_multi(fecha, cartera, subcartera_ids=None):
+    """
+    Como gestiones_del_dia, pero para el envio automatico (actions/reportes_automaticos.py): filtra
+    por Cartera (no por nombre fijo 'Tanner') y acepta una LISTA de subcarteras en vez de una sola
+    -- no reemplaza gestiones_del_dia (que siguen usando TannerReportView y
+    generar_reporte_tanner_rango, con su propio criterio de scope_por_lead por usuario) para no
+    tocar el contrato de codigo regulatorio ya probado.
+    """
+    from .models import Action
+
+    start = datetime.datetime.combine(fecha, datetime.time.min, tzinfo=REPORT_TZ)
+    end = datetime.datetime.combine(fecha, datetime.time.max, tzinfo=REPORT_TZ)
+
+    actions = Action.objects.filter(
+        subcartera__cartera=cartera,
+        created_at__gte=start,
+        created_at__lte=end,
+    ).select_related('lead', 'medio', 'resultado', 'user__userprofile', 'phone')
+
+    if subcartera_ids:
+        actions = actions.filter(subcartera_id__in=subcartera_ids)
+    return actions.order_by('created_at')
+
+
 def construir_lineas(actions):
     """Las 15 columnas del reporte, una linea por gestion."""
     lineas = []

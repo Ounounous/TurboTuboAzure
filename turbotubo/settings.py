@@ -159,6 +159,19 @@ CELERY_TASK_IGNORE_RESULT = True
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 CELERY_TIMEZONE = 'America/Santiago'
 
+# Email saliente (reportes automatizados, actions/email_reportes.py). El remitente real NO es
+# TurboTubo (SaaS): es la casilla propia del CLIENTE (ej. Viared/Zona Sur) -- a la financiera la
+# contrata el cliente, no nosotros. Hoy solo SMTP; el dia que se sume envio via Azure
+# Communication Services, cambia el backend/config aca, no la logica de armado del email
+# (actions/email_reportes.py usa la API estandar de EmailMessage de Django).
+EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend')
+EMAIL_HOST = os.environ.get('EMAIL_HOST', '')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True') == 'True'
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
+
 # Cache compartido entre workers (Redis, mismo host que Celery). Necesario para que el throttle
 # de login (userprofile/forms.py) funcione de verdad en produccion: con el cache en memoria
 # por-proceso (default de Django) cada worker de gunicorn lleva su propio contador y el limite se
