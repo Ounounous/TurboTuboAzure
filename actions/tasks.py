@@ -1008,3 +1008,85 @@ def generar_reporte_omega(job_id):
     job.save(update_fields=[
         'estado', 'total_filas', 'total_excluidas', 'mensaje', 'archivo', 'finished_at',
     ])
+
+
+@shared_task(**RETRY_DB)
+def despachar_reportes_automaticos():
+    """
+    Trigger UNICO, fijo, cada 15 minutos (ver actions/management/commands/cargar_tareas_programadas.py)
+    para TODAS las ReporteAutomaticoConfig activas. En vez de un CrontabSchedule por config (Celery
+    Beat no expresa nativamente "cada X dias desde una fecha ancla" ni "saltar fin de semana"), este
+    trigger unico recorre las configs y decide en Python cual corresponde despachar ahora --
+    evita sincronizar altas/bajas/ediciones de PeriodicTask con cada guardado del formulario.
+    """
+    from .models import ReporteAutomaticoConfig
+    from .reportes_automaticos import corresponde_enviar_hoy
+
+    ahora_local = timezone.localtime()
+    hoy = ahora_local.date()
+    ventana_min = ahora_local - timedelta(minutes=15)
+
+    configs = ReporteAutomaticoConfig.objects.filter(activo=True).select_related('cartera')
+    despachadas = 0
+    for config in configs:
+        if not corresponde_enviar_hoy(config, hoy=hoy):
+            continue
+        objetivo = ahora_local.replace(
+            hour=config.hora_envio.hour, minute=config.hora_envio.minute, second=0, microsecond=0,
+        )
+        if ventana_min < objetivo <= ahora_local:
+            enviar_reporte_automatico.delay(config.pk)
+            despachadas += 1
+
+    if despachadas:
+        logger.info(f"despachar_reportes_automaticos: {despachadas} config(s) encolada(s)")
+
+
+@shared_task(**RETRY_DB)
+def enviar_reporte_automatico(config_id):
+    """
+    Genera y envia el reporte de UNA ReporteAutomaticoConfig. Se usa tanto desde el trigger
+    periodico (despachar_reportes_automaticos) como desde el boton "Enviar de prueba" de la UI.
+    """
+    from .email_reportes import enviar_email_reporte
+    from .models import ReporteAutomaticoConfig
+    from .reportes_automaticos import generar_adjunto_reporte, rango_pendiente
+
+    try:
+        config = ReporteAutomaticoConfig.objects.select_related('cartera').prefetch_related(
+            'subcarteras',
+        ).get(pk=config_id, activo=True)
+    except ReporteAutomaticoConfig.DoesNotExist:
+        logger.warning(f"enviar_reporte_automatico: config {config_id} no existe o esta inactiva")
+        return
+
+    fecha_desde, fecha_hasta = rango_pendiente(config)
+
+    try:
+        adjunto = generar_adjunto_reporte(config, fecha_desde, fecha_hasta)
+        if adjunto is None:
+            config.ultimo_estado = ReporteAutomaticoConfig.ESTADO_SIN_DATOS
+            config.ultimo_mensaje = f'Sin gestiones entre {fecha_desde:%d-%m-%Y} y {fecha_hasta:%d-%m-%Y}.'
+            # ultimo_envio_ok_at NO avanza: el proximo intento debe reintentar el MISMO rango, no
+            # saltarselo -- si se saltara, esos dias quedarian sin reportar para siempre.
+        else:
+            filename, contenido, content_type = adjunto
+            enviar_email_reporte(config, fecha_desde, fecha_hasta, filename, contenido, content_type)
+            config.ultimo_estado = ReporteAutomaticoConfig.ESTADO_OK
+            config.ultimo_mensaje = f'{filename} enviado a {", ".join(config.to_list())}.'
+            config.ultimo_envio_ok_at = timezone.now()
+
+            from configuracion.models import AccessLog, registrar_acceso
+            registrar_acceso(
+                config.creado_por, AccessLog.ENVIO_REPORTE_AUTOMATICO,
+                detail=f"Cartera {config.cartera.nombre}, {fecha_desde:%d-%m-%Y} a {fecha_hasta:%d-%m-%Y}",
+            )
+    except Exception as exc:
+        logger.exception(f"enviar_reporte_automatico: fallo la config {config_id}")
+        config.ultimo_estado = ReporteAutomaticoConfig.ESTADO_ERROR
+        config.ultimo_mensaje = str(exc)[:2000]
+
+    config.ultima_ejecucion_at = timezone.now()
+    config.save(update_fields=[
+        'ultimo_estado', 'ultimo_mensaje', 'ultimo_envio_ok_at', 'ultima_ejecucion_at',
+    ])
