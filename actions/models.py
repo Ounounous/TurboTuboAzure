@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import time, timedelta
 
 from django.core.validators import FileExtensionValidator
 from django.db import models, transaction
@@ -232,6 +232,17 @@ class Action(models.Model):
     create_payment = models.BooleanField(_('Create Payment'), default=False)
     convert_debt_free = models.BooleanField(_('Convert Debt Free'), default=False)
 
+    # Gestiones que vienen de un envio masivo (SMS/email/WhatsApp por campana, via el webhook de
+    # api/tasks.py) en vez de un gestor humano hablando con el deudor. "Entregado"/"no entregado"
+    # no es informacion nueva sobre contactabilidad real -- un gestor humano SI puede degradar el
+    # status a proposito (ej. marcar "no contactado" tras un intento fallido), pero una campana
+    # masiva nunca debe poder bajar a un lead que ya esta en compromiso/pagando. Ver
+    # status_logic.apply_status(permitir_degradar=...).
+    origen_masivo = models.BooleanField(
+        _('Origen masivo'), default=False,
+        help_text=_('Gestión creada por un envío de campaña (SMS/email/WhatsApp), no por un gestor humano.'),
+    )
+
     def save(self, *args, **kwargs):
         # Status antes de que apply_status lo pise, para la metadata anonimizada (mlmetadata) --
         # se lee antes del bloque atomico para no depender de su resultado.
@@ -287,7 +298,10 @@ class Action(models.Model):
             # El status del lead se calcula solo, a partir del resultado de la gestion.
             if self.lead_id and self.resultado_id:
                 from .status_logic import apply_status, aplicar_efecto_demografico, compute_status
-                apply_status(self.lead, compute_status(self.resultado, self.fecha_compromiso), changed_by=self.user)
+                apply_status(
+                    self.lead, compute_status(self.resultado, self.fecha_compromiso),
+                    changed_by=self.user, permitir_degradar=not self.origen_masivo,
+                )
                 # El resultado puede marcar el dato usado (no existe / blacklist / apaga whatsapp) y,
                 # si el lead se queda sin datos activos, dejarlo inubicable.
                 aplicar_efecto_demografico(self)
@@ -690,3 +704,157 @@ class ReporteTannerJob(models.Model):
     @property
     def en_curso(self):
         return self.estado in (self.PENDIENTE, self.PROCESANDO)
+
+
+class ReporteOmegaJob(models.Model):
+    """
+    "Gestiones Tanner a Omega" de UN dia. Se procesa en el WORKER, no en el proceso web: armaba el
+    Excel del dia completo dentro del mismo request-response, igual que el reporte Tanner antes de
+    moverse al worker -- un dia de mucho volumen puede repetir el mismo 504 del proxy de Azure.
+    """
+    PENDIENTE = 'pendiente'
+    PROCESANDO = 'procesando'
+    LISTO = 'listo'
+    VACIO = 'vacio'
+    ERROR = 'error'
+    CHOICES_ESTADO = [
+        (PENDIENTE, _('En cola')),
+        (PROCESANDO, _('Procesando')),
+        (LISTO, _('Listo para descargar')),
+        (VACIO, _('Sin gestiones de Tanner ese día')),
+        (ERROR, _('Falla del servidor')),
+    ]
+
+    solicitado_por = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reportes_omega')
+    fecha = models.DateField()
+    archivo = models.FileField(upload_to='reportes/omega/%Y/%m/', blank=True)
+    estado = models.CharField(max_length=12, choices=CHOICES_ESTADO, default=PENDIENTE)
+    total_filas = models.PositiveIntegerField(default=0)
+    # Gestiones cuyo resultado no tiene equivalente confirmado en Omega -- se excluyen del
+    # archivo principal y quedan listadas en la segunda hoja "Excluidas". Ver actions/omega_report.py.
+    total_excluidas = models.PositiveIntegerField(default=0)
+    mensaje = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = _('Reporte Tanner a Omega')
+        verbose_name_plural = _('Reportes Tanner a Omega')
+
+    def __str__(self):
+        return f"Reporte Omega #{self.pk} ({self.fecha})"
+
+    @property
+    def en_curso(self):
+        return self.estado in (self.PENDIENTE, self.PROCESANDO)
+
+
+def _parse_emails(raw):
+    """'a@x.com, b@y.com' -> ['a@x.com', 'b@y.com']. Filtra vacios; no valida formato (eso lo hace
+    el form al guardar, ver actions/forms_reportes.py) -- este helper solo parsea para el envio."""
+    return [e.strip() for e in (raw or '').split(',') if e.strip()]
+
+
+class ReporteAutomaticoConfig(models.Model):
+    """
+    Configuracion de un reporte de gestiones que se envia por email de forma automatica y
+    periodica (actions/tasks.py: despachar_reportes_automaticos + enviar_reporte_automatico).
+    Vive en /dashboard/carteras/<id>/ -- una cartera puede tener varias configs (ej. una diaria
+    para uso interno y otra semanal para el cliente).
+
+    El remitente real NO es TurboTubo (SaaS): es el CLIENTE de TurboTubo (ej. Zona Sur/Viared)
+    enviando desde su propia casilla -- a la financiera/banco la contrata el cliente, no nosotros.
+    Ver metodo_envio y actions/email_reportes.py.
+    """
+    TIPO_ESTANDAR = 'estandar'
+    TIPO_GENERICO = 'generico'
+    CHOICES_TIPO_REPORTE = [
+        (TIPO_ESTANDAR, 'Estándar (regulatorio)'),
+        (TIPO_GENERICO, 'Genérico'),
+    ]
+
+    PERIODICIDAD_DIARIA = 'diaria'
+    PERIODICIDAD_SEMANAL = 'semanal'
+    PERIODICIDAD_CADA_X_DIAS = 'cada_x_dias'
+    CHOICES_PERIODICIDAD = [
+        (PERIODICIDAD_DIARIA, 'Diaria'),
+        (PERIODICIDAD_SEMANAL, 'Semanal'),
+        (PERIODICIDAD_CADA_X_DIAS, 'Cada X días'),
+    ]
+
+    METODO_SMTP = 'smtp'
+    # Placeholder: el modelo ya deja lugar para envio via Azure Communication Services (cuando
+    # TurboTubo mismo sea el remitente), pero no esta implementado -- el form solo ofrece SMTP.
+    METODO_AZURE_ACS = 'azure_acs'
+    CHOICES_METODO_ENVIO = [
+        (METODO_SMTP, 'SMTP (casilla propia)'),
+        (METODO_AZURE_ACS, 'Azure Communication Services (próximamente)'),
+    ]
+
+    ESTADO_OK = 'ok'
+    ESTADO_ERROR = 'error'
+    ESTADO_SIN_DATOS = 'sin_datos'
+    CHOICES_ULTIMO_ESTADO = [
+        (ESTADO_OK, 'Enviado'),
+        (ESTADO_ERROR, 'Error'),
+        (ESTADO_SIN_DATOS, 'Sin gestiones en el rango'),
+    ]
+
+    cartera = models.ForeignKey(Cartera, on_delete=models.CASCADE, related_name='reportes_automaticos')
+    # Vacio (sin filas) = cartera completa; con filas = solo esas subcarteras. M2M en vez de un
+    # boolean "toda_la_cartera" + FK opcional: el vacio ya representa "toda la cartera" sin campo
+    # extra ambiguo.
+    subcarteras = models.ManyToManyField('cartera.Subcartera', blank=True, related_name='reportes_automaticos')
+
+    tipo_reporte = models.CharField(max_length=12, choices=CHOICES_TIPO_REPORTE, default=TIPO_GENERICO)
+    periodicidad = models.CharField(max_length=12, choices=CHOICES_PERIODICIDAD, default=PERIODICIDAD_DIARIA)
+    cada_x_dias = models.PositiveSmallIntegerField(default=1)  # solo si periodicidad == CADA_X_DIAS
+    saltar_fines_de_semana = models.BooleanField(
+        default=False, help_text='No enviar sábado ni domingo, aunque la periodicidad indique que corresponde.',
+    )
+    hora_envio = models.TimeField(default=time(8, 0), help_text='Hora local (America/Santiago) de envío.')
+
+    destinatarios_to = models.TextField(help_text='Emails separados por coma. Ej: data@cliente.com')
+    destinatarios_cc = models.TextField(blank=True)
+    destinatarios_cco = models.TextField(
+        blank=True, help_text='Con copia oculta -- ej. dueños o supervisores que quieren registro sin que el resto lo sepa.',
+    )
+
+    metodo_envio = models.CharField(max_length=12, choices=CHOICES_METODO_ENVIO, default=METODO_SMTP)
+    remitente_from = models.EmailField(blank=True, help_text='Vacío = usa el remitente por defecto del sistema.')
+    asunto_personalizado = models.CharField(max_length=255, blank=True)
+
+    activo = models.BooleanField(default=True)
+    creado_por = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name='reportes_automaticos_creados',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    actualizado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    ultima_ejecucion_at = models.DateTimeField(null=True, blank=True)
+    # Fecha/hora del ULTIMO ENVIO EXITOSO (no de cualquier intento) -- es el punto de partida del
+    # rango acumulado del proximo envio (ver actions/reportes_automaticos.py: rango_pendiente).
+    # Distinto de ultima_ejecucion_at: un intento con error o sin_datos no debe "adelantar" el
+    # rango, o se perderian gestiones de los dias intermedios.
+    ultimo_envio_ok_at = models.DateTimeField(null=True, blank=True)
+    ultimo_estado = models.CharField(max_length=10, choices=CHOICES_ULTIMO_ESTADO, blank=True)
+    ultimo_mensaje = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Reporte automático'
+        verbose_name_plural = 'Reportes automáticos'
+
+    def __str__(self):
+        return f"Reporte automático #{self.pk} ({self.cartera.nombre})"
+
+    def to_list(self):
+        return _parse_emails(self.destinatarios_to)
+
+    def cc_list(self):
+        return _parse_emails(self.destinatarios_cc)
+
+    def cco_list(self):
+        return _parse_emails(self.destinatarios_cco)

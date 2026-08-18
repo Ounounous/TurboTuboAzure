@@ -851,8 +851,9 @@ class RecordingsExportDownloadView(SupervisorRequiredMixin, View):
 
 from .tanner_report import (
     TANNER_GESTOR_CODIGO, TANNER_ORIGEN_GESTION_DEFAULT, TANNER_TIPO_GESTION_DEFAULT,
-    construir_lineas, gestiones_del_dia, nombre_archivo as _tanner_nombre_archivo,
-    nombre_ejecutivo as _ejecutivo_nombre_tanner,
+    construir_lineas, formatear_telefono as _format_tanner_phone, gestiones_del_dia,
+    nombre_archivo as _tanner_nombre_archivo, nombre_ejecutivo as _ejecutivo_nombre_tanner,
+    resultados_sin_codigo,
 )
 
 
@@ -881,8 +882,8 @@ class TannerReportView(SupervisorRequiredMixin, View):
             return JsonResponse({'error': 'Fecha invalida. Usa el formato YYYY-MM-DD.'}, status=400)
 
         subcartera_id = request.GET.get('subcartera')
-        actions = gestiones_del_dia(fecha, request.user, subcartera_id)
-        if not actions.exists():
+        actions = list(gestiones_del_dia(fecha, request.user, subcartera_id))
+        if not actions:
             return JsonResponse({'error': 'No hay gestiones de Tanner para esa fecha.'}, status=404)
 
         content = '\r\n'.join(construir_lineas(actions)) + '\r\n'
@@ -891,8 +892,22 @@ class TannerReportView(SupervisorRequiredMixin, View):
 
         response = HttpResponse(content, content_type='text/plain; charset=utf-8')
         response['Content-Disposition'] = f'attachment; filename={filename}'
+
+        detail = f"Fecha {fecha:%d-%m-%Y}"
+        sin_codigo = resultados_sin_codigo(actions)
+        if sin_codigo:
+            # Es una descarga directa (la respuesta ES el archivo, sin pantalla siguiente donde
+            # mostrar un aviso) -- el rastro auditable queda en AccessLog y en el log del server,
+            # que es lo que ya existe para revisar despues. El archivo se genera igual: no enviar
+            # nada a Tanner por un solo resultado mal configurado seria peor.
+            nombres = sorted({a.resultado.nombre for a in sin_codigo})
+            detail += f" — {len(sin_codigo)} gestión(es) con código de resultado vacío: {', '.join(nombres)}"
+            logger.warning(
+                f"TannerReportView {fecha}: {len(sin_codigo)} gestión(es) con Resultado.codigo "
+                f"vacío en el archivo generado — {', '.join(nombres)}"
+            )
         from configuracion.models import AccessLog, registrar_acceso
-        registrar_acceso(request.user, AccessLog.EXPORTAR_TANNER, detail=f"Fecha {fecha:%d-%m-%Y}")
+        registrar_acceso(request.user, AccessLog.EXPORTAR_TANNER, detail=detail)
         return response
 
 
@@ -982,76 +997,78 @@ class TannerReportRangeDownloadView(SupervisorRequiredMixin, View):
 
 class TannerOmegaReportView(SupervisorRequiredMixin, View):
     """
-    "Gestiones Tanner a Omega": convierte las gestiones de un dia de Tanner al formato de carga
-    masiva del sistema anterior (Omega) -- RUT, FECHA, ACCION, ESTADO, EMAIL, TELEFONO,
+    "Gestiones Tanner a Omega": encola la conversion de un dia de gestiones de Tanner al formato
+    de carga masiva del sistema anterior (Omega) -- RUT, FECHA, ACCION, ESTADO, EMAIL, TELEFONO,
     COMENTARIO, SUBESTADO. Para el traspaso de cobradores a produccion real: mientras Omega siga
     en uso, las gestiones hechas en TurboTubo tienen que poder subirse ahi tambien.
+
+    Se procesa en el WORKER (no en el request-response): un dia de mucho volumen de campana puede
+    tardar lo suficiente para repetir el 504 del proxy de Azure que ya obligo a mover la carga
+    masiva y el reporte por rango al worker.
 
     El mapeo de codigo Tanner -> (Accion, SubEstado, Estado) de Omega vive en
     actions/omega_report.py, validado contra 55.266 gestiones reales del sistema anterior. Las
     gestiones cuyo resultado no tiene equivalente confirmado se EXCLUYEN del archivo (no se
-    adivina) y se avisan en la respuesta.
+    adivina) y quedan listadas en una segunda hoja del mismo Excel.
     """
 
-    def get(self, request, *args, **kwargs):
-        from .omega_report import construir_filas, gestiones_del_dia, rut_sin_dv
+    def post(self, request, *args, **kwargs):
+        from .models import ReporteOmegaJob
+        from .tasks import generar_reporte_omega
 
-        fecha_str = request.GET.get('fecha')
-        if not fecha_str:
-            return JsonResponse({'error': 'Debes indicar una fecha (YYYY-MM-DD).'}, status=400)
-        fecha = parse_date(fecha_str)
+        fecha_str = request.POST.get('fecha')
+        fecha = parse_date(fecha_str) if fecha_str else None
         if not fecha:
-            return JsonResponse({'error': 'Fecha inválida. Usa el formato YYYY-MM-DD.'}, status=400)
+            messages.error(request, 'Indica una fecha válida (YYYY-MM-DD).')
+            return redirect('actions:index')
 
-        actions = gestiones_del_dia(fecha)
-        if not actions.exists():
-            return JsonResponse({'error': 'No hay gestiones de Tanner para esa fecha.'}, status=404)
+        job = ReporteOmegaJob.objects.create(solicitado_por=request.user, fecha=fecha)
+        try:
+            generar_reporte_omega.delay(job.pk)
+        except Exception:
+            logger.exception('No se pudo encolar generar_reporte_omega; queda pendiente.')
 
-        filas, bloqueados = construir_filas(actions)
-        if not filas:
-            detalle = ', '.join(sorted({a.resultado.nombre for a in bloqueados}))
-            return JsonResponse({
-                'error': f'Ninguna gestión de ese día tiene un resultado con equivalente '
-                         f'confirmado en Omega. Resultados sin mapear: {detalle}.'
-            }, status=404)
-
-        wb = Workbook()
-        ws = wb.active
-        ws.title = 'Datos'
-        ws.append(['RUT', 'FECHA', 'ACCION', 'ESTADO', 'EMAIL', 'TELEFONO', 'COMENTARIO', 'SUBESTADO'])
-        for fila in filas:
-            ws.append(fila)
-        for row in ws.iter_rows(min_row=2, min_col=2, max_col=2):
-            row[0].number_format = 'm/d/yy h:mm'
-
-        if bloqueados:
-            # La respuesta es el archivo mismo (navegacion directa del navegador, sin pantalla
-            # intermedia): el aviso de que gestiones quedaron fuera va en una segunda hoja, para
-            # que quien lo abra lo vea de inmediato en vez de asumir que el archivo esta completo.
-            ws2 = wb.create_sheet('Excluidas (sin mapeo a Omega)')
-            ws2.append(['OP', 'RUT', 'Código resultado', 'Resultado', 'Motivo'])
-            for a in bloqueados:
-                ws2.append([
-                    a.lead.op, rut_sin_dv(a.lead), a.resultado.codigo, a.resultado.nombre,
-                    'Sin equivalente confirmado en Omega — súbela a mano si corresponde.',
-                ])
-            ws2.column_dimensions['D'].width = 40
-            ws2.column_dimensions['E'].width = 55
-
-        output = BytesIO()
-        wb.save(output)
-        output.seek(0)
-
-        filename = f"{fecha:%Y%m%d}_tanner_a_omega.xlsx"
-        response = HttpResponse(
-            output.read(),
-            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        messages.success(
+            request,
+            'Estamos generando el archivo para Omega de ese día. Aparecerá para descargar en '
+            '"Reportes Tanner a Omega" en cuanto esté listo (no necesitas esperar aquí).'
         )
-        response['Content-Disposition'] = f'attachment; filename={filename}'
+        return redirect('actions:tanner_omega_list')
+
+
+class TannerOmegaReportListView(SupervisorRequiredMixin, ListView):
+    """Lista los reportes Tanner a Omega pedidos (los propios; admin/owner ven todos)."""
+    template_name = 'actions/tanner_omega_list.html'
+    context_object_name = 'jobs'
+    paginate_by = 20
+
+    def get_queryset(self):
+        from .models import ReporteOmegaJob
+        qs = ReporteOmegaJob.objects.select_related('solicitado_por')
+        if not es_admin_owner(self.request.user):
+            qs = qs.filter(solicitado_por=self.request.user)
+        return qs
+
+
+class TannerOmegaReportDownloadView(SupervisorRequiredMixin, View):
+    """Descarga el Excel ya generado. Solo el dueño del job (o admin/owner)."""
+
+    def get(self, request, *args, **kwargs):
+        from .models import ReporteOmegaJob
+        job = get_object_or_404(ReporteOmegaJob, pk=kwargs.get('pk'))
+        if job.solicitado_por_id != request.user.pk and not es_admin_owner(request.user):
+            raise PermissionDenied
+        if job.estado != ReporteOmegaJob.LISTO or not job.archivo:
+            messages.error(request, 'Ese reporte todavía no está listo.')
+            return redirect('actions:tanner_omega_list')
 
         from configuracion.models import AccessLog, registrar_acceso
-        registrar_acceso(request.user, AccessLog.EXPORTAR_TANNER_OMEGA, detail=f"Fecha {fecha:%d-%m-%Y}")
-        return response
+        registrar_acceso(request.user, AccessLog.EXPORTAR_TANNER_OMEGA, detail=f"Fecha {job.fecha:%d-%m-%Y}")
+        return FileResponse(
+            job.archivo.open('rb'), as_attachment=True,
+            filename=f'{job.fecha:%Y%m%d}_tanner_a_omega.xlsx',
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
 
 
 def _rango_semana_mes(today):

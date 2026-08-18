@@ -59,7 +59,9 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'rest_framework',
     'actions',
+    'api',
     'cartera',
     'configuracion',
     'core',
@@ -109,6 +111,44 @@ PBX_ENCRYPTION_KEY = os.environ.get('PBX_ENCRYPTION_KEY', '')
 PBX_MASTER_EMAIL = os.environ.get('PBX_MASTER_EMAIL', '')
 PBX_MASTER_PASSWORD = os.environ.get('PBX_MASTER_PASSWORD', '')
 
+# API de solo lectura (/api/1.0/) para motores de campaña externos -- ver CONTRATO_API_v1.md.
+# Sin SessionAuthentication/BasicAuthentication: la API es maquina a maquina (api.ApiKeyAuthentication),
+# nunca comparte sesion con /dashboard/. Throttle scope 'api_lectura' aplica a todos los endpoints
+# desde el primer dia (ver plan de riesgos, seccion "Carga sobre produccion").
+# ApiClientRateThrottle (no ScopedRateThrottle de DRF): la identidad es el ApiClient autenticado,
+# no la IP -- request.user queda AnonymousUser a proposito (auth maquina a maquina), asi que
+# ScopedRateThrottle caia siempre a la IP, y sin NUM_PROXIES configurado esa IP sale del
+# X-Forwarded-For crudo que el propio cliente controla (bypass total del limite, auditoria de
+# riesgos hallazgo 4).
+# Cuantos proxies de confianza hay delante de la app (Azure App Service: uno). Sin esto, DRF
+# get_ident() (usado por cualquier throttle que caiga a IP -- hoy ninguno para api_lectura, pero
+# es la config correcta por si se agrega otro) toma el X-Forwarded-For CRUDO y completo, que el
+# cliente controla enteramente. Con NUM_PROXIES=1, toma el penultimo valor (el que agrega el
+# proxy de confianza, no falsificable) -- mismo criterio que userprofile/forms.py::_client_ip.
+API_NUM_PROXIES = int(os.environ.get('API_NUM_PROXIES', '1'))
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': ['api.authentication.ApiKeyAuthentication'],
+    'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.IsAuthenticated'],
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 50,
+    'DEFAULT_THROTTLE_CLASSES': ['api.throttling.ApiClientRateThrottle'],
+    'DEFAULT_THROTTLE_RATES': {
+        'api_lectura': '120/min',
+    },
+    'NUM_PROXIES': API_NUM_PROXIES,
+}
+
+# Frenos de contencion del webhook de escritura (api/freno_demografico.py, Fase 4 + auditoria de
+# riesgos hallazgo 2): cuantos eventos se toleran en la ventana antes de dejar de procesar. Ver
+# plan de riesgos, "Efecto demografico en cascada" -- un motor mal calibrado reportando rebotes en
+# masa puede apagar miles de telefonos/correos de un golpe. El de VOLUMEN cuenta cualquier evento
+# aplicado (no solo los que tocan demografia) -- sin el, una descalibracion masiva sobre resultados
+# sin efecto_demografia (hoy ningun mapeo Tanner/Galgo lo tiene) no la frenaba nada.
+WEBHOOK_FRENO_DEMOGRAFICO_UMBRAL = int(os.environ.get('WEBHOOK_FRENO_DEMOGRAFICO_UMBRAL', '50'))
+WEBHOOK_FRENO_VOLUMEN_UMBRAL = int(os.environ.get('WEBHOOK_FRENO_VOLUMEN_UMBRAL', '200'))
+WEBHOOK_FRENO_DEMOGRAFICO_VENTANA_MINUTOS = int(os.environ.get('WEBHOOK_FRENO_DEMOGRAFICO_VENTANA_MINUTOS', '10'))
+
 CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0')
 # Sin backend de resultados: el codigo nunca lee el retorno/estado de una tarea (no hay
 # AsyncResult.get()/.ready()/.state en ningun lado), asi que guardarlos era puro overhead que
@@ -118,6 +158,19 @@ CELERY_RESULT_BACKEND = None
 CELERY_TASK_IGNORE_RESULT = True
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 CELERY_TIMEZONE = 'America/Santiago'
+
+# Email saliente (reportes automatizados, actions/email_reportes.py). El remitente real NO es
+# TurboTubo (SaaS): es la casilla propia del CLIENTE (ej. Viared/Zona Sur) -- a la financiera la
+# contrata el cliente, no nosotros. Hoy solo SMTP; el dia que se sume envio via Azure
+# Communication Services, cambia el backend/config aca, no la logica de armado del email
+# (actions/email_reportes.py usa la API estandar de EmailMessage de Django).
+EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend')
+EMAIL_HOST = os.environ.get('EMAIL_HOST', '')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True') == 'True'
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
 
 # Cache compartido entre workers (Redis, mismo host que Celery). Necesario para que el throttle
 # de login (userprofile/forms.py) funcione de verdad en produccion: con el cache en memoria

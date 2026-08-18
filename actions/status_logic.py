@@ -22,8 +22,19 @@ def compute_status(resultado, fecha_compromiso):
     return Lead.NO_CONTACTADO
 
 
-def apply_status(lead, new_status, changed_by=None):
-    """Actualiza status actual + historico (si new_status es mejor) y deja registro en el log."""
+def apply_status(lead, new_status, changed_by=None, permitir_degradar=True):
+    """
+    Actualiza status actual + historico (si new_status es mejor) y deja registro en el log.
+
+    permitir_degradar=False (usado por gestiones de campana masiva, ver Action.origen_masivo):
+    si new_status tiene un rango MENOR al status actual del lead, no se aplica -- "no entregado"
+    de un SMS masivo no es informacion nueva sobre contactabilidad real, y no debe poder bajar a
+    un lead que un gestor humano ya avanzo a compromiso/pagando. Un gestor humano SI puede
+    degradar a proposito (ej. "no contactado" tras un intento fallido real), por eso el default
+    sigue siendo True -- este parametro es la excepcion, no la regla general.
+    """
+    if not permitir_degradar and Lead.STATUS_RANK[new_status] < Lead.STATUS_RANK.get(lead.status, 0):
+        return
     lead.status = new_status
     if Lead.STATUS_RANK[new_status] > Lead.STATUS_RANK.get(lead.status_historico, 0):
         lead.status_historico = new_status
@@ -52,6 +63,25 @@ def _tiene_contacto_activo(lead):
             id_demographics__lead=OuterRef('pk'), aval_email_status=CONTACT_ACTIVE,
         ).exclude(aval_email='').exclude(aval_email__isnull=True)),
     ).filter(Q(_tel=True) | Q(_mail=True) | Q(_mail2=True) | Q(_aval=True)).exists()
+
+
+def revertir_al_dia(lead, changed_by=None):
+    """
+    Deshace un "al dia" puesto por error: saca al lead de TERMINADO (vuelve a ACTIVO, ver
+    lead.lifecycle.reactivar) y recalcula su status a partir de la ULTIMA gestion real (Action),
+    igual que si esa gestion se acabara de guardar -- no un valor fijo. Sin gestiones previas,
+    cae al default de compute_status (no_contactado).
+    """
+    from lead.lifecycle import reactivar
+
+    reactivar(lead, changed_by=changed_by)
+
+    ultima_action = lead.actions.select_related('resultado').first()
+    if ultima_action and ultima_action.resultado:
+        nuevo_status = compute_status(ultima_action.resultado, ultima_action.fecha_compromiso)
+    else:
+        nuevo_status = Lead.NO_CONTACTADO
+    apply_status(lead, nuevo_status, changed_by=changed_by)
 
 
 def recompute_inubicable(lead, changed_by=None):

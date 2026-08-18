@@ -229,13 +229,17 @@
             Solo cartera Tanner, un día. Convierte las gestiones al formato de carga masiva del
             sistema anterior (Omega), para subirlas allá durante el traspaso.
           </p>
-          <form method="GET" action="{% url 'actions:tanner_omega' %}" class="flex flex-wrap gap-3 items-end">
+          <form method="POST" action="{% url 'actions:tanner_omega' %}" class="flex flex-wrap gap-3 items-end">
+            {% csrf_token %}
             <div><label class="font-semibold block mb-1" for="fecha_tanner_omega">Fecha</label><input type="date" id="fecha_tanner_omega" name="fecha" required></div>
-            <button type="submit" class="btn btn-primary">Descargar .xlsx</button>
+            <button type="submit" class="btn btn-primary">Generar .xlsx</button>
           </form>
           <p class="muted mt-2" style="font-size:11.5px;">
-            Si alguna gestión no tiene equivalente confirmado en Omega, queda fuera del archivo
-            y listada en una segunda hoja ("Excluidas").
+            Se genera en segundo plano. Si alguna gestión no tiene equivalente confirmado en Omega,
+            queda fuera del archivo principal y listada en una segunda hoja ("Excluidas").
+          </p>
+          <p class="mt-2" style="font-size:12.5px;">
+            <a href="{% url 'actions:tanner_omega_list' %}" class="link">Ver mis reportes a Omega</a>
           </p>
         </div>
       </div>

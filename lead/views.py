@@ -351,6 +351,29 @@ class MarcarAlDiaView(LoginRequiredMixin, View):
         messages.success(request, f'{lead.op} marcado como al día.')
         return redirect('leads:detail', pk=lead.pk)
 
+
+class RevertirAlDiaView(LoginRequiredMixin, View):
+    """
+    Deshace un "al dia" puesto por error: saca al lead de TERMINADO y recalcula su status desde
+    la ultima gestion real (ver actions.status_logic.revertir_al_dia). Mismo gate de permisos
+    que MarcarAlDiaView -- es la contraparte de esa accion, no una edicion libre de status.
+    """
+    def post(self, request, pk, *args, **kwargs):
+        user_type = getattr(request.user.userprofile, 'user_type', '')
+        if user_type not in ('admin', 'owner', 'supervisor'):
+            raise PermissionDenied
+
+        from .permissions import leads_visibles
+        lead = get_object_or_404(leads_visibles(request.user), pk=pk)
+        if lead.status != Lead.AL_DIA:
+            messages.error(request, f'{lead.op} no está marcado como al día.')
+            return redirect('leads:detail', pk=lead.pk)
+
+        from actions.status_logic import revertir_al_dia
+        revertir_al_dia(lead, changed_by=request.user)
+        messages.success(request, f'{lead.op}: se revirtió "al día", vuelve a {lead.get_status_display()}.')
+        return redirect('leads:detail', pk=lead.pk)
+
 @login_required
 def status_changes_by_date(request, period='day'):
     # Fecha de inicio en la zona horaria local (evita perder cambios de las últimas horas

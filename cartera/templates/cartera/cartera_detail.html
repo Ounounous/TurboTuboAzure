@@ -96,6 +96,81 @@
     </div>
   {% endif %}
 
+  {% if puede_gestionar_subcarteras %}
+    <div class="card p-4 mb-6">
+      <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <h2 class="text-lg font-bold">Reportes automáticos</h2>
+        <a href="{% url 'cartera:reportes_automaticos' cartera.pk %}" class="btn btn-primary" style="font-size:12px; padding:5px 12px;">+ Agregar reporte automático</a>
+      </div>
+      {% if reportes_automaticos %}
+        <div class="overflow-x-auto">
+          <table class="table-dense">
+            <thead>
+              <tr>
+                <th>Alcance</th><th>Tipo</th><th>Periodicidad</th><th>Destinatarios</th>
+                <th>Activo</th><th>Último envío</th><th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in reportes_automaticos %}
+                <tr>
+                  <td>
+                    {% with subs=r.subcarteras.all %}
+                      {% if subs %}
+                        <span title="{% for s in subs %}{{ s.nombre }}{% if not forloop.last %}, {% endif %}{% endfor %}">{{ subs|length }} subcartera(s)</span>
+                      {% else %}
+                        <span class="dot-st"><span class="d st-blue"></span>Toda la cartera</span>
+                      {% endif %}
+                    {% endwith %}
+                  </td>
+                  <td>{{ r.get_tipo_reporte_display }}</td>
+                  <td>
+                    {{ r.get_periodicidad_display }}{% if r.periodicidad == 'cada_x_dias' %} ({{ r.cada_x_dias }}d){% endif %}
+                    {% if r.saltar_fines_de_semana %}<br><span class="muted" style="font-size:11px;">sin fines de semana</span>{% endif %}
+                    <br><span class="muted" style="font-size:11px;">{{ r.hora_envio|time:"H:i" }}</span>
+                  </td>
+                  <td style="max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="TO: {{ r.destinatarios_to }}{% if r.destinatarios_cc %}&#10;CC: {{ r.destinatarios_cc }}{% endif %}{% if r.destinatarios_cco %}&#10;CCO: {{ r.destinatarios_cco }}{% endif %}">
+                    {{ r.destinatarios_to }}
+                  </td>
+                  <td>
+                    <form method="post" action="{% url 'cartera:reporte_automatico_toggle' cartera.pk r.pk %}" style="margin:0;">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-secondary" style="font-size:11px; padding:3px 8px;">
+                        {% if r.activo %}<span class="dot-st"><span class="d st-green"></span>Sí</span>{% else %}<span class="muted">No</span>{% endif %}
+                      </button>
+                    </form>
+                  </td>
+                  <td title="{{ r.ultimo_mensaje }}">
+                    {% if r.ultima_ejecucion_at %}
+                      {{ r.ultima_ejecucion_at|date:"d-m-Y H:i" }}
+                      {% if r.ultimo_estado == 'ok' %}<br><span class="dot-st"><span class="d st-green"></span>Enviado</span>
+                      {% elif r.ultimo_estado == 'error' %}<br><span class="dot-st"><span class="d st-red"></span>Error</span>
+                      {% elif r.ultimo_estado == 'sin_datos' %}<br><span class="dot-st"><span class="d st-amber"></span>Sin datos</span>
+                      {% endif %}
+                    {% else %}
+                      <span class="muted">Nunca</span>
+                    {% endif %}
+                  </td>
+                  <td style="display:flex; gap:6px; flex-wrap:wrap;">
+                    <a href="{% url 'cartera:reporte_automatico_edit' cartera.pk r.pk %}" class="btn btn-secondary" style="font-size:11px; padding:3px 8px;">Editar</a>
+                    <form method="post" action="{% url 'cartera:reporte_automatico_test_send' cartera.pk r.pk %}" style="margin:0;">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-secondary" style="font-size:11px; padding:3px 8px;">Enviar de prueba</button>
+                    </form>
+                    <form id="del_reporte_{{ r.pk }}" method="post" action="{% url 'cartera:reporte_automatico_delete' cartera.pk r.pk %}" style="margin:0;">{% csrf_token %}</form>
+                    <a href="#" onclick="if(confirm('¿Eliminar este reporte automático?')){document.getElementById('del_reporte_{{ r.pk }}').submit();} return false;" class="btn btn-danger" style="font-size:11px; padding:3px 8px;">Eliminar</a>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="empty-state">No hay reportes automáticos configurados todavía.</p>
+      {% endif %}
+    </div>
+  {% endif %}
+
   {% if medios or resultados %}
   <details class="card p-4" style="border: 1px solid var(--border); border-radius: 10px;">
     <summary style="cursor: pointer; font-size: 1.05rem; font-weight: 800; margin: 0; user-select: none;">

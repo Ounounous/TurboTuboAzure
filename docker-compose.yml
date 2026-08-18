@@ -1,21 +1,33 @@
+# Credenciales parametrizadas via .env (auditoria de riesgos, hallazgo 18): el default
+# "turbotubo" solo sirve para no romper el flujo local existente si no hay .env -- si este
+# compose alguna vez sirve de base para un ambiente remoto, definir DB_PASSWORD/REDIS_PASSWORD
+# reales en el .env de ese ambiente es obligatorio, no opcional.
 services:
   db:
     image: postgres:16
     restart: unless-stopped
     environment:
-      POSTGRES_DB: turbotubo
-      POSTGRES_USER: turbotubo
-      POSTGRES_PASSWORD: turbotubo
+      POSTGRES_DB: ${DB_NAME:-turbotubo}
+      POSTGRES_USER: ${DB_USER:-turbotubo}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-turbotubo}
     ports:
-      - "5432:5432"
+      # Solo loopback: sin esto, Docker Desktop publica en 0.0.0.0 y salta el firewall de
+      # Windows (NAT de WSL2/Hyper-V), exponiendo Postgres a toda la red.
+      - "127.0.0.1:5432:5432"
     volumes:
       - turbotubo_pgdata:/var/lib/postgresql/data
 
   redis:
     image: redis:7
     restart: unless-stopped
+    # Sin requirepass, cualquier proceso local (incluido codigo de terceros va npm/node_modules)
+    # podia leer/escribir la cola de Celery y el cache de throttle. REDIS_PASSWORD vacio por
+    # defecto no rompe el flujo local existente (CELERY_BROKER_URL en settings.py no manda
+    # password hoy) -- definir REDIS_PASSWORD en .env y agregarlo a CELERY_BROKER_URL/
+    # CACHE_REDIS_URL (redis://:<password>@localhost:6379/0) para que quede protegido de verdad.
+    command: redis-server --requirepass "${REDIS_PASSWORD:-}"
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
 
 volumes:
   turbotubo_pgdata:

@@ -1,11 +1,15 @@
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import Action, Medio, Resultado, PendingPbxCall, CallRecording, PaymentCommitment, Payment
+from .models import (
+    Action, Medio, Resultado, PendingPbxCall, CallRecording, PaymentCommitment, Payment,
+    GrabacionesExportJob, CargaGestionesJob, ReporteTannerJob, ReporteOmegaJob,
+)
 
 
 class MedioAdmin(admin.ModelAdmin):
     list_display = ('nombre', 'cartera', 'canal', 'codigo', 'es_llamada', 'es_inbound', 'permite_manual')
     list_filter = ('cartera', 'canal', 'es_llamada', 'es_inbound', 'permite_manual')
+    search_fields = ('nombre', 'codigo', 'cartera__nombre')
     list_editable = ('permite_manual',)
 
 
@@ -149,3 +153,58 @@ admin.site.register(PendingPbxCall, PendingPbxCallAdmin)
 admin.site.register(CallRecording, CallRecordingAdmin)
 admin.site.register(PaymentCommitment, PaymentCommitmentAdmin)
 admin.site.register(Payment, PaymentAdmin)
+
+
+# Registrados sobre todo para poder borrar/consultar a mano un job que quedo atascado (ej. un
+# mensaje de Celery perdido en un deploy) sin necesitar acceso al servidor -- mismo motivo y
+# mismo patron que ContactExportJobAdmin (demographics/admin.py).
+@admin.register(GrabacionesExportJob)
+class GrabacionesExportJobAdmin(admin.ModelAdmin):
+    list_display = ('id', 'estado', 'solicitado_por', 'total', 'created_at', 'finished_at')
+    list_filter = ('estado',)
+    search_fields = ('solicitado_por__username',)
+    readonly_fields = (
+        'solicitado_por', 'excel', 'archivo', 'total', 'errores', 'created_at', 'finished_at',
+    )
+
+
+@admin.register(CargaGestionesJob)
+class CargaGestionesJobAdmin(admin.ModelAdmin):
+    list_display = (
+        'id', 'estado', 'solicitado_por', 'total_filas', 'creadas', 'omitidas_duplicadas',
+        'created_at', 'finished_at',
+    )
+    list_filter = ('estado',)
+    search_fields = ('solicitado_por__username',)
+    readonly_fields = (
+        'solicitado_por', 'excel', 'archivo_errores', 'total_filas', 'creadas',
+        'omitidas_duplicadas', 'mensaje', 'created_at', 'finished_at',
+    )
+
+
+@admin.register(ReporteTannerJob)
+class ReporteTannerJobAdmin(admin.ModelAdmin):
+    list_display = (
+        'id', 'estado', 'solicitado_por', 'fecha_desde', 'fecha_hasta', 'subcartera',
+        'total_gestiones', 'created_at', 'finished_at',
+    )
+    list_filter = ('estado', 'subcartera')
+    search_fields = ('solicitado_por__username',)
+    readonly_fields = (
+        'solicitado_por', 'fecha_desde', 'fecha_hasta', 'subcartera', 'archivo',
+        'total_gestiones', 'dias_con_datos', 'mensaje', 'created_at', 'finished_at',
+    )
+
+
+@admin.register(ReporteOmegaJob)
+class ReporteOmegaJobAdmin(admin.ModelAdmin):
+    list_display = (
+        'id', 'estado', 'solicitado_por', 'fecha', 'total_filas', 'total_excluidas',
+        'created_at', 'finished_at',
+    )
+    list_filter = ('estado',)
+    search_fields = ('solicitado_por__username',)
+    readonly_fields = (
+        'solicitado_por', 'fecha', 'archivo', 'total_filas', 'total_excluidas', 'mensaje',
+        'created_at', 'finished_at',
+    )

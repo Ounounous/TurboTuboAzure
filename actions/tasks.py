@@ -889,11 +889,12 @@ def generar_reporte_tanner_rango(job_id):
         total = 0
         dias_con_datos = 0
 
+        advertencias = []
         with zipfile.ZipFile(spool, 'w', zipfile.ZIP_DEFLATED) as zf:
             consolidado = []
             fecha = job.fecha_desde
             while fecha <= job.fecha_hasta:
-                contenido, cantidad = contenido_del_dia(
+                contenido, cantidad, advertencia = contenido_del_dia(
                     fecha, job.solicitado_por, job.subcartera_id,
                 )
                 if cantidad:
@@ -901,6 +902,8 @@ def generar_reporte_tanner_rango(job_id):
                     consolidado.append(contenido)
                     total += cantidad
                     dias_con_datos += 1
+                if advertencia:
+                    advertencias.append(f"{fecha:%d-%m-%Y}: {advertencia}")
                 fecha += datetime.timedelta(days=1)
 
             if consolidado:
@@ -927,6 +930,14 @@ def generar_reporte_tanner_rango(job_id):
                 f'{total} gestión(es) en {dias_con_datos} día(s) con datos. '
                 'El ZIP trae un .txt por día (nombre oficial de Tanner) y un consolidado.'
             )
+            if advertencias:
+                # No bloquea la generacion (el archivo ya se envio/esta listo) -- pero deja
+                # constancia visible en la lista de reportes, para revisar antes de mandarlo.
+                job.mensaje += ' ATENCIÓN: ' + ' | '.join(advertencias)
+                logger.warning(
+                    f"generar_reporte_tanner_rango: job {job_id} con resultados sin código: "
+                    f"{' | '.join(advertencias)}"
+                )
     except Exception:
         logger.exception(f"generar_reporte_tanner_rango: falló el job {job_id}")
         job.estado = ReporteTannerJob.ERROR
@@ -938,4 +949,144 @@ def generar_reporte_tanner_rango(job_id):
     job.finished_at = timezone.now()
     job.save(update_fields=[
         'estado', 'total_gestiones', 'dias_con_datos', 'mensaje', 'archivo', 'finished_at',
+    ])
+
+
+@shared_task(**RETRY_DB)
+def generar_reporte_omega(job_id):
+    """
+    Arma el Excel "Gestiones Tanner a Omega" de UN dia en el WORKER. Antes se armaba en el proceso
+    web dentro del mismo request-response; un dia de mucho volumen de campana puede tardar lo
+    suficiente para repetir el 504 del proxy de Azure que ya obligo a mover la carga masiva y el
+    reporte por rango al worker.
+    """
+    from io import BytesIO
+
+    from django.core.files.base import ContentFile
+
+    from actions.models import ReporteOmegaJob
+    from actions.omega_report import construir_workbook
+
+    try:
+        job = ReporteOmegaJob.objects.select_related('solicitado_por').get(pk=job_id)
+    except ReporteOmegaJob.DoesNotExist:
+        logger.warning(f"generar_reporte_omega: job {job_id} no existe (¿se borró?)")
+        return
+
+    job.estado = ReporteOmegaJob.PROCESANDO
+    job.save(update_fields=['estado'])
+
+    try:
+        wb, total_filas, total_excluidas = construir_workbook(job.fecha)
+
+        if wb is None:
+            job.estado = ReporteOmegaJob.VACIO
+            job.mensaje = 'No hay gestiones de Tanner para esa fecha.'
+        else:
+            output = BytesIO()
+            wb.save(output)
+            job.total_filas = total_filas
+            job.total_excluidas = total_excluidas
+            job.archivo.save(f"{job.fecha:%Y%m%d}_tanner_a_omega.xlsx", ContentFile(output.getvalue()), save=False)
+            job.estado = ReporteOmegaJob.LISTO
+            if total_filas == 0:
+                job.mensaje = (
+                    f'Ninguna gestión de ese día tiene un resultado con equivalente confirmado en '
+                    f'Omega. Las {total_excluidas} gestión(es) del día quedaron listadas en la hoja '
+                    f'"Excluidas".'
+                )
+            else:
+                job.mensaje = f'{total_filas} fila(s).'
+                if total_excluidas:
+                    job.mensaje += f' {total_excluidas} gestión(es) excluida(s), ver hoja "Excluidas".'
+    except Exception:
+        logger.exception(f"generar_reporte_omega: falló el job {job_id}")
+        job.estado = ReporteOmegaJob.ERROR
+        job.mensaje = 'Falla del servidor generando el archivo. Reintenta o avisa a soporte.'
+
+    job.finished_at = timezone.now()
+    job.save(update_fields=[
+        'estado', 'total_filas', 'total_excluidas', 'mensaje', 'archivo', 'finished_at',
+    ])
+
+
+@shared_task(**RETRY_DB)
+def despachar_reportes_automaticos():
+    """
+    Trigger UNICO, fijo, cada 15 minutos (ver actions/management/commands/cargar_tareas_programadas.py)
+    para TODAS las ReporteAutomaticoConfig activas. En vez de un CrontabSchedule por config (Celery
+    Beat no expresa nativamente "cada X dias desde una fecha ancla" ni "saltar fin de semana"), este
+    trigger unico recorre las configs y decide en Python cual corresponde despachar ahora --
+    evita sincronizar altas/bajas/ediciones de PeriodicTask con cada guardado del formulario.
+    """
+    from .models import ReporteAutomaticoConfig
+    from .reportes_automaticos import corresponde_enviar_hoy
+
+    ahora_local = timezone.localtime()
+    hoy = ahora_local.date()
+    ventana_min = ahora_local - timedelta(minutes=15)
+
+    configs = ReporteAutomaticoConfig.objects.filter(activo=True).select_related('cartera')
+    despachadas = 0
+    for config in configs:
+        if not corresponde_enviar_hoy(config, hoy=hoy):
+            continue
+        objetivo = ahora_local.replace(
+            hour=config.hora_envio.hour, minute=config.hora_envio.minute, second=0, microsecond=0,
+        )
+        if ventana_min < objetivo <= ahora_local:
+            enviar_reporte_automatico.delay(config.pk)
+            despachadas += 1
+
+    if despachadas:
+        logger.info(f"despachar_reportes_automaticos: {despachadas} config(s) encolada(s)")
+
+
+@shared_task(**RETRY_DB)
+def enviar_reporte_automatico(config_id):
+    """
+    Genera y envia el reporte de UNA ReporteAutomaticoConfig. Se usa tanto desde el trigger
+    periodico (despachar_reportes_automaticos) como desde el boton "Enviar de prueba" de la UI.
+    """
+    from .email_reportes import enviar_email_reporte
+    from .models import ReporteAutomaticoConfig
+    from .reportes_automaticos import generar_adjunto_reporte, rango_pendiente
+
+    try:
+        config = ReporteAutomaticoConfig.objects.select_related('cartera').prefetch_related(
+            'subcarteras',
+        ).get(pk=config_id, activo=True)
+    except ReporteAutomaticoConfig.DoesNotExist:
+        logger.warning(f"enviar_reporte_automatico: config {config_id} no existe o esta inactiva")
+        return
+
+    fecha_desde, fecha_hasta = rango_pendiente(config)
+
+    try:
+        adjunto = generar_adjunto_reporte(config, fecha_desde, fecha_hasta)
+        if adjunto is None:
+            config.ultimo_estado = ReporteAutomaticoConfig.ESTADO_SIN_DATOS
+            config.ultimo_mensaje = f'Sin gestiones entre {fecha_desde:%d-%m-%Y} y {fecha_hasta:%d-%m-%Y}.'
+            # ultimo_envio_ok_at NO avanza: el proximo intento debe reintentar el MISMO rango, no
+            # saltarselo -- si se saltara, esos dias quedarian sin reportar para siempre.
+        else:
+            filename, contenido, content_type = adjunto
+            enviar_email_reporte(config, fecha_desde, fecha_hasta, filename, contenido, content_type)
+            config.ultimo_estado = ReporteAutomaticoConfig.ESTADO_OK
+            config.ultimo_mensaje = f'{filename} enviado a {", ".join(config.to_list())}.'
+            config.ultimo_envio_ok_at = timezone.now()
+
+            from configuracion.models import AccessLog, registrar_acceso
+            registrar_acceso(
+                config.creado_por, AccessLog.ENVIO_REPORTE_AUTOMATICO,
+                detail=f"Cartera {config.cartera.nombre}, {fecha_desde:%d-%m-%Y} a {fecha_hasta:%d-%m-%Y}",
+            )
+    except Exception as exc:
+        logger.exception(f"enviar_reporte_automatico: fallo la config {config_id}")
+        config.ultimo_estado = ReporteAutomaticoConfig.ESTADO_ERROR
+        config.ultimo_mensaje = str(exc)[:2000]
+
+    config.ultima_ejecucion_at = timezone.now()
+    config.save(update_fields=[
+        'ultimo_estado', 'ultimo_mensaje', 'ultimo_envio_ok_at', 'ultima_ejecucion_at',
     ])

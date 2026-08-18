@@ -1,0 +1,65 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Reportes Tanner a Omega{% endblock %}
+
+{% block content %}
+<div class="py-6 px-6">
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-1">
+    <h1 class="text-xl font-bold">Reportes Tanner a Omega</h1>
+    <a href="{% url 'actions:index' %}" class="btn btn-secondary">Volver a Gestiones</a>
+  </div>
+  <p class="muted mb-4" style="font-size:12.5px;">
+    Cada Excel trae las gestiones de <strong>un día</strong> en el formato de carga masiva de Omega.
+    Las gestiones sin equivalente confirmado quedan listadas aparte, en la hoja "Excluidas".
+  </p>
+
+  {% if jobs %}
+    <div class="card" style="border:1px solid var(--border); border-radius:10px;">
+      <div class="overflow-x-auto">
+        <table class="table-dense">
+          <thead>
+            <tr>
+              <th>Pedido</th><th>Fecha</th><th>Usuario</th>
+              <th>Estado</th><th class="num">Filas</th><th class="num">Excluidas</th><th>Acción</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for job in jobs %}
+              <tr>
+                <td style="font-variant-numeric:tabular-nums; color:var(--text-muted)">{{ job.created_at|date:"d-m-Y H:i" }}</td>
+                <td style="font-variant-numeric:tabular-nums">{{ job.fecha|date:"d-m-Y" }}</td>
+                <td>{{ job.solicitado_por.username|default:"—" }}</td>
+                <td>
+                  {% if job.estado == 'listo' %}
+                    <span class="dot-st"><span class="d st-green"></span>Listo</span>
+                  {% elif job.estado == 'error' %}
+                    <span class="dot-st"><span class="d st-red"></span>Falla del servidor</span>
+                  {% elif job.estado == 'vacio' %}
+                    <span class="muted">Sin gestiones ese día</span>
+                  {% else %}
+                    <span class="dot-st"><span class="d st-amber"></span>{{ job.get_estado_display }}</span>
+                  {% endif %}
+                </td>
+                <td class="num">{% if job.estado == 'listo' %}{{ job.total_filas }}{% else %}—{% endif %}</td>
+                <td class="num">{% if job.total_excluidas %}{{ job.total_excluidas }}{% else %}—{% endif %}</td>
+                <td>
+                  {% if job.estado == 'listo' and job.archivo %}
+                    <a href="{% url 'actions:tanner_omega_download' job.pk %}" class="btn btn-primary" style="font-size:11px; padding:3px 8px;">Descargar</a>
+                  {% else %}
+                    <span class="muted">—</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <p class="muted mt-2" style="font-size:12px;">
+      ¿Un reporte lleva rato en "En cola" o "Procesando"? Recarga la página para ver su estado actualizado.
+    </p>
+  {% else %}
+    <p class="empty-state">Todavía no has pedido ningún reporte a Omega.</p>
+  {% endif %}
+</div>
+{% endblock %}
