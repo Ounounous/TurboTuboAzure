@@ -65,6 +65,25 @@ def _tiene_contacto_activo(lead):
     ).filter(Q(_tel=True) | Q(_mail=True) | Q(_mail2=True) | Q(_aval=True)).exists()
 
 
+def revertir_al_dia(lead, changed_by=None):
+    """
+    Deshace un "al dia" puesto por error: saca al lead de TERMINADO (vuelve a ACTIVO, ver
+    lead.lifecycle.reactivar) y recalcula su status a partir de la ULTIMA gestion real (Action),
+    igual que si esa gestion se acabara de guardar -- no un valor fijo. Sin gestiones previas,
+    cae al default de compute_status (no_contactado).
+    """
+    from lead.lifecycle import reactivar
+
+    reactivar(lead, changed_by=changed_by)
+
+    ultima_action = lead.actions.select_related('resultado').first()
+    if ultima_action and ultima_action.resultado:
+        nuevo_status = compute_status(ultima_action.resultado, ultima_action.fecha_compromiso)
+    else:
+        nuevo_status = Lead.NO_CONTACTADO
+    apply_status(lead, nuevo_status, changed_by=changed_by)
+
+
 def recompute_inubicable(lead, changed_by=None):
     """
     Marca/desmarca 'inubicable' segun si al lead le queda algun dato de contacto activo. Solo
