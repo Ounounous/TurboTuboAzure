@@ -13,6 +13,7 @@ urlpatterns = [
     path('<int:pk>/revertir-al-dia/', views.RevertirAlDiaView.as_view(), name='revertir_al_dia'),
     path('<int:pk>/add-note/', views.AddLeadNoteView.as_view(), name='add_note'),
     path('<int:pk>/toggle-favorite/', views.ToggleFavoriteView.as_view(), name='toggle_favorite'),
+    path('<int:pk>/toggle-alert/', views.ToggleAlertView.as_view(), name='toggle_alert'),
     path('<int:pk>/add-file/', views.AddFileView.as_view(), name='add_file'),
     path('add/', views.LeadCreateView.as_view(), name='add_lead'),
     path('upload_excel/', views.UploadExcelFileView.as_view(), name='upload-excel'),

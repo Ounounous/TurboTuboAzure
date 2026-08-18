@@ -539,6 +539,7 @@ label { color: var(--field-label); }
 .chip .c { font-variant-numeric: tabular-nums; font-weight: 800; }
 .chip.active { border-color: var(--accent); background: var(--nav-active-bg); color: var(--accent); }
 .chip.fav.active { border-color: #e0a91b; background: color-mix(in srgb, #e0a91b 16%, var(--surface)); color: #a5790a; }
+.chip.alert.active { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, var(--surface)); color: var(--danger); }
 
 /* punto + etiqueta de status */
 .dot-st { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; font-size: 12.5px; white-space: nowrap; }
@@ -577,6 +578,15 @@ label { color: var(--field-label); }
 }
 .fav-star:hover { opacity: 1; filter: none; }
 .fav-star.is-fav { color: #e0a91b; filter: none; opacity: 1; }
+
+/* punto de alerta: mismo mecanismo que la estrella de favorito, marca casos con gestion
+   complicada. Independiente de favoritos -- un lead puede tener ambas marcas. */
+.alert-dot {
+  background: none; border: 0; cursor: pointer; font-size: 14px; line-height: 1; padding: 2px;
+  color: var(--text-muted); opacity: .35; transition: all .12s ease;
+}
+.alert-dot:hover { opacity: .8; color: var(--danger); }
+.alert-dot.is-alert { color: var(--danger); opacity: 1; }
 
 /* acciones compactas */
 .row-actions { display: inline-flex; gap: 2px; }

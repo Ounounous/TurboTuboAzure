@@ -152,6 +152,24 @@
                         }
                     }).catch(function () { btn.disabled = false; });
                 });
+                // Alerta: mismo mecanismo que favoritos, delegado a document, botones .alert-dot.
+                document.addEventListener('click', function (e) {
+                    var btn = e.target.closest('.alert-dot');
+                    if (!btn) return;
+                    var pk = btn.dataset.leadId;
+                    btn.disabled = true;
+                    fetch('/dashboard/leads/' + pk + '/toggle-alert/', {
+                        method: 'POST',
+                        headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': getCsrf() },
+                    }).then(function (r) { return r.json(); }).then(function (data) {
+                        btn.disabled = false;
+                        if (data.ok) {
+                            document.querySelectorAll('.alert-dot[data-lead-id="' + pk + '"]').forEach(function (b) {
+                                b.classList.toggle('is-alert', data.alerted);
+                            });
+                        }
+                    }).catch(function () { btn.disabled = false; });
+                });
             })();
         </script>
     </body>

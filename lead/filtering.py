@@ -43,6 +43,9 @@ def aplicar_filtros_clientes(queryset, params, user):
     if params.get('fav') == '1':
         queryset = queryset.filter(favorited_by=user)
 
+    if params.get('alerta') == '1':
+        queryset = queryset.filter(alerted_by=user)
+
     q = (params.get('q') or '').strip()
     if q:
         queryset = queryset.filter(Q(op__icontains=q) | Q(name__icontains=q) | Q(rut__icontains=q))

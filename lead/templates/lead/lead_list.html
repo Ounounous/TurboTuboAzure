@@ -26,6 +26,7 @@
         </a>
       {% endfor %}
       <a href="{% if only_fav %}{{ url_clear_fav }}{% else %}{{ url_fav }}{% endif %}" class="chip fav {% if only_fav %}active{% endif %}">★ Favoritos <span class="c">{{ fav_count }}</span></a>
+      <a href="{% if only_alert %}{{ url_clear_alerta }}{% else %}{{ url_alerta }}{% endif %}" class="chip alert {% if only_alert %}active{% endif %}">● Alerta <span class="c">{{ alert_count }}</span></a>
     </div>
 
     <!-- Buscador + filtros avanzados -->
@@ -123,6 +124,7 @@
             <thead>
               <tr>
                 <th></th>
+                <th>Acciones</th>
                 <th class="sortable"><a href="{{ sort_links.op.url }}" style="color:inherit;text-decoration:none;">Op <span class="ar">{{ sort_links.op.arrow }}</span></a></th>
                 <th class="sortable"><a href="{{ sort_links.nombre.url }}" style="color:inherit;text-decoration:none;">Nombre <span class="ar">{{ sort_links.nombre.arrow }}</span></a></th>
                 <th class="sortable"><a href="{{ sort_links.rut.url }}" style="color:inherit;text-decoration:none;">RUT <span class="ar">{{ sort_links.rut.arrow }}</span></a></th>
@@ -135,14 +137,24 @@
                 {% if is_supervisor %}<th>Asignado a</th>{% endif %}
                 <th class="sortable"><a href="{{ sort_links.status.url }}" style="color:inherit;text-decoration:none;">Status <span class="ar">{{ sort_links.status.arrow }}</span></a></th>
                 <th class="sortable"><a href="{{ sort_links.dias.url }}" style="color:inherit;text-decoration:none;">Últ. gestión <span class="ar">{{ sort_links.dias.arrow }}</span></a></th>
-                <th>Acciones</th>
               </tr>
             </thead>
             <tbody>
               {% for lead in leads %}
                 <tr>
                   <td>
-                    <button type="button" class="fav-star {% if lead.is_fav %}is-fav{% endif %}" data-lead-id="{{ lead.pk }}" title="Favorito" aria-label="Marcar favorito">{% if lead.is_fav %}★{% else %}☆{% endif %}</button>
+                    <span style="display:inline-flex; align-items:center; gap:2px;">
+                      <button type="button" class="fav-star {% if lead.is_fav %}is-fav{% endif %}" data-lead-id="{{ lead.pk }}" title="Favorito" aria-label="Marcar favorito">{% if lead.is_fav %}★{% else %}☆{% endif %}</button>
+                      <button type="button" class="alert-dot {% if lead.is_alert %}is-alert{% endif %}" data-lead-id="{{ lead.pk }}" title="Alerta (gestión complicada)" aria-label="Marcar alerta">●</button>
+                    </span>
+                  </td>
+                  <td>
+                    <span class="row-actions">
+                      <a href="{% url 'leads:detail' lead.pk %}" title="Ver detalles">👁️</a>
+                      <a href="{% url 'actions:multistep_step_with_lead' step=2 lead_id=lead.pk %}" title="Gestionar" onclick="openGestionModal(this.href); return false;">⚡</a>
+                      <a href="{% url 'actions:payment_create' lead.pk %}" title="Ingresar pago" onclick="openGestionModal(this.href); return false;">💵</a>
+                      <button type="button" title="Agregar nota" onclick="openNoteModal({{ lead.pk }}, '{{ lead.op|escapejs }}')">📝</button>
+                    </span>
                   </td>
                   <td class="op"><a href="{% url 'leads:detail' lead.pk %}" class="link">{{ lead.op }}</a></td>
                   <td style="font-weight:600">{{ lead.name }}</td>
@@ -161,14 +173,6 @@
                     {% else %}
                       <span class="dias {% if lead.dias_ultima_gestion <= 3 %}ok{% elif lead.dias_ultima_gestion < 10 %}warn{% else %}late{% endif %}">{{ lead.dias_ultima_gestion }} d</span>
                     {% endif %}
-                  </td>
-                  <td>
-                    <span class="row-actions">
-                      <a href="{% url 'leads:detail' lead.pk %}" title="Ver detalles">👁️</a>
-                      <a href="{% url 'actions:multistep_step_with_lead' step=2 lead_id=lead.pk %}" title="Gestionar" onclick="openGestionModal(this.href); return false;">⚡</a>
-                      <a href="{% url 'actions:payment_create' lead.pk %}" title="Ingresar pago" onclick="openGestionModal(this.href); return false;">💵</a>
-                      <button type="button" title="Agregar nota" onclick="openNoteModal({{ lead.pk }}, '{{ lead.op|escapejs }}')">📝</button>
-                    </span>
                   </td>
                 </tr>
               {% endfor %}

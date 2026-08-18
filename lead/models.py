@@ -165,6 +165,10 @@ class Lead(models.Model):
     assigned_to = models.ForeignKey(User, related_name='assigned_leads', on_delete=models.SET_NULL, null=True, blank=True)
     # Favoritos por usuario: cada ejecutivo marca sus propios clientes destacados.
     favorited_by = models.ManyToManyField(User, related_name='favorite_leads', blank=True)
+    # Alerta por usuario: casos con gestión complicada, marcados por quien los gestiona. Mismo
+    # mecanismo que favorited_by (M2M por usuario, no un flag global) pero con significado
+    # distinto -- un lead puede estar en ambos, en uno solo, o en ninguno.
+    alerted_by = models.ManyToManyField(User, related_name='alert_leads', blank=True)
 
     # Color semántico del status para la UI (separado del color de marca).
     STATUS_COLOR = {

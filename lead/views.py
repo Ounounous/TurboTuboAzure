@@ -126,15 +126,20 @@ class LeadListView(LoginRequiredMixin, ListView):
         base_qs = self.get_queryset()
         context['total_count'] = base_qs.count()
 
-        # ids favoritos del usuario (para pintar la estrella) sobre la página mostrada.
+        # ids favoritos/alerta del usuario (para pintar estrella/punto rojo) sobre la página mostrada.
         leads = list(base_qs[:limit])
         fav_ids = set(
             self._base_scope().filter(favorited_by=self.request.user, pk__in=[l.pk for l in leads])
             .values_list('pk', flat=True)
         )
+        alert_ids = set(
+            self._base_scope().filter(alerted_by=self.request.user, pk__in=[l.pk for l in leads])
+            .values_list('pk', flat=True)
+        )
         today = localdate()
         for lead in leads:
             lead.is_fav = lead.pk in fav_ids
+            lead.is_alert = lead.pk in alert_ids
             if lead.last_action_at:
                 lead.dias_ultima_gestion = (today - localtime(lead.last_action_at).date()).days
             else:
@@ -160,9 +165,12 @@ class LeadListView(LoginRequiredMixin, ListView):
         ]
         context['total_scope'] = scope.count()
         context['fav_count'] = scope.filter(favorited_by=self.request.user).count()
-        context['url_todos'] = self._url_with(status=None, fav=None)
-        context['url_fav'] = self._url_with(fav='1', status=None)
+        context['alert_count'] = scope.filter(alerted_by=self.request.user).count()
+        context['url_todos'] = self._url_with(status=None, fav=None, alerta=None)
+        context['url_fav'] = self._url_with(fav='1', status=None, alerta=None)
         context['url_clear_fav'] = self._url_with(fav=None)
+        context['url_alerta'] = self._url_with(alerta='1', status=None, fav=None)
+        context['url_clear_alerta'] = self._url_with(alerta=None)
         context['sort_links'] = self._sort_links()
         context['url_limit_10'] = self._url_with(limit=10)
         context['url_limit_50'] = self._url_with(limit=50)
@@ -172,6 +180,7 @@ class LeadListView(LoginRequiredMixin, ListView):
         context['q'] = self.request.GET.get('q', '')
         context['selected_status'] = selected_status
         context['only_fav'] = self.request.GET.get('fav') == '1'
+        context['only_alert'] = self.request.GET.get('alerta') == '1'
         context['sort'] = self.request.GET.get('sort', 'nombre')
         context['dir'] = self.request.GET.get('dir', 'asc')
         active_filters = filtering.filtros_activos(self.request.GET)
@@ -760,6 +769,26 @@ class ToggleFavoriteView(LoginRequiredMixin, View):
             favorited = True
         if request.headers.get('x-requested-with') == 'XMLHttpRequest':
             return JsonResponse({'ok': True, 'favorited': favorited})
+        return redirect(request.POST.get('next') or reverse('leads:list'))
+
+
+class ToggleAlertView(LoginRequiredMixin, View):
+    """Marca/desmarca un lead como 'alerta' (gestión complicada) del usuario. Mismo mecanismo que
+    ToggleFavoriteView, independiente de favoritos -- un lead puede tener ambas marcas, una sola,
+    o ninguna."""
+
+    def post(self, request, *args, **kwargs):
+        lead = get_object_or_404(Lead, pk=kwargs.get('pk'))
+        if not _puede_ver_lead(request.user, lead):
+            raise PermissionDenied
+        if lead.alerted_by.filter(pk=request.user.pk).exists():
+            lead.alerted_by.remove(request.user)
+            alerted = False
+        else:
+            lead.alerted_by.add(request.user)
+            alerted = True
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            return JsonResponse({'ok': True, 'alerted': alerted})
         return redirect(request.POST.get('next') or reverse('leads:list'))
 
 
