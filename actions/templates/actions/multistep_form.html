@@ -2,7 +2,7 @@
 {% load icons %}
 
 {% block content %}
-<div class="mx-auto mt-4 px-6 pb-6">
+<div class="mx-auto mt-4 px-6 pb-6" style="max-width:560px;">
   <h1 class="text-2xl font-bold mb-4">Nueva gestión{% if lead %} - {{ lead.op }} {{ lead.name }}{% endif %}</h1>
 
   {% if no_gestionable %}
@@ -211,7 +211,7 @@
       <label class="font-semibold block mb-1" for="id_resultado">Resultado:</label>
       {{ action_form.resultado.errors }}
       <!-- Medio y Resultado son independientes: la lista de resultados no depende del medio elegido. -->
-      <select name="resultado" id="id_resultado" class="border p-2 rounded w-full" required>
+      <select name="resultado" id="id_resultado" class="border p-2 rounded" style="width:100%; max-width:360px;" required>
         <option value="">--- Elige un resultado ---</option>
         {% for resultado in action_form.fields.resultado.queryset %}
           <option value="{{ resultado.id }}" data-fecha="{% if resultado.requiere_fecha_pago %}1{% else %}0{% endif %}" {% if action_form.resultado.value|stringformat:"s" == resultado.id|stringformat:"s" %}selected{% endif %}>{{ resultado.nombre }}{% if resultado.tipo_contacto %} ({{ resultado.tipo_contacto|title }}){% endif %}</option>
