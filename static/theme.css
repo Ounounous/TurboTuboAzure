@@ -274,6 +274,12 @@ body.site-body { display: flex; flex-direction: column; min-height: 100vh; }
 .nav-link.is-active { background: var(--nav-active-bg); color: var(--accent); }
 
 /* ---------------- buttons ---------------- */
+:root {
+  /* Una sola altura para todo control de una linea (boton, campo, medio-btn, resumen cerrado de
+     un <details>) -- que un formulario se vea "parejo" depende de esto mas que de cualquier otra
+     regla suelta. Cambiar este valor cambia la altura de TODO a la vez. */
+  --field-height: 2.6rem;
+}
 .btn {
   display: inline-flex;
   align-items: center;
@@ -284,7 +290,7 @@ body.site-body { display: flex; flex-direction: column; min-height: 100vh; }
   font-weight: 600;
   font-size: .9rem;
   line-height: 1.2;
-  min-height: 2.6rem;         /* misma altura para todos los botones */
+  min-height: var(--field-height);
   box-sizing: border-box;
   align-self: center;          /* evita que se estiren dentro de filas flex (form + input) */
   border: 1px solid transparent;
@@ -322,6 +328,22 @@ textarea {
   border: 1px solid var(--field-border);
   border-radius: .55rem;
   padding: .5rem .65rem;
+  box-sizing: border-box;
+  font-size: .9rem;
+}
+/* Misma altura que .btn/.medio-btn en TODO campo de una sola linea -- textarea queda afuera a
+   proposito (necesita poder crecer verticalmente para el texto). */
+input[type="text"],
+input[type="date"],
+input[type="number"],
+input[type="email"],
+input[type="password"],
+input[type="search"],
+input[type="tel"],
+input[type="url"],
+input:not([type]),
+select {
+  height: var(--field-height);
 }
 select option { color: var(--field-text); background-color: var(--field-bg); }
 input::placeholder,
@@ -362,13 +384,19 @@ label { color: var(--field-label); }
 
 /* ---------------- medio picker (multistep gestion) ---------------- */
 .medio-btn {
-  padding: .5rem 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--field-height);
+  width: var(--field-height);   /* solo icono: cuadrado, mismo lado que el alto */
+  padding: 0;
   border-radius: .75rem;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text);
   font-weight: 600;
   cursor: pointer;
+  box-sizing: border-box;
 }
 .medio-btn:hover { background: var(--surface-alt); }
 .medio-btn.is-selected {
@@ -376,6 +404,44 @@ label { color: var(--field-label); }
   color: var(--accent-contrast);
   border-color: var(--accent);
 }
+/* WhatsApp sin numero activo: mismo tamano, pero necesita lugar para el triangulo de aviso al
+   lado del logo -- unico caso que no es un cuadrado de un solo icono. */
+.medio-btn.medio-btn-wide {
+  width: auto;
+  padding: 0 .85rem;
+  gap: .3rem;
+}
+
+/* ---------------- paneles desplegables del formulario de gestion (multistep, paso 2) ----------
+   Cerrado, cada <details> debe verse como una caja mas de la fila (misma altura que un boton o
+   un campo) -- abierto, se expande con su propio padding interno. Sin esto cada <summary> media
+   su alto segun su padding fijo, y una fila de "cajas" con botones + inputs + estos paneles no
+   queda pareja. */
+details.gestion-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: .75rem;
+  padding: 0 1rem;
+}
+details.gestion-panel > summary {
+  display: flex;
+  align-items: center;
+  min-height: var(--field-height);
+  padding: 0;
+  list-style: none;
+}
+details.gestion-panel > summary::-webkit-details-marker { display: none; }
+details.gestion-panel > summary::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: .5rem;
+  color: var(--text-muted);
+  font-size: .75rem;
+  transition: transform .12s ease;
+}
+details.gestion-panel[open] > summary::before { transform: rotate(90deg); }
+details.gestion-panel[open] > summary { border-bottom: 1px solid var(--border); margin-bottom: .85rem; }
+details.gestion-panel > .gestion-panel-body { padding-bottom: 1rem; }
 
 /* ---------------- surfaces ---------------- */
 .card {

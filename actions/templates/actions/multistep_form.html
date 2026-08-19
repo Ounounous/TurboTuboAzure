@@ -21,78 +21,84 @@
   </form>
 
   {% elif step == 2 %}
-  <form method="post">
-    {% csrf_token %}
-    <input type="hidden" name="accion" value="seleccionar">
-    <p class="font-semibold mb-2">¿A qué teléfono o email vas a gestionar?</p>
-    {{ demographic_form.as_p }}
-    <button type="submit" class="btn btn-primary">Siguiente</button>
-    <a href="{% url 'actions:cancel' lead.id %}" class="btn btn-secondary">Cancelar</a>
-  </form>
-
-  <details class="card p-3 mt-4">
-    <summary class="cursor-pointer font-semibold" style="font-size:13px; color:var(--text-muted);">+ Agregar teléfono nuevo</summary>
-    <form method="post" class="mt-3">
+  <div style="display:flex; flex-direction:column; gap:1rem;">
+    <form method="post" style="display:flex; flex-direction:column; gap:.6rem;">
       {% csrf_token %}
-      <input type="hidden" name="accion" value="agregar_telefono">
-      {{ quick_phone_form.non_field_errors }}
-      {{ quick_phone_form.as_p }}
-      <button type="submit" class="btn btn-primary">Agregar y gestionar</button>
+      <input type="hidden" name="accion" value="seleccionar">
+      <p class="font-semibold" style="margin:0 0 -.1rem;">¿A qué teléfono o email vas a gestionar?</p>
+      <div class="grid-form" style="grid-template-columns:1fr;">
+        {{ demographic_form.as_p }}
+      </div>
+      <div style="display:flex; gap:.75rem;">
+        <button type="submit" class="btn btn-primary">Siguiente</button>
+        <a href="{% url 'actions:cancel' lead.id %}" class="btn btn-secondary">Cancelar</a>
+      </div>
     </form>
-  </details>
 
-  {% if puede_agregar_email %}
-  <details class="card p-3 mt-3">
-    <summary class="cursor-pointer font-semibold" style="font-size:13px; color:var(--text-muted);">+ Agregar correo nuevo</summary>
-    <form method="post" class="mt-3">
-      {% csrf_token %}
-      <input type="hidden" name="accion" value="agregar_email">
-      {{ quick_email_form.non_field_errors }}
-      {{ quick_email_form.as_p }}
-      <button type="submit" class="btn btn-primary">Agregar y gestionar</button>
-    </form>
-  </details>
-  {% endif %}
+    <details class="gestion-panel">
+      <summary style="font-weight:600; font-size:13px; color:var(--text-muted);">Agregar teléfono nuevo</summary>
+      <form method="post" class="gestion-panel-body" style="display:flex; flex-direction:column; gap:.6rem;">
+        {% csrf_token %}
+        <input type="hidden" name="accion" value="agregar_telefono">
+        {{ quick_phone_form.non_field_errors }}
+        <div class="grid-form" style="grid-template-columns:1fr;">{{ quick_phone_form.as_p }}</div>
+        <button type="submit" class="btn btn-primary" style="align-self:flex-start;">Agregar y gestionar</button>
+      </form>
+    </details>
 
-  <details class="card p-3 mt-3">
-    <summary class="cursor-pointer font-semibold" style="font-size:13px; color:var(--text-muted);">Mejor gestión</summary>
-    <div class="mt-3">
-      <span class="dot-st"><span class="d st-{{ lead.status_historico_color }}"></span>{{ lead.get_status_historico_display }}</span>
-    </div>
-  </details>
+    {% if puede_agregar_email %}
+    <details class="gestion-panel">
+      <summary style="font-weight:600; font-size:13px; color:var(--text-muted);">Agregar correo nuevo</summary>
+      <form method="post" class="gestion-panel-body" style="display:flex; flex-direction:column; gap:.6rem;">
+        {% csrf_token %}
+        <input type="hidden" name="accion" value="agregar_email">
+        {{ quick_email_form.non_field_errors }}
+        <div class="grid-form" style="grid-template-columns:1fr;">{{ quick_email_form.as_p }}</div>
+        <button type="submit" class="btn btn-primary" style="align-self:flex-start;">Agregar y gestionar</button>
+      </form>
+    </details>
+    {% endif %}
 
-  <details class="card p-3 mt-3">
-    <summary class="cursor-pointer font-semibold" style="font-size:13px; color:var(--text-muted);">Últimas gestiones</summary>
-    <div class="mt-3">
-      {% if ultimas_gestiones %}
-        <div class="overflow-x-auto">
-          <table class="table-dense">
-            <thead><tr><th>Medio</th><th>Resultado</th><th>Usuario</th><th>Fecha</th><th>Comentario</th></tr></thead>
-            <tbody>
-              {% for action in ultimas_gestiones %}
-                <tr>
-                  <td style="font-weight:600">{{ action.medio.nombre }}</td>
-                  <td>{{ action.resultado.nombre }}</td>
-                  <td>{{ action.user }}</td>
-                  <td style="font-variant-numeric:tabular-nums; color:var(--text-muted)">{{ action.created_at|date:"d-m-Y H:i" }}</td>
-                  <td>{{ action.comment|default_if_none:"-" }}</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      {% else %}
-        <p class="muted">Sin gestiones ingresadas</p>
-      {% endif %}
-    </div>
-  </details>
+    <details class="gestion-panel">
+      <summary style="font-weight:600; font-size:13px; color:var(--text-muted);">Mejor gestión</summary>
+      <div class="gestion-panel-body">
+        <span class="dot-st"><span class="d st-{{ lead.status_historico_color }}"></span>{{ lead.get_status_historico_display }}</span>
+      </div>
+    </details>
 
-  <details class="card p-3 mt-3">
-    <summary class="cursor-pointer font-semibold" style="font-size:13px; color:var(--text-muted);">Notas</summary>
-    <div class="mt-3">
-      {% include 'lead/partials/_notes.html' with lead=lead notes=lead_notes note_readonly=1 %}
-    </div>
-  </details>
+    <details class="gestion-panel">
+      <summary style="font-weight:600; font-size:13px; color:var(--text-muted);">Últimas gestiones</summary>
+      <div class="gestion-panel-body">
+        {% if ultimas_gestiones %}
+          <div class="overflow-x-auto">
+            <table class="table-dense">
+              <thead><tr><th>Medio</th><th>Resultado</th><th>Usuario</th><th>Fecha</th><th>Comentario</th></tr></thead>
+              <tbody>
+                {% for action in ultimas_gestiones %}
+                  <tr>
+                    <td style="font-weight:600">{{ action.medio.nombre }}</td>
+                    <td>{{ action.resultado.nombre }}</td>
+                    <td>{{ action.user }}</td>
+                    <td style="font-variant-numeric:tabular-nums; color:var(--text-muted)">{{ action.created_at|date:"d-m-Y H:i" }}</td>
+                    <td>{{ action.comment|default_if_none:"-" }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <p class="muted" style="margin:0;">Sin gestiones ingresadas</p>
+        {% endif %}
+      </div>
+    </details>
+
+    <details class="gestion-panel">
+      <summary style="font-weight:600; font-size:13px; color:var(--text-muted);">Notas</summary>
+      <div class="gestion-panel-body">
+        {% include 'lead/partials/_notes.html' with lead=lead notes=lead_notes note_readonly=1 %}
+      </div>
+    </details>
+  </div>
 
   {% elif step == 3 %}
   {% if lead_notes %}
@@ -129,12 +135,12 @@
           {% for medio in action_form.fields.medio.queryset %}
             {% if 'whatsapp' in medio.nombre|lower and selected_phone and not selected_phone.whatsapp_activo %}
               <button type="button"
-                      class="medio-btn"
+                      class="medio-btn medio-btn-wide"
                       data-medio-id="{{ medio.id }}"
                       data-nombre="{{ medio.nombre }}"
                       data-no-whatsapp="1"
-                      title="Número sin WhatsApp activo">
-                {% icon "brand-whatsapp" size=16 %} WhatsApp {% icon "alert-triangle" size=14 %}
+                      title="WhatsApp — número sin WhatsApp activo">
+                {% icon "brand-whatsapp" size=18 %}{% icon "alert-triangle" size=14 %}
               </button>
             {% else %}
               <button type="button"
@@ -142,12 +148,14 @@
                       data-medio-id="{{ medio.id }}"
                       data-nombre="{{ medio.nombre }}"
                       {% if 'whatsapp' in medio.nombre|lower %}
+                        title="WhatsApp"
                         data-native-url="https://wa.me/{{ phone_digits }}"
                       {% else %}
+                        title="Llamar"
                         data-native-url="tel:{{ phone_digits }}"
                         {% if has_pbx %}data-pbx-call="1"{% endif %}
                       {% endif %}>
-                {% if 'whatsapp' in medio.nombre|lower %}{% icon "brand-whatsapp" size=16 %} WhatsApp{% else %}{% icon "phone" size=16 %} Llamar{% endif %}
+                {% if 'whatsapp' in medio.nombre|lower %}{% icon "brand-whatsapp" size=19 %}{% else %}{% icon "phone" size=19 %}{% endif %}
               </button>
             {% endif %}
           {% endfor %}
@@ -164,8 +172,9 @@
                     class="medio-btn"
                     data-medio-id="{{ medio.id }}"
                     data-nombre="{{ medio.nombre }}"
+                    title="{{ medio.nombre }}"
                     data-native-url="mailto:{{ selected_email }}">
-              {% icon "mail" size=16 %} {{ medio.nombre }}
+              {% icon "mail" size=19 %}
             </button>
           {% endfor %}
         </div>
@@ -277,9 +286,13 @@
           lead_id: actionForm.dataset.leadId,
           phone_id: actionForm.dataset.phoneId,
         });
-        var originalText = btn.textContent;
+        // El boton ahora solo tiene el icono (sin texto) -- "llamando" se comunica con opacidad +
+        // title, no reemplazando el SVG por texto (eso rompia el cuadrado del boton mientras
+        // estaba deshabilitado).
+        var originalTitle = btn.title;
         btn.disabled = true;
-        btn.textContent = 'Llamando...';
+        btn.style.opacity = '.5';
+        btn.title = 'Llamando…';
         fetch('{% url "actions:pbx_call" %}', {
           method: 'POST',
           headers: {
@@ -289,7 +302,8 @@
           body: body,
         }).then(function (resp) { return resp.json(); }).then(function (data) {
           btn.disabled = false;
-          btn.textContent = originalText;
+          btn.style.opacity = '';
+          btn.title = originalTitle;
           if (!data.ok) {
             // Advertencia: sin extension SIP no se podra cruzar/adjuntar la grabacion despues.
             if (data.reason === 'no_extension' || data.reason === 'no_credentials') {
@@ -302,7 +316,8 @@
           }
         }).catch(function () {
           btn.disabled = false;
-          btn.textContent = originalText;
+          btn.style.opacity = '';
+          btn.title = originalTitle;
           window.open(btn.dataset.nativeUrl, '_blank');
         });
       }
