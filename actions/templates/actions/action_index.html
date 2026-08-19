@@ -1,5 +1,5 @@
 {% extends 'core/base.html' %}
-{% load money %}
+{% load money icons %}
 
 {% block title %}Gestiones{% endblock %}
 
@@ -292,7 +292,7 @@
           <tbody>
             {% for action in listado %}
               <tr>
-                <td><button type="button" class="fav-star {% if action.lead.is_fav %}is-fav{% endif %}" data-lead-id="{{ action.lead.pk }}" title="Favorito" aria-label="Marcar favorito">{% if action.lead.is_fav %}★{% else %}☆{% endif %}</button></td>
+                <td><button type="button" class="fav-star {% if action.lead.is_fav %}is-fav{% endif %}" data-lead-id="{{ action.lead.pk }}" title="Favorito" aria-label="Marcar favorito">{% icon "star" size=15 %}</button></td>
                 <td class="op"><a href="{% url 'leads:detail' action.lead.pk %}" class="link">{{ action.lead.op }}</a></td>
                 <td style="font-weight:600">{{ action.lead.name }}</td>
                 <td>{{ action.medio.nombre }}</td>
@@ -301,10 +301,10 @@
                 <td style="font-variant-numeric:tabular-nums; color:var(--text-muted)">{{ action.created_at|date:"d-m-Y H:i" }}</td>
                 <td>
                   <span class="row-actions">
-                    <a href="{% url 'leads:detail' action.lead.pk %}" title="Ver detalles">👁️</a>
-                    <a href="{% url 'actions:multistep_step_with_lead' step=2 lead_id=action.lead.pk %}" title="Gestionar" onclick="openGestionModal(this.href); return false;">⚡</a>
-                    <a href="{% url 'actions:payment_create' action.lead.pk %}" title="Ingresar pago" onclick="openGestionModal(this.href); return false;">💵</a>
-                    <button type="button" title="Agregar nota" onclick="openNoteModal({{ action.lead.pk }}, '{{ action.lead.op|escapejs }}')">📝</button>
+                    <a href="{% url 'leads:detail' action.lead.pk %}" title="Ver detalles">{% icon "eye" size=15 %}</a>
+                    <a href="{% url 'actions:multistep_step_with_lead' step=2 lead_id=action.lead.pk %}" title="Gestionar" onclick="openGestionModal(this.href); return false;">{% icon "bolt" size=15 %}</a>
+                    <a href="{% url 'actions:payment_create' action.lead.pk %}" title="Ingresar pago" onclick="openGestionModal(this.href); return false;">{% icon "currency-dollar" size=15 %}</a>
+                    <button type="button" title="Agregar nota" onclick="openNoteModal({{ action.lead.pk }}, '{{ action.lead.op|escapejs }}')">{% icon "note" size=15 %}</button>
                   </span>
                 </td>
               </tr>

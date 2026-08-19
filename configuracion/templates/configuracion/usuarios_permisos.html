@@ -1,4 +1,5 @@
 {% extends 'core/base.html' %}
+{% load icons %}
 
 {% block title %}Usuarios y Permisos{% endblock %}
 
@@ -92,7 +93,7 @@
                   <input type="hidden" name="user_id" value="{{ u.id }}">
                   <input type="text" name="first_name" value="{{ u.first_name }}" placeholder="Nombre" style="width:90px; font-size:12px;">
                   <input type="text" name="last_name" value="{{ u.last_name }}" placeholder="Apellido" style="width:90px; font-size:12px;">
-                  <button type="submit" class="btn btn-secondary" style="font-size:11px; padding:3px 7px;">✓</button>
+                  <button type="submit" class="btn btn-secondary" style="font-size:11px; padding:3px 7px;">{% icon "check" size=13 %}</button>
                 </form>
               </td>
 
@@ -103,7 +104,7 @@
                   <input type="hidden" name="accion" value="editar_contacto">
                   <input type="hidden" name="user_id" value="{{ u.id }}">
                   <input type="text" name="rut" value="{{ u.userprofile.rut }}" placeholder="RUT" style="width:100px; font-size:12px;">
-                  <button type="submit" class="btn btn-secondary" style="font-size:11px; padding:3px 7px;">✓</button>
+                  <button type="submit" class="btn btn-secondary" style="font-size:11px; padding:3px 7px;">{% icon "check" size=13 %}</button>
                 </form>
               </td>
 
@@ -119,7 +120,7 @@
                       <option value="{{ val }}" {% if u.userprofile.user_type == val %}selected{% endif %}>{{ label }}</option>
                     {% endfor %}
                   </select>
-                  <button type="submit" class="btn btn-secondary" style="font-size:11px; padding:3px 7px;">✓</button>
+                  <button type="submit" class="btn btn-secondary" style="font-size:11px; padding:3px 7px;">{% icon "check" size=13 %}</button>
                 </form>
                 {% else %}
                   <span>{{ u.userprofile.get_user_type_display }}</span>
@@ -139,7 +140,7 @@
                       <option value="{{ eq.id }}" {% if u.userprofile.active_team_id == eq.id %}selected{% endif %}>{{ eq.name }}</option>
                     {% endfor %}
                   </select>
-                  <button type="submit" class="btn btn-secondary" style="font-size:11px; padding:3px 7px;">✓</button>
+                  <button type="submit" class="btn btn-secondary" style="font-size:11px; padding:3px 7px;">{% icon "check" size=13 %}</button>
                 </form>
                 {% else %}
                   <span>{{ u.userprofile.active_team.name|default:"— sin equipo —" }}</span>
@@ -173,7 +174,7 @@
               {# Botón Configurar SIP — abre el formulario SIP #}
               <td>
                 <details>
-                  <summary class="cursor-pointer" style="font-size:12px; font-weight:600; color:var(--text-muted);">⚙️ Configurar</summary>
+                  <summary class="cursor-pointer" style="font-size:12px; font-weight:600; color:var(--text-muted);">{% icon "settings" size=14 %} Configurar</summary>
                   <form method="post" action="{% url 'configuracion:usuarios_permisos' %}" style="display:flex; flex-direction:column; gap:5px; margin-top:8px; min-width:220px;">
                     {% csrf_token %}
                     <input type="hidden" name="accion" value="configurar_sip">
@@ -196,7 +197,7 @@
               <td>
                 {% if es_admin %}
                 <details>
-                  <summary class="cursor-pointer" style="font-size:12px; font-weight:600; color:var(--text-muted);">🔑 Resetear</summary>
+                  <summary class="cursor-pointer" style="font-size:12px; font-weight:600; color:var(--text-muted);">{% icon "key" size=14 %} Resetear</summary>
                   <form method="post" action="{% url 'configuracion:usuarios_permisos' %}" style="display:flex; flex-direction:column; gap:5px; margin-top:8px; min-width:200px;" onsubmit="return confirm('¿Poner una clave nueva a {{ u.username }}? Se le pedirá cambiarla en su próximo ingreso.');">
                     {% csrf_token %}
                     <input type="hidden" name="accion" value="resetear_password">
@@ -219,7 +220,7 @@
               <td>
                 {% if es_admin and u.id != request.user.id %}
                 <details>
-                  <summary class="cursor-pointer" style="font-size:12px; font-weight:600; color:var(--danger);">🗑️ Eliminar</summary>
+                  <summary class="cursor-pointer" style="font-size:12px; font-weight:600; color:var(--danger);">{% icon "trash" size=14 %} Eliminar</summary>
                   <form method="post" action="{% url 'configuracion:usuarios_permisos' %}" style="display:flex; flex-direction:column; gap:5px; margin-top:8px; min-width:240px;" onsubmit="return confirm('¿Eliminar a {{ u.username }} definitivamente? Sus gestiones, pagos, compromisos y grabaciones se conservan; su cartera queda desasignada. Esta acción NO se puede deshacer.');">
                     {% csrf_token %}
                     <input type="hidden" name="accion" value="eliminar_usuario">

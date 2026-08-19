@@ -1,4 +1,4 @@
-{% load static %}
+{% load static icons %}
 
 <!doctype html>
 
@@ -64,7 +64,7 @@
 
         <dialog id="gestion-dialog" class="rounded-xl p-0 w-11/12" style="max-width: 56.7rem;">
             <div class="flex justify-end p-2 card rounded-t-xl">
-                <button type="button" onclick="closeGestionModal()" class="text-xl px-2" aria-label="Cerrar">✕</button>
+                <button type="button" onclick="closeGestionModal()" class="px-2" aria-label="Cerrar">{% icon "x" size=18 %}</button>
             </div>
             <iframe id="gestion-iframe" src="about:blank" class="w-full border-0" style="height:75vh;"></iframe>
         </dialog>
@@ -145,9 +145,11 @@
                     }).then(function (r) { return r.json(); }).then(function (data) {
                         btn.disabled = false;
                         if (data.ok) {
+                            // Mismo icono siempre (SVG de Tabler, hereda currentColor): el estado
+                            // marcado/no marcado lo comunica solo la clase is-fav (ver .fav-star en
+                            // theme.css), no un cambio de glifo -- antes se pisaba el SVG con texto.
                             document.querySelectorAll('.fav-star[data-lead-id="' + pk + '"]').forEach(function (b) {
                                 b.classList.toggle('is-fav', data.favorited);
-                                b.textContent = data.favorited ? '★' : '☆';
                             });
                         }
                     }).catch(function () { btn.disabled = false; });

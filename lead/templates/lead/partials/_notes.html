@@ -1,3 +1,4 @@
+{% load icons %}
 {% comment %}
   Panel de notas internas de un lead. Reutilizable en el detalle del lead y en el
   formulario de gestión. Las notas NO entran en los reportes de cartera.
@@ -8,7 +9,7 @@
 {% endcomment %}
 <div class="card p-4">
   <div class="flex items-center justify-between mb-3">
-    <h2 class="text-lg font-bold">📝 Notas internas</h2>
+    <h2 class="text-lg font-bold">{% icon "note" size=20 %} Notas internas</h2>
     <span class="muted text-sm">No salen en los reportes</span>
   </div>
 

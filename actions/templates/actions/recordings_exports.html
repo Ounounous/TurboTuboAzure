@@ -1,4 +1,5 @@
 {% extends 'core/base.html' %}
+{% load icons %}
 
 {% block title %}Mis exports de grabaciones{% endblock %}
 
@@ -32,10 +33,10 @@
             {% if request.user != job.solicitado_por %}<br><span class="muted" style="font-size:12px;">{{ job.solicitado_por.username }}</span>{% endif %}
           </td>
           <td style="padding:.6em .8em;">
-            {% if job.estado == 'listo' %}<span style="color:var(--success); font-weight:600;">✓ Listo</span>
+            {% if job.estado == 'listo' %}<span style="color:var(--success); font-weight:600;">{% icon "check" size=14 %} Listo</span>
             {% elif job.estado == 'vacio' %}<span class="muted">Sin grabaciones</span>
             {% elif job.estado == 'error' %}<span style="color:var(--danger); font-weight:600;">Error</span>
-            {% else %}<span style="color:var(--text-muted);">⏳ {{ job.get_estado_display }}</span>{% endif %}
+            {% else %}<span style="color:var(--text-muted);">{% icon "hourglass" size=14 %} {{ job.get_estado_display }}</span>{% endif %}
             {% if job.errores %}
               <details style="margin-top:.3em;"><summary class="muted" style="font-size:12px; cursor:pointer;">ver detalle</summary>
               <pre style="white-space:pre-wrap; font-size:11.5px; margin:.3em 0 0;">{{ job.errores }}</pre></details>

@@ -1,4 +1,5 @@
 {% extends 'core/base.html' %}
+{% load icons %}
 
 {% block title %}Configuración{% endblock %}
 
@@ -10,19 +11,19 @@
 
   <div class="launcher-grid">
     <a href="{% url 'configuracion:usuarios_permisos' %}" class="launcher-card">
-      <div class="lc-nm">👥 Usuarios y Permisos</div>
+      <div class="lc-nm">{% icon "users" size=17 %} Usuarios y Permisos</div>
       <div class="lc-ct">Roles de usuario y qué supervisor ve cada cartera</div>
     </a>
     <a href="{% url 'configuracion:equipo' %}" class="launcher-card">
-      <div class="lc-nm">🏢 Equipo</div>
+      <div class="lc-nm">{% icon "building" size=17 %} Equipo</div>
       <div class="lc-ct">Nombre del equipo y sus miembros</div>
     </a>
     <a href="{% url 'configuracion:retencion' %}" class="launcher-card">
-      <div class="lc-nm">🗄️ Retención de datos</div>
+      <div class="lc-nm">{% icon "archive" size=17 %} Retención de datos</div>
       <div class="lc-ct">Plazos de purga y del historial de status</div>
     </a>
     <a href="{% url 'configuracion:registros' %}" class="launcher-card">
-      <div class="lc-nm">📋 Registros de acciones</div>
+      <div class="lc-nm">{% icon "clipboard-list" size=17 %} Registros de acciones</div>
       <div class="lc-ct">Quién accedió a datos de deudores y cuándo (Ley 20.575)</div>
     </a>
   </div>

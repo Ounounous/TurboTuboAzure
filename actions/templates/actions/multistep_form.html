@@ -1,4 +1,5 @@
 {% extends 'actions/popup_base.html' %}
+{% load icons %}
 
 {% block content %}
 <div class="mx-auto mt-4 px-6 pb-6">
@@ -133,7 +134,7 @@
                       data-nombre="{{ medio.nombre }}"
                       data-no-whatsapp="1"
                       title="Número sin WhatsApp activo">
-                💬 WhatsApp ⚠️
+                {% icon "brand-whatsapp" size=16 %} WhatsApp {% icon "alert-triangle" size=14 %}
               </button>
             {% else %}
               <button type="button"
@@ -146,7 +147,7 @@
                         data-native-url="tel:{{ phone_digits }}"
                         {% if has_pbx %}data-pbx-call="1"{% endif %}
                       {% endif %}>
-                {% if 'whatsapp' in medio.nombre|lower %}💬 WhatsApp{% else %}☎️ Llamar{% endif %}
+                {% if 'whatsapp' in medio.nombre|lower %}{% icon "brand-whatsapp" size=16 %} WhatsApp{% else %}{% icon "phone" size=16 %} Llamar{% endif %}
               </button>
             {% endif %}
           {% endfor %}
@@ -154,7 +155,7 @@
         {% if selected_phone and not selected_phone.whatsapp_activo %}
           <p class="alert alert-danger mt-1" style="font-size:12px; padding:6px 10px;">Número sin WhatsApp activo.</p>
         {% endif %}
-        {% if has_pbx %}<p class="text-sm mt-1" style="color:var(--text-muted)">☎️ marcará por la central telefónica (pbxip.cl) a tu anexo, luego te conecta con el cliente.</p>{% endif %}
+        {% if has_pbx %}<p class="text-sm mt-1" style="color:var(--text-muted)">{% icon "phone" size=14 %} marcará por la central telefónica (pbxip.cl) a tu anexo, luego te conecta con el cliente.</p>{% endif %}
         <p class="text-sm mt-2 mb-1" style="color:var(--text-muted)">O elige el medio directamente (sin llamar):</p>
       {% else %}
         <div class="flex gap-3 items-center" id="medio-buttons">
@@ -164,7 +165,7 @@
                     data-medio-id="{{ medio.id }}"
                     data-nombre="{{ medio.nombre }}"
                     data-native-url="mailto:{{ selected_email }}">
-              ✉️ {{ medio.nombre }}
+              {% icon "mail" size=16 %} {{ medio.nombre }}
             </button>
           {% endfor %}
         </div>

@@ -1,4 +1,5 @@
 {% extends 'core/base.html'%}
+{% load icons %}
 
 {% block title %}TurboTubo{% endblock %}
 
@@ -9,14 +10,14 @@
 
   {% if request.user.is_authenticated %}
     <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-      <a href="{% url 'leads:list' %}" class="card p-4 link" style="text-decoration:none;">👥 Clientes</a>
-      <a href="{% url 'actions:index' %}" class="card p-4 link" style="text-decoration:none;">⚡ Gestiones</a>
-      <a href="{% url 'actions:payments_list' %}" class="card p-4 link" style="text-decoration:none;">💵 Pagos</a>
+      <a href="{% url 'leads:list' %}" class="card p-4 link" style="text-decoration:none;">{% icon "users" size=18 %} Clientes</a>
+      <a href="{% url 'actions:index' %}" class="card p-4 link" style="text-decoration:none;">{% icon "bolt" size=18 %} Gestiones</a>
+      <a href="{% url 'actions:payments_list' %}" class="card p-4 link" style="text-decoration:none;">{% icon "currency-dollar" size=18 %} Pagos</a>
       {% if request.user.userprofile.user_type in 'admin,owner,supervisor' %}
-        <a href="{% url 'actions:commitments_list' %}" class="card p-4 link" style="text-decoration:none;">🤝 Compromisos</a>
-        <a href="{% url 'actions:recordings_list' %}" class="card p-4 link" style="text-decoration:none;">🎙️ Grabaciones</a>
+        <a href="{% url 'actions:commitments_list' %}" class="card p-4 link" style="text-decoration:none;">{% icon "calendar-dollar" size=18 %} Compromisos</a>
+        <a href="{% url 'actions:recordings_list' %}" class="card p-4 link" style="text-decoration:none;">{% icon "microphone" size=18 %} Grabaciones</a>
       {% endif %}
-      <a href="{% url 'userprofile:myaccount' %}" class="card p-4 link" style="text-decoration:none;">⚙️ Mi cuenta</a>
+      <a href="{% url 'userprofile:myaccount' %}" class="card p-4 link" style="text-decoration:none;">{% icon "settings" size=18 %} Mi cuenta</a>
     </div>
   {% else %}
     <a href="{% url 'login' %}" class="btn btn-primary">Iniciar sesión</a>

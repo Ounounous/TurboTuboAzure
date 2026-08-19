@@ -1,4 +1,5 @@
 {% extends 'core/base.html' %}
+{% load icons %}
 
 {% block title %}Grabaciones{% endblock %}
 
@@ -9,7 +10,7 @@
     {% if es_admin %}
     <form method="post" action="{% url 'actions:recordings_sync' %}" style="margin:0;">
       {% csrf_token %}
-      <button type="submit" class="btn btn-secondary" title="Busca en pbxip.cl las grabaciones de las llamadas pendientes, sin esperar el cron de cada 5 min.">🔄 Buscar grabaciones ahora</button>
+      <button type="submit" class="btn btn-secondary" title="Busca en pbxip.cl las grabaciones de las llamadas pendientes, sin esperar el cron de cada 5 min.">{% icon "refresh" size=15 %} Buscar grabaciones ahora</button>
     </form>
     {% endif %}
   </div>
@@ -64,7 +65,7 @@
                     {# No se pudo conseguir el audio tras los reintentos (ver actions/tasks.py) --
                        se deja la guia para buscarla directo en pbxip.cl. #}
                     <span class="muted" style="font-size:11.5px; line-height:1.4; display:block;" title="{{ rec.sin_audio_detalle }}">
-                      ⚠️ Sin audio — {{ rec.get_sin_audio_motivo_display|default:"no disponible" }}<br>
+                      {% icon "alert-triangle" size=14 %} Sin audio — {{ rec.get_sin_audio_motivo_display|default:"no disponible" }}<br>
                       {% if rec.cdr_id %}
                         Buscar en pbxip.cl, ID: <code>{{ rec.cdr_id }}</code> (mes {{ rec.month }})
                       {% else %}
@@ -78,7 +79,7 @@
                 <td>
                   <span class="row-actions">
                     {% if rec.audio_file %}
-                      <a href="{{ rec.audio_file.url }}" download title="Descargar">⬇️</a>
+                      <a href="{{ rec.audio_file.url }}" download title="Descargar">{% icon "download" size=15 %}</a>
                     {% else %}
                       <span class="muted">—</span>
                     {% endif %}

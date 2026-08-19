@@ -1,5 +1,6 @@
 <!-- demographics/templates/demographics/demographics_index.html -->
 {% extends 'core/base.html' %}
+{% load icons %}
 
 {% block title %}Demografía{% endblock %}
 
@@ -9,11 +10,11 @@
   {% include 'demographics/_subnav.html' with active='subir' %}
   <p class="muted mb-4">Elige qué datos quieres cargar por Excel.</p>
   <div class="chips">
-    <a href="?form_type=phone" class="chip {% if form_type == 'phone' %}active{% endif %}">📞 Teléfonos</a>
-    <a href="?form_type=iddemographics" class="chip {% if form_type == 'iddemographics' %}active{% endif %}">✉️ Email</a>
-    <a href="?form_type=address" class="chip {% if form_type == 'address' %}active{% endif %}">📍 Dirección</a>
-    <a href="?form_type=iditem" class="chip {% if form_type == 'iditem' %}active{% endif %}">🚗 Bienes</a>
-    <a href="?form_type=aval_demographics" class="chip {% if form_type == 'aval_demographics' %}active{% endif %}">🧑‍🤝‍🧑 Aval</a>
+    <a href="?form_type=phone" class="chip {% if form_type == 'phone' %}active{% endif %}">{% icon "phone" size=14 %} Teléfonos</a>
+    <a href="?form_type=iddemographics" class="chip {% if form_type == 'iddemographics' %}active{% endif %}">{% icon "mail" size=14 %} Email</a>
+    <a href="?form_type=address" class="chip {% if form_type == 'address' %}active{% endif %}">{% icon "map-pin" size=14 %} Dirección</a>
+    <a href="?form_type=iditem" class="chip {% if form_type == 'iditem' %}active{% endif %}">{% icon "car" size=14 %} Bienes</a>
+    <a href="?form_type=aval_demographics" class="chip {% if form_type == 'aval_demographics' %}active{% endif %}">{% icon "users" size=14 %} Aval</a>
   </div>
 
   <div id="upload-forms" class="mt-6" style="max-width:720px;">
@@ -51,7 +52,7 @@
               <li><strong>cartera</strong>, <strong>subcartera</strong>, <strong>op</strong> — identifican al cliente. Obligatorias.</li>
               <li><strong>principal_email</strong> — el correo principal del cliente. Obligatoria.</li>
             </ul>
-            <p class="muted mt-2" style="font-size:12px;">Esta es la demografía "base" del cliente: para poder subir Avales (pestaña 🧑‍🤝‍🧑) primero tiene que existir este registro.</p>
+            <p class="muted mt-2" style="font-size:12px;">Esta es la demografía "base" del cliente: para poder subir Avales (pestaña {% icon "users" size=13 %} Aval) primero tiene que existir este registro.</p>
           </div>
       </div>
       {% elif form_type == 'address' %}
@@ -109,7 +110,7 @@
               <li><strong>aval_address</strong> — dirección del aval. Obligatoria.</li>
             </ul>
             <p class="muted mt-2" style="font-size:12px;">
-              ⚠ El cliente tiene que tener ya cargado su correo (pestaña ✉️ Email) antes de poder
+              {% icon "alert-triangle" size=13 %} El cliente tiene que tener ya cargado su correo (pestaña {% icon "mail" size=13 %} Email) antes de poder
               subirle un aval — si no, la fila se rechaza con "no tiene demografía principal cargada todavía".
             </p>
           </div>

@@ -1,4 +1,5 @@
 {% extends 'core/base.html' %}
+{% load icons %}
 
 {% block title %}{{ cartera.nombre }}{% endblock %}
 
@@ -174,7 +175,7 @@
   {% if medios or resultados %}
   <details class="card p-4" style="border: 1px solid var(--border); border-radius: 10px;">
     <summary style="cursor: pointer; font-size: 1.05rem; font-weight: 800; margin: 0; user-select: none;">
-      📋 Árbol de decisiones
+      {% icon "clipboard-list" size=18 %} Árbol de decisiones
     </summary>
     <div style="margin-top: 16px;">
       {% if medios %}

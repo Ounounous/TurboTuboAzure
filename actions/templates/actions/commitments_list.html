@@ -1,5 +1,5 @@
 {% extends 'core/base.html' %}
-{% load money %}
+{% load money icons %}
 
 {% block title %}Compromisos de pago{% endblock %}
 
@@ -89,7 +89,7 @@
                 {# Editar: reemplaza este compromiso por uno nuevo (misma gestion, fecha/monto distintos). #}
                 <td>
                   <details>
-                    <summary class="cursor-pointer" style="font-size:12px; font-weight:600; color:var(--text-muted);">✏️ Editar</summary>
+                    <summary class="cursor-pointer" style="font-size:12px; font-weight:600; color:var(--text-muted);">{% icon "pencil" size=14 %} Editar</summary>
                     <form method="post" action="{% url 'actions:commitments_list' %}"
                           style="display:flex; flex-direction:column; gap:5px; margin-top:8px; min-width:220px;"
                           onsubmit="return confirm('¿Confirmas que quieres reemplazar este compromiso por uno nuevo con la fecha/monto que ingresaste? El compromiso actual queda retirado.');">
@@ -117,7 +117,7 @@
                 {# Compromiso roto: gestion nueva con el mismo medio/resultado, sin fecha -> status Contactado. #}
                 <td>
                   <details>
-                    <summary class="cursor-pointer" style="font-size:12px; font-weight:600; color:var(--text-muted);">💔 Roto</summary>
+                    <summary class="cursor-pointer" style="font-size:12px; font-weight:600; color:var(--text-muted);">{% icon "heart-broken" size=14 %} Roto</summary>
                     <form method="post" action="{% url 'actions:commitments_list' %}"
                           style="display:flex; flex-direction:column; gap:5px; margin-top:8px; min-width:220px;"
                           onsubmit="return confirm('¿Confirmas que este compromiso NO se cumplió? El cliente quedará en estado Contactado.');">
@@ -156,7 +156,7 @@
   {% endif %}
 
   <div class="mt-6">
-    <a href="{% url 'actions:commitments_broken_list' %}" class="link">💔 Ver compromisos rotos</a>
+    <a href="{% url 'actions:commitments_broken_list' %}" class="link">{% icon "heart-broken" size=14 %} Ver compromisos rotos</a>
   </div>
 </div>
 {% endblock %}

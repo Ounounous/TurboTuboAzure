@@ -1,5 +1,5 @@
 {% extends 'core/base.html' %}
-{% load money %}
+{% load money icons %}
 
 {% block title %}{{ lead.name }}{% endblock %}
 
@@ -49,9 +49,9 @@
 
         <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
           {% if lead.es_gestionable %}
-            <a href="{% url 'actions:multistep_step_with_lead' step=2 lead_id=lead.pk %}" class="btn btn-primary" onclick="openGestionModal(this.href); return false;">⚡ Gestionar</a>
+            <a href="{% url 'actions:multistep_step_with_lead' step=2 lead_id=lead.pk %}" class="btn btn-primary" onclick="openGestionModal(this.href); return false;">{% icon "bolt" %} Gestionar</a>
           {% endif %}
-          <a href="{% url 'actions:payment_create' lead.pk %}" class="btn btn-secondary" onclick="openGestionModal(this.href); return false;">💵 Pago</a>
+          <a href="{% url 'actions:payment_create' lead.pk %}" class="btn btn-secondary" onclick="openGestionModal(this.href); return false;">{% icon "currency-dollar" %} Pago</a>
         </div>
 
         {% if is_supervisor %}
@@ -139,15 +139,15 @@
         <div class="kv-list">
           {% for phone in phones %}
             {% if phone.phone_type == 'principal' %}
-              <div class="kv"><span class="k">📞 Teléfono</span><span class="v">{{ phone.phone_number }}</span></div>
+              <div class="kv"><span class="k">{% icon "phone" %} Teléfono</span><span class="v">{{ phone.phone_number }}</span></div>
             {% endif %}
           {% endfor %}
           {% with demo=demographics.first %}
-            <div class="kv"><span class="k">✉️ Email</span><span class="v">{{ demo.principal_email|default:"-" }}</span></div>
+            <div class="kv"><span class="k">{% icon "mail" %} Email</span><span class="v">{{ demo.principal_email|default:"-" }}</span></div>
           {% for em in lead.emails.all %}
-            <div class="kv"><span class="k">✉️ Email extra</span><span class="v">{{ em.email }}{% if em.email_status != 'active' %} <span class="muted">({{ em.get_email_status_display }})</span>{% endif %}</span></div>
+            <div class="kv"><span class="k">{% icon "mail" %} Email extra</span><span class="v">{{ em.email }}{% if em.email_status != 'active' %} <span class="muted">({{ em.get_email_status_display }})</span>{% endif %}</span></div>
           {% endfor %}
-            <div class="kv"><span class="k">📍 Dirección</span><span class="v">{{ demo.principal_address|default:"-" }}</span></div>
+            <div class="kv"><span class="k">{% icon "map-pin" %} Dirección</span><span class="v">{{ demo.principal_address|default:"-" }}</span></div>
           {% endwith %}
           {% if aval_demographics %}
             <div class="kv"><span class="k">Aval</span><span class="v">{{ aval_demographics.aval_name }} · {{ aval_demographics.aval_rut }}-{{ aval_demographics.aval_dv }}</span></div>
@@ -159,7 +159,7 @@
         <h3 style="margin:0 0 10px; font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted);">Bienes</h3>
         <div class="kv-list">
           {% for item in lead.iditem_set.all %}
-            <div class="kv"><span class="k">🚗 {{ item.get_item_type_display }}</span><span class="v">{{ item.patente|default:"-" }}{% if item.marca %} · {{ item.marca }}{% endif %}{% if item.modelo %} {{ item.modelo }}{% endif %}</span></div>
+            <div class="kv"><span class="k">{% icon "car" %} {{ item.get_item_type_display }}</span><span class="v">{{ item.patente|default:"-" }}{% if item.marca %} · {{ item.marca }}{% endif %}{% if item.modelo %} {{ item.modelo }}{% endif %}</span></div>
           {% empty %}
             <div class="kv"><span class="v muted">Sin bienes informados.</span></div>
           {% endfor %}
@@ -181,7 +181,7 @@
         <button type="button" class="tab-btn is-active" data-tab="gestiones">Gestiones</button>
         <button type="button" class="tab-btn" data-tab="compromisos">Compromisos</button>
         <button type="button" class="tab-btn" data-tab="pagos">Pagos</button>
-        <button type="button" class="tab-btn" data-tab="notas">📝 Notas</button>
+        <button type="button" class="tab-btn" data-tab="notas">{% icon "note" %} Notas</button>
         <button type="button" class="tab-btn" data-tab="grabaciones">Grabaciones</button>
         <button type="button" class="tab-btn" data-tab="demografia">Demografía</button>
         <button type="button" class="tab-btn" data-tab="archivos">Archivos</button>
@@ -289,7 +289,7 @@
         {% if lead.pending_pbx_calls.all|length %}
           {% for pc in lead.pending_pbx_calls.all %}
             {% if not pc.resolved %}
-              <p class="text-sm muted mb-2">⏳ Llamada iniciada {{ pc.requested_at|date:"d-m-Y H:i" }}, buscando su grabación...</p>
+              <p class="text-sm muted mb-2">{% icon "hourglass" size=14 %} Llamada iniciada {{ pc.requested_at|date:"d-m-Y H:i" }}, buscando su grabación...</p>
             {% endif %}
           {% endfor %}
         {% endif %}
@@ -308,7 +308,7 @@
                 {% else %}
                   {# No se pudo conseguir el audio tras los reintentos -- ver Grabaciones para
                      mas detalle (motivo, y el ID de pbxip.cl si se llego a encontrar). #}
-                  <p class="muted text-sm">⚠️ Sin audio — {{ rec.get_sin_audio_motivo_display|default:"no disponible" }}</p>
+                  <p class="muted text-sm">{% icon "alert-triangle" size=14 %} Sin audio — {{ rec.get_sin_audio_motivo_display|default:"no disponible" }}</p>
                 {% endif %}
               </div>
             {% endfor %}

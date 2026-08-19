@@ -1,3 +1,4 @@
+{% load icons %}
 {% comment %}
   Modal para agregar una nota interna a un lead sin salir de la página.
   Se abre con openNoteModal(leadPk, leadLabel). Envía la nota por fetch (AJAX) a
@@ -6,8 +7,8 @@
 <dialog id="note-dialog" class="rounded-xl p-0 w-11/12 max-w-lg">
   <form id="note-modal-form" class="card p-0" style="border-radius:.75rem;overflow:hidden;">
     <div class="flex justify-between items-center py-3 px-4" style="background:var(--nav-bg);color:var(--nav-text);">
-      <strong>📝 Nueva nota <span id="note-modal-label" class="font-normal"></span></strong>
-      <button type="button" onclick="closeNoteModal()" class="text-xl" aria-label="Cerrar">✕</button>
+      <strong>{% icon "note" size=18 %} Nueva nota <span id="note-modal-label" class="font-normal"></span></strong>
+      <button type="button" onclick="closeNoteModal()" aria-label="Cerrar">{% icon "x" size=18 %}</button>
     </div>
     <div class="p-4">
       <p class="muted text-sm mb-2">Las notas no salen en los reportes. Sirven de recordatorio para el equipo.</p>

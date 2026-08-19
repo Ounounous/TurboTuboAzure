@@ -1,9 +1,10 @@
+{% load icons %}
 {% comment %}Sub-navegación de Configuración. `active` = index | usuarios | equipo | retencion.{% endcomment %}
 <div class="chips mb-4">
-  <a href="{% url 'configuracion:index' %}" class="chip {% if active == 'index' %}active{% endif %}">⚙️ Configuración</a>
-  <a href="{% url 'configuracion:usuarios_permisos' %}" class="chip {% if active == 'usuarios' %}active{% endif %}">👥 Usuarios y Permisos</a>
-  <a href="{% url 'configuracion:equipo' %}" class="chip {% if active == 'equipo' %}active{% endif %}">🏢 Equipo</a>
-  <a href="{% url 'configuracion:retencion' %}" class="chip {% if active == 'retencion' %}active{% endif %}">🗄️ Retención de datos</a>
-  <a href="{% url 'configuracion:registros' %}" class="chip {% if active == 'registros' %}active{% endif %}">📋 Registros de acciones</a>
-  <a href="{% url 'configuracion:cargas_masivas' %}" class="chip {% if active == 'cargas_masivas' %}active{% endif %}">📤 Cargas masivas</a>
+  <a href="{% url 'configuracion:index' %}" class="chip {% if active == 'index' %}active{% endif %}">{% icon "settings" size=14 %} Configuración</a>
+  <a href="{% url 'configuracion:usuarios_permisos' %}" class="chip {% if active == 'usuarios' %}active{% endif %}">{% icon "users" size=14 %} Usuarios y Permisos</a>
+  <a href="{% url 'configuracion:equipo' %}" class="chip {% if active == 'equipo' %}active{% endif %}">{% icon "building" size=14 %} Equipo</a>
+  <a href="{% url 'configuracion:retencion' %}" class="chip {% if active == 'retencion' %}active{% endif %}">{% icon "archive" size=14 %} Retención de datos</a>
+  <a href="{% url 'configuracion:registros' %}" class="chip {% if active == 'registros' %}active{% endif %}">{% icon "clipboard-list" size=14 %} Registros de acciones</a>
+  <a href="{% url 'configuracion:cargas_masivas' %}" class="chip {% if active == 'cargas_masivas' %}active{% endif %}">{% icon "cloud-upload" size=14 %} Cargas masivas</a>
 </div>

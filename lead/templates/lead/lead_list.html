@@ -1,5 +1,5 @@
 {% extends 'core/base.html' %}
-{% load money %}
+{% load money icons %}
 
 {% block title %}Clientes{% endblock %}
 
@@ -25,8 +25,8 @@
           <span class="dot-st"><span class="d st-{{ chip.color }}"></span></span>{{ chip.label }} <span class="c">{{ chip.count }}</span>
         </a>
       {% endfor %}
-      <a href="{% if only_fav %}{{ url_clear_fav }}{% else %}{{ url_fav }}{% endif %}" class="chip fav {% if only_fav %}active{% endif %}">★ Favoritos <span class="c">{{ fav_count }}</span></a>
-      <a href="{% if only_alert %}{{ url_clear_alerta }}{% else %}{{ url_alerta }}{% endif %}" class="chip alert {% if only_alert %}active{% endif %}">● Alerta <span class="c">{{ alert_count }}</span></a>
+      <a href="{% if only_fav %}{{ url_clear_fav }}{% else %}{{ url_fav }}{% endif %}" class="chip fav {% if only_fav %}active{% endif %}">{% icon "star" size=14 %} Favoritos <span class="c">{{ fav_count }}</span></a>
+      <a href="{% if only_alert %}{{ url_clear_alerta }}{% else %}{{ url_alerta }}{% endif %}" class="chip alert {% if only_alert %}active{% endif %}">{% icon "alert-triangle" size=14 %} Alerta <span class="c">{{ alert_count }}</span></a>
     </div>
 
     <!-- Buscador + filtros avanzados -->
@@ -144,16 +144,16 @@
                 <tr>
                   <td>
                     <span style="display:inline-flex; align-items:center; gap:2px;">
-                      <button type="button" class="fav-star {% if lead.is_fav %}is-fav{% endif %}" data-lead-id="{{ lead.pk }}" title="Favorito" aria-label="Marcar favorito">{% if lead.is_fav %}★{% else %}☆{% endif %}</button>
-                      <button type="button" class="alert-dot {% if lead.is_alert %}is-alert{% endif %}" data-lead-id="{{ lead.pk }}" title="Alerta (gestión complicada)" aria-label="Marcar alerta">●</button>
+                      <button type="button" class="fav-star {% if lead.is_fav %}is-fav{% endif %}" data-lead-id="{{ lead.pk }}" title="Favorito" aria-label="Marcar favorito">{% icon "star" size=15 %}</button>
+                      <button type="button" class="alert-dot {% if lead.is_alert %}is-alert{% endif %}" data-lead-id="{{ lead.pk }}" title="Alerta (gestión complicada)" aria-label="Marcar alerta">{% icon "alert-triangle" size=14 %}</button>
                     </span>
                   </td>
                   <td>
                     <span class="row-actions">
-                      <a href="{% url 'leads:detail' lead.pk %}" title="Ver detalles">👁️</a>
-                      <a href="{% url 'actions:multistep_step_with_lead' step=2 lead_id=lead.pk %}" title="Gestionar" onclick="openGestionModal(this.href); return false;">⚡</a>
-                      <a href="{% url 'actions:payment_create' lead.pk %}" title="Ingresar pago" onclick="openGestionModal(this.href); return false;">💵</a>
-                      <button type="button" title="Agregar nota" onclick="openNoteModal({{ lead.pk }}, '{{ lead.op|escapejs }}')">📝</button>
+                      <a href="{% url 'leads:detail' lead.pk %}" title="Ver detalles">{% icon "eye" size=15 %}</a>
+                      <a href="{% url 'actions:multistep_step_with_lead' step=2 lead_id=lead.pk %}" title="Gestionar" onclick="openGestionModal(this.href); return false;">{% icon "bolt" size=15 %}</a>
+                      <a href="{% url 'actions:payment_create' lead.pk %}" title="Ingresar pago" onclick="openGestionModal(this.href); return false;">{% icon "currency-dollar" size=15 %}</a>
+                      <button type="button" title="Agregar nota" onclick="openNoteModal({{ lead.pk }}, '{{ lead.op|escapejs }}')">{% icon "note" size=15 %}</button>
                     </span>
                   </td>
                   <td class="op"><a href="{% url 'leads:detail' lead.pk %}" class="link">{{ lead.op }}</a></td>
