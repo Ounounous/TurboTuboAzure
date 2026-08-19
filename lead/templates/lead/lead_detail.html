@@ -8,13 +8,119 @@
   <a href="{% url 'leads:list' %}" class="link mb-4" style="font-size:13px; display:inline-block;">← Volver a clientes</a>
 
   <div class="detail-grid">
+    <!-- ============ Riel de acciones ============ -->
+    <div class="action-rail">
+      {% if lead.es_gestionable %}
+        <button type="button" class="rail-btn rail-btn-primary" title="Gestionar"
+                onclick="openGestionModal('{% url 'actions:multistep_step_with_lead' step=2 lead_id=lead.pk %}'); return false;">{% icon "bolt" %}</button>
+      {% endif %}
+      <button type="button" class="rail-btn" title="Registrar pago"
+              onclick="openGestionModal('{% url 'actions:payment_create' lead.pk %}'); return false;">{% icon "currency-dollar" %}</button>
+
+      {% if is_supervisor %}
+        <div class="rail-sep"></div>
+
+        {% if lead.status != 'al dia' %}
+          <form method="post" action="{% url 'leads:marcar_al_dia' lead.pk %}"
+                onsubmit="return confirm('¿Marcar {{ lead.op }} como al día? Si te equivocas, se puede revertir después desde esta misma ficha.');">
+            {% csrf_token %}
+            <button type="submit" class="rail-btn" title="Marcar al día">{% icon "circle-check" %}</button>
+          </form>
+        {% else %}
+          <form method="post" action="{% url 'leads:revertir_al_dia' lead.pk %}"
+                onsubmit="return confirm('¿Revertir \'al día\' en {{ lead.op }}? Vuelve a estar activo y su status se recalcula desde su última gestión.');">
+            {% csrf_token %}
+            <button type="submit" class="rail-btn" title="Revertir &quot;al día&quot;">{% icon "circle-check" %}</button>
+          </form>
+        {% endif %}
+
+        {% if lead.activo == 'activo' %}
+          <button type="button" class="rail-btn" title="Suspender / desasignar" data-popover="pop-suspender">{% icon "player-pause" %}</button>
+        {% else %}
+          <form method="post" action="{% url 'suspensiones:lead_accion' lead.pk %}">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <button type="submit" name="accion" value="reactivar" class="rail-btn" title="Reactivar (volver a activo)">{% icon "player-play" %}</button>
+          </form>
+        {% endif %}
+
+        {% if quick_assign_form %}
+          <button type="button" class="rail-btn" title="Asignar cobrador" data-popover="pop-asignar">{% icon "user-check" %}</button>
+        {% endif %}
+        {% if mover_subcartera_form %}
+          <button type="button" class="rail-btn" title="Mover subcartera" data-popover="pop-subcartera">{% icon "arrows-right-left" %}</button>
+        {% endif %}
+
+        <div class="rail-sep"></div>
+        <form id="lead_delete_form" method="post" action="{% url 'leads:delete' lead.id %}">{% csrf_token %}</form>
+        <button type="button" class="rail-btn rail-btn-danger" title="Eliminar"
+                onclick="if(confirm('¿Eliminar {{ lead.op }}? Esta acción no se puede deshacer.')) document.getElementById('lead_delete_form').submit();">{% icon "trash" %}</button>
+      {% endif %}
+
+      {% if is_supervisor and lead.activo == 'activo' %}
+        <div class="rail-popover" id="pop-suspender">
+          <div class="rp-title">Suspender / desasignar</div>
+          <form method="post" action="{% url 'suspensiones:lead_accion' lead.pk %}" style="display:flex; flex-direction:column; gap:8px;">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <input type="text" name="motivo" placeholder="Motivo de suspensión">
+            <div style="display:flex; gap:6px;">
+              <button type="submit" name="accion" value="suspender" class="btn btn-secondary" style="flex:1; font-size:12.5px;">Suspender</button>
+              <button type="submit" name="accion" value="desasignar" class="btn btn-secondary" style="flex:1; font-size:12.5px;">Desasignar</button>
+            </div>
+          </form>
+        </div>
+      {% endif %}
+
+      {% if is_supervisor and quick_assign_form %}
+        <div class="rail-popover" id="pop-asignar">
+          <div class="rp-title">Asignar cobrador</div>
+          <div class="muted" style="font-size:11.5px; margin-bottom:8px;">
+            Actual:
+            {% if lead.assigned_to and lead.assigned_to.userprofile.user_type == 'collector' %}
+              <strong style="color:var(--text);">{{ lead.assigned_to.username }}</strong>
+            {% else %}No asignado{% endif %}
+          </div>
+          <form method="post" style="display:flex; flex-direction:column; gap:8px;">
+            {% csrf_token %}
+            <select name="collector">
+              <option value="" {% if not lead.assigned_to or lead.assigned_to.userprofile.user_type != 'collector' %}selected{% endif %}>-- Sin asignar --</option>
+              {% for user in quick_assign_form.collector.field.queryset %}
+                <option value="{{ user.pk }}" {% if lead.assigned_to_id == user.pk %}selected{% endif %}>{{ user.username }}</option>
+              {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-secondary" style="font-size:12.5px;">Asignar</button>
+          </form>
+        </div>
+      {% endif %}
+
+      {% if is_supervisor and mover_subcartera_form %}
+        <div class="rail-popover" id="pop-subcartera">
+          <div class="rp-title">Mover subcartera</div>
+          <div class="muted" style="font-size:11.5px; margin-bottom:8px;">
+            Actual: <strong style="color:var(--text);">{{ lead.subcartera.cartera.nombre }} / {{ lead.subcartera.nombre }}</strong>
+          </div>
+          <form method="post" style="display:flex; flex-direction:column; gap:8px;">
+            {% csrf_token %}
+            <input type="hidden" name="mover_subcartera" value="1">
+            <select name="subcartera">
+              {% for sub in mover_subcartera_form.subcartera.field.queryset %}
+                <option value="{{ sub.pk }}" {% if lead.subcartera_id == sub.pk %}selected{% endif %}>{{ sub.nombre }}</option>
+              {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-secondary" style="font-size:12.5px;">Mover</button>
+          </form>
+        </div>
+      {% endif %}
+    </div>
+
     <!-- ============ Izquierda: deuda + información ============ -->
     <div style="display:flex; flex-direction:column; gap:16px;">
 
       <div class="card p-4" style="text-align:center;">
-        <div class="avatar-lg">{{ initials }}</div>
+        <div class="id-destacado">{{ lead.op }}</div>
         <div style="font-size:16px; font-weight:800;">{{ lead.name }}</div>
-        <div class="muted" style="font-size:12.5px; margin-bottom:8px;">{{ lead.op }} · {{ lead.rut }}-{{ lead.dv }}</div>
+        <div class="muted" style="font-size:12.5px; margin-bottom:8px;">{{ lead.rut }}-{{ lead.dv }}</div>
         <span class="dot-st"><span class="d st-{{ lead.status_color }}"></span>{{ lead.get_status_display }}</span>
         {% if lead.status_historico != lead.status %}
           <div class="muted" style="font-size:11.5px; margin-top:4px;">Mejor status: {{ lead.get_status_historico_display }}</div>
@@ -27,93 +133,11 @@
         {% if not lead.es_gestionable %}
           <div class="alert alert-danger mt-2" style="font-size:11.5px; padding:6px 10px;">{{ lead.motivo_no_gestionable }} — solo se pueden agregar notas.</div>
         {% endif %}
-        {% if is_supervisor and lead.status != 'al dia' %}
-          <form method="post" action="{% url 'leads:marcar_al_dia' lead.pk %}" style="margin-top:8px;"
-                onsubmit="return confirm('¿Marcar {{ lead.op }} como al día? Si te equivocas, se puede revertir después desde esta misma ficha.');">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-secondary" style="font-size:11.5px; padding:4px 10px;">Marcar al día</button>
-          </form>
-        {% endif %}
-        {% if is_supervisor and lead.status == 'al dia' %}
-          <form method="post" action="{% url 'leads:revertir_al_dia' lead.pk %}" style="margin-top:8px;"
-                onsubmit="return confirm('¿Revertir \'al día\' en {{ lead.op }}? Vuelve a estar activo y su status se recalcula desde su última gestión.');">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-secondary" style="font-size:11.5px; padding:4px 10px;">Revertir "al día"</button>
-          </form>
-        {% endif %}
 
         <div class="debt-highlight">
           <div class="lbl">Saldo deuda</div>
           <div class="amt">{{ lead.saldo_deuda|clp }}</div>
         </div>
-
-        <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
-          {% if lead.es_gestionable %}
-            <a href="{% url 'actions:multistep_step_with_lead' step=2 lead_id=lead.pk %}" class="btn btn-primary" onclick="openGestionModal(this.href); return false;">{% icon "bolt" %} Gestionar</a>
-          {% endif %}
-          <a href="{% url 'actions:payment_create' lead.pk %}" class="btn btn-secondary" onclick="openGestionModal(this.href); return false;">{% icon "currency-dollar" %} Pago</a>
-        </div>
-
-        {% if is_supervisor %}
-          <div style="display:flex; gap:6px; justify-content:center; flex-wrap:wrap; margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
-            {% if lead.activo == 'activo' %}
-              <form method="post" action="{% url 'suspensiones:lead_accion' lead.pk %}" style="display:flex; gap:4px; align-items:center; flex-wrap:wrap; justify-content:center;">
-                {% csrf_token %}
-                <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                <input type="text" name="motivo" placeholder="motivo suspensión" style="width:150px; font-size:11.5px;">
-                <button type="submit" name="accion" value="suspender" class="btn btn-secondary" style="font-size:11px; padding:3px 8px;">Suspender</button>
-                <button type="submit" name="accion" value="desasignar" class="btn btn-secondary" style="font-size:11px; padding:3px 8px;">Desasignar</button>
-              </form>
-            {% else %}
-              <form method="post" action="{% url 'suspensiones:lead_accion' lead.pk %}" style="display:inline;">
-                {% csrf_token %}
-                <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                <button type="submit" name="accion" value="reactivar" class="btn btn-secondary" style="font-size:11px; padding:3px 8px;">Reactivar (volver a activo)</button>
-              </form>
-            {% endif %}
-          </div>
-
-          {% if quick_assign_form %}
-            <div style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border); display:flex; flex-direction:column; gap:6px; align-items:center;">
-              <div style="font-size:11.5px; color:var(--text-muted);">
-                Asignado a:
-                {% if lead.assigned_to and lead.assigned_to.userprofile.user_type == 'collector' %}
-                  <strong style="color:var(--text);">{{ lead.assigned_to.username }}</strong>
-                {% else %}
-                  No asignado
-                {% endif %}
-              </div>
-              <form method="post" style="display:flex; gap:4px; align-items:center; flex-wrap:wrap; justify-content:center;">
-                {% csrf_token %}
-                <select name="collector" style="font-size:11.5px; padding:4px 8px; border-radius:4px; border:1px solid var(--border);">
-                  <option value="" {% if not lead.assigned_to or lead.assigned_to.userprofile.user_type != 'collector' %}selected{% endif %}>-- Sin asignar --</option>
-                  {% for user in quick_assign_form.collector.field.queryset %}
-                    <option value="{{ user.pk }}" {% if lead.assigned_to_id == user.pk %}selected{% endif %}>{{ user.username }}</option>
-                  {% endfor %}
-                </select>
-                <button type="submit" class="btn btn-secondary" style="font-size:11px; padding:3px 8px;">Asignar</button>
-              </form>
-            </div>
-          {% endif %}
-
-          {% if mover_subcartera_form %}
-            <div style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border); display:flex; flex-direction:column; gap:6px; align-items:center;">
-              <div style="font-size:11.5px; color:var(--text-muted);">
-                Subcartera: <strong style="color:var(--text);">{{ lead.subcartera.cartera.nombre }} / {{ lead.subcartera.nombre }}</strong>
-              </div>
-              <form method="post" style="display:flex; gap:4px; align-items:center; flex-wrap:wrap; justify-content:center;">
-                {% csrf_token %}
-                <input type="hidden" name="mover_subcartera" value="1">
-                <select name="subcartera" style="font-size:11.5px; padding:4px 8px; border-radius:4px; border:1px solid var(--border);">
-                  {% for sub in mover_subcartera_form.subcartera.field.queryset %}
-                    <option value="{{ sub.pk }}" {% if lead.subcartera_id == sub.pk %}selected{% endif %}>{{ sub.nombre }}</option>
-                  {% endfor %}
-                </select>
-                <button type="submit" class="btn btn-secondary" style="font-size:11px; padding:3px 8px;">Mover</button>
-              </form>
-            </div>
-          {% endif %}
-        {% endif %}
       </div>
 
       <div class="card p-4">
@@ -151,6 +175,12 @@
           {% endwith %}
           {% if aval_demographics %}
             <div class="kv"><span class="k">Aval</span><span class="v">{{ aval_demographics.aval_name }} · {{ aval_demographics.aval_rut }}-{{ aval_demographics.aval_dv }}</span></div>
+            <div class="kv"><span class="k">{% icon "mail" %} Email aval</span><span class="v">{{ aval_demographics.aval_email|default:"-" }}</span></div>
+            {% for phone in phones %}
+              {% if phone.phone_type == 'aval' %}
+                <div class="kv"><span class="k">{% icon "phone" %} Teléfono aval</span><span class="v">{{ phone.phone_number }}</span></div>
+              {% endif %}
+            {% endfor %}
           {% endif %}
         </div>
       </div>
@@ -165,14 +195,6 @@
           {% endfor %}
         </div>
       </div>
-
-      <details class="card p-4">
-        <summary class="cursor-pointer font-semibold" style="font-size:12.5px; color:var(--text-muted);">Más opciones</summary>
-        <div class="mt-3" style="display:flex; flex-direction:column; gap:8px;">
-          <form id="lead_delete_form" method="post" action="{% url 'leads:delete' lead.id %}">{% csrf_token %}</form>
-          <a href="#" onclick="document.getElementById('lead_delete_form').submit();" class="btn btn-danger">Eliminar</a>
-        </div>
-      </details>
     </div>
 
     <!-- ============ Derecha: gestiones / notas / pagos (pestañas) ============ -->
@@ -183,7 +205,6 @@
         <button type="button" class="tab-btn" data-tab="pagos">Pagos</button>
         <button type="button" class="tab-btn" data-tab="notas">Notas</button>
         <button type="button" class="tab-btn" data-tab="grabaciones">Grabaciones</button>
-        <button type="button" class="tab-btn" data-tab="demografia">Demografía</button>
         <button type="button" class="tab-btn" data-tab="archivos">Archivos</button>
       </div>
 
@@ -318,31 +339,6 @@
         {% endif %}
       </div>
 
-      <!-- Demografía -->
-      <div class="tab-panel" data-panel="demografia">
-        <h3 class="font-bold mb-2">Bienes</h3>
-        <ul class="list-disc list-inside mb-4">
-          {% for item in lead.iditem_set.all %}
-            <li>{{ item.item_type }} - {{ item.patente }} - {{ item.marca }} - {{ item.modelo }}</li>
-          {% empty %}
-            <li class="muted">Sin bienes registrados.</li>
-          {% endfor %}
-        </ul>
-        {% if aval_demographics %}
-          <h3 class="font-bold mb-2">Aval</h3>
-          <div class="kv-list" style="max-width:420px;">
-            <div class="kv"><span class="k">Nombre</span><span class="v">{{ aval_demographics.aval_name }}</span></div>
-            <div class="kv"><span class="k">RUT</span><span class="v">{{ aval_demographics.aval_rut }}-{{ aval_demographics.aval_dv }}</span></div>
-            <div class="kv"><span class="k">Email</span><span class="v">{{ aval_demographics.aval_email|default:"-" }}</span></div>
-            {% for phone in phones %}
-              {% if phone.phone_type == 'aval' %}
-                <div class="kv"><span class="k">Teléfono</span><span class="v">{{ phone.phone_number }}</span></div>
-              {% endif %}
-            {% endfor %}
-          </div>
-        {% endif %}
-      </div>
-
       <!-- Archivos -->
       <div class="tab-panel" data-panel="archivos">
         {% for file in lead.files.all %}
@@ -376,6 +372,37 @@
         if (panel) panel.classList.add('is-active');
       });
     });
+  })();
+
+  (function () {
+    // Popovers del riel de acciones: cada .rail-btn[data-popover] abre/cierra el
+    // .rail-popover con ese id, anclado a la derecha del boton que lo activo.
+    var openPopover = null;
+
+    function closePopover() {
+      if (openPopover) { openPopover.classList.remove('is-open'); openPopover = null; }
+    }
+
+    document.querySelectorAll('.rail-btn[data-popover]').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var panel = document.getElementById(btn.dataset.popover);
+        if (!panel) return;
+        if (panel === openPopover) { closePopover(); return; }
+        closePopover();
+        var rect = btn.getBoundingClientRect();
+        panel.style.top = rect.top + 'px';
+        panel.style.left = (rect.right + 10) + 'px';
+        panel.classList.add('is-open');
+        openPopover = panel;
+      });
+    });
+
+    document.querySelectorAll('.rail-popover').forEach(function (panel) {
+      panel.addEventListener('click', function (e) { e.stopPropagation(); });
+    });
+
+    document.addEventListener('click', closePopover);
   })();
 </script>
 {% endblock %}
