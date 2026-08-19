@@ -20,9 +20,6 @@
   </form>
 
   {% elif step == 2 %}
-  <div class="mb-4">
-    {% include 'lead/partials/_notes.html' with lead=lead notes=lead_notes note_next='/dashboard/actions/multistep/2/' %}
-  </div>
   <form method="post">
     {% csrf_token %}
     <input type="hidden" name="accion" value="seleccionar">
@@ -55,6 +52,46 @@
     </form>
   </details>
   {% endif %}
+
+  <details class="card p-3 mt-3">
+    <summary class="cursor-pointer font-semibold" style="font-size:13px; color:var(--text-muted);">Mejor gestión</summary>
+    <div class="mt-3">
+      <span class="dot-st"><span class="d st-{{ lead.status_historico_color }}"></span>{{ lead.get_status_historico_display }}</span>
+    </div>
+  </details>
+
+  <details class="card p-3 mt-3">
+    <summary class="cursor-pointer font-semibold" style="font-size:13px; color:var(--text-muted);">Últimas gestiones</summary>
+    <div class="mt-3">
+      {% if ultimas_gestiones %}
+        <div class="overflow-x-auto">
+          <table class="table-dense">
+            <thead><tr><th>Medio</th><th>Resultado</th><th>Usuario</th><th>Fecha</th><th>Comentario</th></tr></thead>
+            <tbody>
+              {% for action in ultimas_gestiones %}
+                <tr>
+                  <td style="font-weight:600">{{ action.medio.nombre }}</td>
+                  <td>{{ action.resultado.nombre }}</td>
+                  <td>{{ action.user }}</td>
+                  <td style="font-variant-numeric:tabular-nums; color:var(--text-muted)">{{ action.created_at|date:"d-m-Y H:i" }}</td>
+                  <td>{{ action.comment|default_if_none:"-" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="muted">Sin gestiones ingresadas</p>
+      {% endif %}
+    </div>
+  </details>
+
+  <details class="card p-3 mt-3">
+    <summary class="cursor-pointer font-semibold" style="font-size:13px; color:var(--text-muted);">Notas</summary>
+    <div class="mt-3">
+      {% include 'lead/partials/_notes.html' with lead=lead notes=lead_notes note_readonly=1 %}
+    </div>
+  </details>
 
   {% elif step == 3 %}
   {% if lead_notes %}

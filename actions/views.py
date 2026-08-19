@@ -299,6 +299,8 @@ class MultiStepActionView(LoginRequiredMixin, View):
             'lead': lead, 'step': step, 'no_gestionable': lead.motivo_no_gestionable,
         })
 
+    ULTIMAS_GESTIONES_STEP2 = 5
+
     def _step2_context(self, lead, demographic_form=None, quick_phone_form=None, quick_email_form=None):
         idd = IDDemographics.objects.filter(lead=lead).first()
         return {
@@ -311,6 +313,13 @@ class MultiStepActionView(LoginRequiredMixin, View):
             # guardan como correos adicionales (modelo Email), sin pisar el principal.
             'puede_agregar_email': True,
             'lead_notes': lead.notes.select_related('author'),
+            # Mejor gestion (status_historico, "el mejor status que alcanzo alguna vez", no baja
+            # aunque el status actual si -- ver lead/models.py) y las ultimas gestiones reales,
+            # para dar contexto al cobrador antes de gestionar sin salir del formulario.
+            'ultimas_gestiones': list(
+                lead.actions.select_related('medio', 'resultado', 'user')
+                .order_by('-created_at')[:self.ULTIMAS_GESTIONES_STEP2]
+            ),
         }
 
     def get(self, request, step=1, lead_id=None):

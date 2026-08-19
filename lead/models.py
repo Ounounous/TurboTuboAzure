@@ -204,6 +204,10 @@ class Lead(models.Model):
         return self.STATUS_COLOR.get(self.status, 'slate')
 
     @property
+    def status_historico_color(self):
+        return self.STATUS_COLOR.get(self.status_historico, 'slate')
+
+    @property
     def es_gestionable(self):
         """False si no se le puede ingresar una gestion (suspendido o terminado)."""
         return self.activo not in self.ACTIVO_NO_GESTIONABLE
