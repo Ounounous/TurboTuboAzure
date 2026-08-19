@@ -558,6 +558,25 @@ class UploadExcelFileView(_SupervisorGate, View):
         }
         ops_en_archivo = set()
 
+        # Cache de subcarteras ya resueltas (evita una query por fila). La subcartera destino
+        # debe existir de antemano -- no se crea sola (mismo criterio que AssignLeadsView y
+        # MoveSubcarteraUploadView): un typo aca creaba una subcartera nueva con clientes reales
+        # en vez de fallar avisando. Columna vacía SI sigue cayendo a la subcartera por defecto
+        # de la cartera -- eso no es un typo, es "no especificado".
+        sub_default = cartera.subcartera_default
+        sub_cache = {}
+
+        def resolver_subcartera(nombre, errores):
+            if not nombre:
+                return sub_default
+            clave = nombre.lower()
+            if clave not in sub_cache:
+                sub_cache[clave] = Subcartera.objects.filter(cartera=cartera, nombre__iexact=nombre).first()
+            sub = sub_cache[clave]
+            if not sub:
+                errores.append(f'subcartera: "{nombre}" no existe en la cartera {cartera.nombre}')
+            return sub
+
         def validar_fila(fila, rownum):
             errores = []
             op = str(fila.get('op') or '').strip()
@@ -601,13 +620,15 @@ class UploadExcelFileView(_SupervisorGate, View):
             activo = _parse_choice(fila.get('activo'), Lead.CHOICES_ACTIVO, Lead.ACTIVO, 'activo', errores)
             tiene_aval = _parse_choice(fila.get('tiene_aval'), Lead.CHOICES_AVAL, Lead.NO, 'tiene_aval', errores)
 
+            subcartera = resolver_subcartera(str(fila.get('subcartera') or '').strip(), errores)
+
             if errores:
                 return None, errores
             return {
                 'op': op, 'name': name, 'rut': rut, 'dv': dv,
                 'saldo_insoluto': saldo_insoluto, 'saldo_deuda': saldo_deuda,
                 'valor_cuota': valor_cuota, 'cuotas_atrasadas': cuotas,
-                'subcartera_nombre': str(fila.get('subcartera') or '').strip(),
+                'subcartera': subcartera,
                 'tipo_cobranza': tipo_cobranza, 'ciclo_cartera': ciclo_cartera,
                 'ciclo': ciclo, 'activo': activo, 'tiene_aval': tiene_aval,
             }, []
@@ -622,27 +643,13 @@ class UploadExcelFileView(_SupervisorGate, View):
 
         # Todo válido: se guarda completo en una sola transacción.
         with transaction.atomic():
-            sub_default = cartera.subcartera_default
-            sub_cache = {}
-
-            def subcartera_para(nombre):
-                if not nombre:
-                    return sub_default
-                clave = nombre.lower()
-                if clave not in sub_cache:
-                    sub = Subcartera.objects.filter(cartera=cartera, nombre__iexact=nombre).first()
-                    if not sub:
-                        sub = Subcartera.objects.create(cartera=cartera, nombre=nombre)
-                    sub_cache[clave] = sub
-                return sub_cache[clave]
-
             team = request.user.userprofile.active_team
             nuevos = [
                 Lead(
                     op=f['op'], name=f['name'], rut=f['rut'], dv=f['dv'],
                     saldo_insoluto=f['saldo_insoluto'], saldo_deuda=f['saldo_deuda'],
                     valor_cuota=f['valor_cuota'], cuotas_atrasadas=f['cuotas_atrasadas'],
-                    subcartera=subcartera_para(f['subcartera_nombre']),
+                    subcartera=f['subcartera'],
                     tipo_cobranza=f['tipo_cobranza'], ciclo_cartera=f['ciclo_cartera'],
                     ciclo=f['ciclo'], activo=f['activo'], tiene_aval=f['tiene_aval'],
                     created_by=request.user, assigned_to=request.user, team=team,
@@ -859,6 +866,10 @@ class DownloadAssignmentTemplateView(LoginRequiredMixin, View):
 
 
 class AssignLeadsView(LoginRequiredMixin, View):
+    """Carga masiva: asigna leads a un cobrador y a una subcartera (columnas Cartera/Subcartera/
+    OP/Collector). La subcartera destino debe existir de antemano -- no se crea sola (mismo
+    criterio que MoveSubcarteraUploadView): elegir entre subcarteras ya creadas, no tipear una
+    nueva por error."""
     template_name = "lead/leads_assign.html"
 
     def get(self, request, *args, **kwargs):
@@ -919,14 +930,24 @@ class AssignLeadsView(LoginRequiredMixin, View):
                 if not collector_obj:
                     errores.append(f'cobrador "{collector_username}" no existe en tu equipo')
 
+                # La subcartera destino debe existir de antemano (mismo criterio que
+                # MoveSubcarteraUploadView) -- no se crea sola: un typo aca movia leads reales a
+                # una subcartera fantasma con el nombre mal escrito, en vez de fallar avisando.
+                subcartera = None
                 if not subcartera_nombre:
                     errores.append('subcartera: vacía')
+                elif cartera:
+                    subcartera = Subcartera.objects.filter(
+                        cartera=cartera, nombre__iexact=subcartera_nombre
+                    ).first()
+                    if not subcartera:
+                        errores.append(f'subcartera "{subcartera_nombre}" no existe en {cartera_nombre}')
 
                 if errores:
                     return None, errores
                 return {
                     'lead': lead, 'collector': collector_obj,
-                    'cartera': cartera, 'subcartera_nombre': subcartera_nombre,
+                    'cartera': cartera, 'subcartera': subcartera,
                 }, []
 
             resultado = procesar_carga(
@@ -941,12 +962,7 @@ class AssignLeadsView(LoginRequiredMixin, View):
             with transaction.atomic():
                 lote = iniciar_lote('asignaciones', request.user, archivo_nombre=getattr(excel_file, 'name', ''), total_filas=len(resultado.filas))
                 for f in resultado.filas:
-                    subcartera = Subcartera.objects.filter(
-                        cartera=f['cartera'], nombre__iexact=f['subcartera_nombre']
-                    ).first()
-                    if subcartera is None:
-                        subcartera = Subcartera.objects.create(cartera=f['cartera'], nombre=f['subcartera_nombre'])
-
+                    subcartera = f['subcartera']
                     lead = f['lead']
                     campos_nuevos = {'subcartera_id': subcartera.pk, 'assigned_to_id': f['collector'].pk}
                     if lead.activo == Lead.DESASIGNADO:
@@ -1016,7 +1032,7 @@ class MoveSubcarteraUploadView(LoginRequiredMixin, View):
     Alcance: cualquier supervisor que vea el lead (leads_visibles, por su subcartera ACTUAL)
     puede moverlo a cualquier otra subcartera de esa cartera, aunque no la supervise el mismo --
     decision explicita, mismo criterio que el movimiento manual desde la ficha del cliente.
-    A diferencia de Asignaciones, la subcartera destino debe existir de antemano (no se crea
+    Igual que AssignLeadsView, la subcartera destino debe existir de antemano (no se crea
     sola): elegir entre subcarteras ya creadas, no tipear una nueva por error.
     """
 

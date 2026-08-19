@@ -620,9 +620,16 @@ class PhoneStatusBulkView(SupervisorRequiredMixin, View):
             return resultado.respuesta_error
 
         from actions.status_logic import recompute_inubicable
+        from core.carga_tracking import iniciar_lote, registrar_actualizacion
         leads_tocados = set()
+        excel_file = request.FILES.get('excel_file')
         with transaction.atomic():
+            lote = iniciar_lote('estado_telefonos', request.user, archivo_nombre=getattr(excel_file, 'name', ''), total_filas=len(resultado.filas))
             for f in resultado.filas:
+                campos_nuevos = {'phone_number_status': f['estado']}
+                if f['whatsapp'] is not None:
+                    campos_nuevos['whatsapp_activo'] = f['whatsapp']
+                registrar_actualizacion(lote, f['phone'], campos_nuevos)
                 f['phone'].phone_number_status = f['estado']
                 if f['whatsapp'] is not None:
                     f['phone'].whatsapp_activo = f['whatsapp']
@@ -738,13 +745,27 @@ class EmailStatusBulkView(SupervisorRequiredMixin, View):
             return resultado.respuesta_error
 
         from actions.status_logic import recompute_inubicable
+        from core.carga_tracking import iniciar_lote, registrar_actualizacion
         leads_tocados = set()
         actualizados = 0
+        excel_file = request.FILES.get('excel_file')
         with transaction.atomic():
+            lote = iniciar_lote('estado_correos', request.user, archivo_nombre=getattr(excel_file, 'name', ''), total_filas=len(resultado.filas))
             for f in resultado.filas:
-                n = IDDemographics.objects.filter(lead=f['lead'], principal_email=f['correo']).update(principal_email_status=f['estado'])
-                n += AvalDemographics.objects.filter(id_demographics__lead=f['lead'], aval_email=f['correo']).update(aval_email_status=f['estado'])
-                actualizados += n
+                # update() masivo cambia por queryset (posiblemente 0, 1 o 2 filas -- principal y
+                # aval pueden coincidir con el mismo correo). Se itera objeto por objeto (en vez
+                # del update() directo que habia antes) para poder dejar en la bitacora el estado
+                # ANTERIOR de cada fila que se toca -- si no, "deshacer" no puede revertir esto.
+                for d in IDDemographics.objects.filter(lead=f['lead'], principal_email=f['correo']):
+                    registrar_actualizacion(lote, d, {'principal_email_status': f['estado']})
+                    d.principal_email_status = f['estado']
+                    d.save(update_fields=['principal_email_status'])
+                    actualizados += 1
+                for a in AvalDemographics.objects.filter(id_demographics__lead=f['lead'], aval_email=f['correo']):
+                    registrar_actualizacion(lote, a, {'aval_email_status': f['estado']})
+                    a.aval_email_status = f['estado']
+                    a.save(update_fields=['aval_email_status'])
+                    actualizados += 1
                 leads_tocados.add(f['lead'].pk)
         for lead in Lead.objects.filter(pk__in=leads_tocados):
             recompute_inubicable(lead, changed_by=request.user)

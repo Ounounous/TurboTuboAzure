@@ -37,7 +37,7 @@
       <li><strong>saldo_insoluto</strong>, <strong>saldo_deuda</strong>, <strong>valor_cuota</strong> — montos en pesos, solo números (sin $ ni puntos). Obligatorias.</li>
       <li><strong>cuotas_atrasadas</strong> — número entero. Obligatoria.</li>
       <li><strong>cartera</strong> — opcional en el Excel; si la incluyes, debe coincidir exactamente con la Cartera que elegiste arriba en el formulario, o la fila se rechaza.</li>
-      <li><strong>subcartera</strong> — opcional; si se omite, va a la subcartera marcada como predeterminada de esa cartera.</li>
+      <li><strong>subcartera</strong> — opcional; si se omite, va a la subcartera marcada como predeterminada de esa cartera. Si la incluyes, debe existir ya en esa cartera (no se crea sola) — un nombre que no exista rechaza la fila.</li>
       <li><strong>tipo_cobranza</strong> — <code>judicial</code> o <code>extra judicial</code>. Opcional (por defecto: extra judicial).</li>
       <li><strong>ciclo_cartera</strong>, <strong>ciclo</strong> — texto libre, según cómo lo reporte la cartera. Opcionales.</li>
       <li><strong>activo</strong> — <code>activo</code>, <code>suspendido</code>, <code>terminado</code> o <code>desasignado</code>. Opcional (por defecto: activo).</li>
