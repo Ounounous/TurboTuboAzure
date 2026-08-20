@@ -751,10 +751,10 @@ details.gestion-panel > .gestion-panel-body { padding-bottom: 1rem; }
    Detalle de cliente — "ficha lateral fija" (Opción 2): izquierda deuda +
    info, derecha gestiones/notas/pagos en pestañas.
    ===================================================================== */
-.detail-grid { display: grid; grid-template-columns: 64px 320px 1fr; gap: 20px; align-items: start; }
+.detail-grid { display: grid; grid-template-columns: 320px 1fr auto; gap: 20px; align-items: start; }
 @media (max-width: 860px) {
   .detail-grid { grid-template-columns: 1fr; }
-  .action-rail { flex-direction: row; flex-wrap: wrap; position: static; width: auto; justify-content: center; }
+  .action-rail { position: static; width: auto; }
 }
 
 .id-destacado {
@@ -763,27 +763,34 @@ details.gestion-panel > .gestion-panel-body { padding-bottom: 1rem; }
 }
 
 /* ---------------- riel de acciones (ficha de cliente) ----------------
-   Columna angosta de botones-icono, sticky, separada de la tarjeta de identidad -- las acciones
-   (gestionar, pago, suspender, asignar, etc.) ya no compiten por espacio con los datos del
-   cliente. Mismo --field-height que .medio-btn: un solo tamano de "boton cuadrado de icono" en
-   toda la app. */
+   Columna a la derecha de la tarjeta de pestanas, sticky, separada de la tarjeta de identidad --
+   las acciones (gestionar, pago, suspender, asignar, etc.) ya no compiten por espacio con los
+   datos del cliente. Cada boton lleva icono + nombre (rail-btn-labeled), mismo --field-height
+   que el resto de los controles de una linea para que quede parejo. */
 .action-rail {
-  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  display: flex; flex-direction: column; align-items: stretch; gap: 8px;
+  width: 190px; flex: none;
   position: sticky; top: 16px;
 }
 .action-rail .rail-btn {
   display: inline-flex; align-items: center; justify-content: center;
-  width: var(--field-height); height: var(--field-height); padding: 0;
+  height: var(--field-height); padding: 0;
   border-radius: .75rem; border: 1px solid var(--border);
   background: var(--surface); color: var(--text);
   cursor: pointer; box-sizing: border-box; position: relative;
+}
+.action-rail .rail-btn.rail-btn-labeled {
+  justify-content: flex-start; gap: .55rem; padding: 0 .9rem;
+  font-weight: 600; font-size: 13px; text-align: left; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; width: 100%;
 }
 .action-rail .rail-btn:hover { background: var(--surface-alt); }
 .action-rail .rail-btn.rail-btn-primary { background: var(--accent); color: var(--accent-contrast); border-color: var(--accent); }
 .action-rail .rail-btn.rail-btn-primary:hover { background: var(--accent-hover); }
 .action-rail .rail-btn.rail-btn-danger { color: var(--danger); }
 .action-rail .rail-btn.rail-btn-danger:hover { background: color-mix(in srgb, var(--danger) 12%, var(--surface)); }
-.action-rail .rail-sep { width: 60%; height: 1px; background: var(--border); margin: 4px 0; flex: none; }
+.action-rail form { width: 100%; }
+.action-rail .rail-sep { height: 1px; background: var(--border); margin: 4px 0; flex: none; }
 
 /* Popover anclado a un rail-btn: oculto hasta que su boton lo activa (JS agrega .is-open). */
 .rail-popover {
