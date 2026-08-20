@@ -22,13 +22,52 @@
 
   {% elif step == 2 %}
   <div style="display:flex; flex-direction:column; gap:1rem;">
-    <form method="post" style="display:flex; flex-direction:column; gap:.6rem;">
+    <form method="post" id="demographic-select-form" style="display:flex; flex-direction:column; gap:.6rem;">
       {% csrf_token %}
       <input type="hidden" name="accion" value="seleccionar">
+      <input type="hidden" name="phone" id="id_phone_hidden" value="{{ demographic_form.phone.value|default:'' }}">
+      <input type="hidden" name="email" id="id_email_hidden" value="{{ demographic_form.email.value|default:'' }}">
       <p class="font-semibold" style="margin:0 0 -.1rem;">¿A qué teléfono o email vas a gestionar?</p>
-      <div class="grid-form" style="grid-template-columns:1fr;">
-        {{ demographic_form.as_p }}
+      {% if demographic_form.non_field_errors or demographic_form.phone.errors or demographic_form.email.errors %}
+        <p class="field-error" style="margin:0;">Elige un teléfono o un correo para continuar.</p>
+      {% endif %}
+
+      <div style="display:flex; gap:.6rem;">
+        <div class="contact-picker" style="flex:1;">
+          <button type="button" class="btn btn-secondary contact-picker-btn" data-picker="phone"
+                  {% if not demographic_form.fields.phone.queryset.all %}disabled{% endif %}
+                  style="width:100%;">
+            {% icon "phone" size=16 %} Teléfono
+            {% if not demographic_form.fields.phone.queryset.all %}<span class="muted" style="font-size:11.5px;">(sin números)</span>{% endif %}
+          </button>
+          <div class="contact-picker-panel" data-picker-panel="phone">
+            {% for obj in demographic_form.fields.phone.queryset %}
+              <label class="contact-picker-option">
+                <input type="radio" name="phone_radio" value="{{ obj.pk }}" {% if demographic_form.phone.value|stringformat:"s" == obj.pk|stringformat:"s" %}checked{% endif %}>
+                {{ obj.phone_number }} <span class="muted">({{ obj.get_phone_type_display }})</span>
+              </label>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="contact-picker" style="flex:1;">
+          <button type="button" class="btn btn-secondary contact-picker-btn" data-picker="email"
+                  {% if not demographic_form.fields.email.choices %}disabled{% endif %}
+                  style="width:100%;">
+            {% icon "mail" size=16 %} Correo
+            {% if not demographic_form.fields.email.choices %}<span class="muted" style="font-size:11.5px;">(sin correos)</span>{% endif %}
+          </button>
+          <div class="contact-picker-panel" data-picker-panel="email">
+            {% for value, label in demographic_form.fields.email.choices %}
+              <label class="contact-picker-option">
+                <input type="radio" name="email_radio" value="{{ value }}" {% if demographic_form.email.value == value %}checked{% endif %}>
+                {{ label }}
+              </label>
+            {% endfor %}
+          </div>
+        </div>
       </div>
+
       <div style="display:flex; gap:.75rem;">
         <button type="submit" class="btn btn-primary">Siguiente</button>
         <a href="{% url 'actions:cancel' lead.id %}" class="btn btn-secondary">Cancelar</a>
@@ -60,20 +99,22 @@
     {% endif %}
 
     <details class="gestion-panel">
-      <summary style="font-weight:600; font-size:13px; color:var(--text-muted);">Mejor gestión</summary>
-      <div class="gestion-panel-body">
-        <span class="dot-st"><span class="d st-{{ lead.status_historico_color }}"></span>{{ lead.get_status_historico_display }}</span>
-      </div>
-    </details>
-
-    <details class="gestion-panel">
       <summary style="font-weight:600; font-size:13px; color:var(--text-muted);">Últimas gestiones</summary>
       <div class="gestion-panel-body">
-        {% if ultimas_gestiones %}
+        {% if mejor_gestion_action or ultimas_gestiones %}
           <div class="overflow-x-auto">
             <table class="table-dense">
               <thead><tr><th>Medio</th><th>Resultado</th><th>Usuario</th><th>Fecha</th><th>Comentario</th></tr></thead>
               <tbody>
+                {% if mejor_gestion_action %}
+                  <tr style="background:var(--nav-active-bg);">
+                    <td style="font-weight:600">★ {{ mejor_gestion_action.medio.nombre }}</td>
+                    <td>{{ mejor_gestion_action.resultado.nombre }}</td>
+                    <td>{{ mejor_gestion_action.user }}</td>
+                    <td style="font-variant-numeric:tabular-nums; color:var(--text-muted)">{{ mejor_gestion_action.created_at|date:"d-m-Y H:i" }}</td>
+                    <td>{{ mejor_gestion_action.comment|default_if_none:"-" }}</td>
+                  </tr>
+                {% endif %}
                 {% for action in ultimas_gestiones %}
                   <tr>
                     <td style="font-weight:600">{{ action.medio.nombre }}</td>
@@ -99,6 +140,53 @@
       </div>
     </details>
   </div>
+
+  <script>
+    (function () {
+      // Botones "Telefono"/"Correo": abren su desplegable de opciones (armadas por
+      // DemographicSelectionForm -- principal/adicional/aval, sin blacklisted) y sincronizan los
+      // hidden inputs phone/email que el form real espera en el POST.
+      var form = document.getElementById('demographic-select-form');
+      if (!form) { return; }
+      var phoneHidden = document.getElementById('id_phone_hidden');
+      var emailHidden = document.getElementById('id_email_hidden');
+
+      document.querySelectorAll('.contact-picker-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          if (btn.disabled) { return; }
+          var panel = document.querySelector('.contact-picker-panel[data-picker-panel="' + btn.dataset.picker + '"]');
+          var isOpen = panel.classList.contains('is-open');
+          document.querySelectorAll('.contact-picker-panel').forEach(function (p) { p.classList.remove('is-open'); });
+          if (!isOpen) { panel.classList.add('is-open'); }
+        });
+      });
+
+      form.querySelectorAll('input[name="phone_radio"]').forEach(function (radio) {
+        radio.addEventListener('change', function () { phoneHidden.value = radio.value; });
+      });
+      form.querySelectorAll('input[name="email_radio"]').forEach(function (radio) {
+        radio.addEventListener('change', function () { emailHidden.value = radio.value; });
+      });
+
+      // Solo una opcion disponible: se preselecciona sola (el cobrador no tiene que abrir el
+      // desplegable para un caso sin ambiguedad).
+      var phoneRadios = form.querySelectorAll('input[name="phone_radio"]');
+      if (phoneRadios.length === 1 && !phoneHidden.value) {
+        phoneRadios[0].checked = true;
+        phoneHidden.value = phoneRadios[0].value;
+      }
+      var emailRadios = form.querySelectorAll('input[name="email_radio"]');
+      if (emailRadios.length === 1 && !emailHidden.value) {
+        emailRadios[0].checked = true;
+        emailHidden.value = emailRadios[0].value;
+      }
+
+      document.addEventListener('click', function (e) {
+        if (e.target.closest('.contact-picker')) { return; }
+        document.querySelectorAll('.contact-picker-panel').forEach(function (p) { p.classList.remove('is-open'); });
+      });
+    })();
+  </script>
 
   {% elif step == 3 %}
   {% if lead_notes %}

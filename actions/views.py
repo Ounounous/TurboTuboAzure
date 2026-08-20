@@ -301,8 +301,27 @@ class MultiStepActionView(LoginRequiredMixin, View):
 
     ULTIMAS_GESTIONES_STEP2 = 5
 
+    def _mejor_gestion_action(self, lead):
+        """Busca, entre las gestiones del lead, la primera (mas antigua) cuyo resultado produce el
+        mismo status que lead.status_historico -- esa es la gestion real detras del "mejor status
+        que el lead alcanzo alguna vez" (ver status_logic.compute_status). Si no se encuentra
+        (dato historico sin gestion que lo respalde), devuelve None y esa fila destacada se omite."""
+        from .status_logic import compute_status
+
+        for action in lead.actions.select_related('medio', 'resultado', 'user').order_by('created_at'):
+            if not action.resultado:
+                continue
+            if compute_status(action.resultado, action.fecha_compromiso) == lead.status_historico:
+                return action
+        return None
+
     def _step2_context(self, lead, demographic_form=None, quick_phone_form=None, quick_email_form=None):
         idd = IDDemographics.objects.filter(lead=lead).first()
+        ultimas_gestiones = list(
+            lead.actions.select_related('medio', 'resultado', 'user')
+            .order_by('-created_at')[:self.ULTIMAS_GESTIONES_STEP2]
+        )
+        mejor_gestion_action = self._mejor_gestion_action(lead) if lead.status_historico != lead.RECIEN_ASIGNADO else None
         return {
             'lead': lead,
             'step': 2,
@@ -314,12 +333,10 @@ class MultiStepActionView(LoginRequiredMixin, View):
             'puede_agregar_email': True,
             'lead_notes': lead.notes.select_related('author'),
             # Mejor gestion (status_historico, "el mejor status que alcanzo alguna vez", no baja
-            # aunque el status actual si -- ver lead/models.py) y las ultimas gestiones reales,
-            # para dar contexto al cobrador antes de gestionar sin salir del formulario.
-            'ultimas_gestiones': list(
-                lead.actions.select_related('medio', 'resultado', 'user')
-                .order_by('-created_at')[:self.ULTIMAS_GESTIONES_STEP2]
-            ),
+            # aunque el status actual si -- ver lead/models.py) destacada como primera fila, y las
+            # ultimas gestiones reales debajo -- un solo panel "Ultimas gestiones" en vez de dos.
+            'mejor_gestion_action': mejor_gestion_action,
+            'ultimas_gestiones': ultimas_gestiones,
         }
 
     def get(self, request, step=1, lead_id=None):

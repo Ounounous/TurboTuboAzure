@@ -456,6 +456,36 @@ input[type="file"]::file-selector-button::before {
   gap: .3rem;
 }
 
+/* ---------------- selector de contacto (Telefono/Correo, multistep paso 2) ----------
+   Boton + panel desplegable con las opciones (radio) de ese tipo -- reemplaza el <select> viejo
+   de DemographicSelectionForm. position:relative en el contenedor, panel absoluto debajo. */
+.contact-picker { position: relative; }
+.contact-picker-btn:disabled { opacity: .5; cursor: not-allowed; }
+.contact-picker-panel {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: .75rem;
+  box-shadow: 0 8px 24px -12px rgba(0, 0, 0, 0.35);
+  padding: 6px;
+}
+.contact-picker-panel.is-open { display: block; }
+.contact-picker-option {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .5rem .6rem;
+  border-radius: .5rem;
+  font-size: 13px;
+  cursor: pointer;
+}
+.contact-picker-option:hover { background: var(--surface-alt); }
+
 /* ---------------- paneles desplegables del formulario de gestion (multistep, paso 2) ----------
    Cerrado, cada <details> debe verse como una caja mas de la fila (misma altura que un boton o
    un campo) -- abierto, se expande con su propio padding interno. Sin esto cada <summary> media
