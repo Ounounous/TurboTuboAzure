@@ -161,22 +161,37 @@
         });
       });
 
+      // Elegir uno limpia el otro: sin esto, si el telefono se auto-preselecciono (unica opcion)
+      // y despues el cobrador elige un correo a mano, el hidden de telefono se quedaba con valor
+      // y la gestion terminaba yendo por telefono igual (bug: "se pasa solo al telefono").
       form.querySelectorAll('input[name="phone_radio"]').forEach(function (radio) {
-        radio.addEventListener('change', function () { phoneHidden.value = radio.value; });
+        radio.addEventListener('change', function () {
+          phoneHidden.value = radio.value;
+          emailHidden.value = '';
+          form.querySelectorAll('input[name="email_radio"]').forEach(function (r) { r.checked = false; });
+        });
       });
       form.querySelectorAll('input[name="email_radio"]').forEach(function (radio) {
-        radio.addEventListener('change', function () { emailHidden.value = radio.value; });
+        radio.addEventListener('change', function () {
+          emailHidden.value = radio.value;
+          phoneHidden.value = '';
+          form.querySelectorAll('input[name="phone_radio"]').forEach(function (r) { r.checked = false; });
+        });
       });
 
-      // Solo una opcion disponible: se preselecciona sola (el cobrador no tiene que abrir el
-      // desplegable para un caso sin ambiguedad).
+      // Solo una opcion disponible EN TOTAL (un telefono y ningun correo, o viceversa) se
+      // preselecciona sola -- el cobrador no tiene que abrir el desplegable para un caso sin
+      // ambiguedad. Si hay un telefono Y un correo (uno de cada uno), NO se auto-preselecciona
+      // ninguno: el cobrador tiene que elegir a proposito, o los dos hidden quedarian con valor
+      // al cargar la pagina (el clean() del form los rechaza a ambos, pero es mejor no llegar a
+      // ese error y dejar la eleccion explicita desde el principio).
       var phoneRadios = form.querySelectorAll('input[name="phone_radio"]');
-      if (phoneRadios.length === 1 && !phoneHidden.value) {
+      var emailRadios = form.querySelectorAll('input[name="email_radio"]');
+      if (phoneRadios.length === 1 && emailRadios.length === 0 && !phoneHidden.value) {
         phoneRadios[0].checked = true;
         phoneHidden.value = phoneRadios[0].value;
       }
-      var emailRadios = form.querySelectorAll('input[name="email_radio"]');
-      if (emailRadios.length === 1 && !emailHidden.value) {
+      if (emailRadios.length === 1 && phoneRadios.length === 0 && !emailHidden.value) {
         emailRadios[0].checked = true;
         emailHidden.value = emailRadios[0].value;
       }

@@ -48,6 +48,21 @@ class DemographicSelectionForm(forms.Form):
 
             self.fields['email'].choices = email_choices
 
+    def clean(self):
+        """Exige elegir exactamente telefono O correo, nunca ambos ni ninguno. Sin esto, el JS
+        del paso 2 puede dejar los dos hidden inputs (phone/email) con valor -- ej. el telefono se
+        auto-preselecciono por ser la unica opcion, y despues el cobrador eligio un correo sin que
+        el hidden de telefono se limpiara -- y el paso 3 terminaba gestionando por telefono aunque
+        el cobrador haya elegido correo (bug reportado: la gestion "se pasaba sola" al telefono)."""
+        cleaned = super().clean()
+        phone = cleaned.get('phone')
+        email = cleaned.get('email')
+        if phone and email:
+            raise forms.ValidationError('Elige solo un teléfono o un correo, no ambos.')
+        if not phone and not email:
+            raise forms.ValidationError('Elige un teléfono o un correo para continuar.')
+        return cleaned
+
 
 class AddPhoneQuickForm(forms.Form):
     """Agregar un teléfono nuevo sin salir del flujo de gestión (paso 2). Queda activo por
