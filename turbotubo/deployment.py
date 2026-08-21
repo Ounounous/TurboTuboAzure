@@ -49,6 +49,9 @@ SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 
 # --- Estaticos servidos por WhiteNoise (comprimidos + hasheados) ---
 MIDDLEWARE = [
+    # Primero de todos: si el Host es el apex (turbotubo.com), redirige a www antes de tocar
+    # sesion/CSRF/DB -- ver core.middleware.ApexToWwwRedirectMiddleware.
+    'core.middleware.ApexToWwwRedirectMiddleware',
     'django.middleware.security.SecurityMiddleware',
     # Comprime el HTML dinamico. Va DESPUES de WhiteNoise: WhiteNoise ya sirve los estaticos
     # (comprimidos) y los short-circuita, asi GZip solo ve las paginas dinamicas.
