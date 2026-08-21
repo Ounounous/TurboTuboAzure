@@ -458,20 +458,18 @@ input[type="file"]::file-selector-button::before {
 
 /* ---------------- selector de contacto (Telefono/Correo, multistep paso 2) ----------
    Boton + panel desplegable con las opciones (radio) de ese tipo -- reemplaza el <select> viejo
-   de DemographicSelectionForm. position:relative en el contenedor, panel absoluto debajo. */
+   de DemographicSelectionForm. El panel es ESTATICO (no position:absolute): al abrirse empuja
+   el resto del formulario hacia abajo en vez de flotar encima -- con absolute, el panel abierto
+   quedaba tapando el boton "Siguiente" (bug reportado), porque nada del flujo normal se movia
+   para hacerle espacio. Mismo criterio que details.gestion-panel: expandir empuja, no flota. */
 .contact-picker { position: relative; }
 .contact-picker-btn:disabled { opacity: .5; cursor: not-allowed; }
 .contact-picker-panel {
   display: none;
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  right: 0;
-  z-index: 40;
+  margin-top: 6px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: .75rem;
-  box-shadow: 0 8px 24px -12px rgba(0, 0, 0, 0.35);
   padding: 6px;
 }
 .contact-picker-panel.is-open { display: block; }

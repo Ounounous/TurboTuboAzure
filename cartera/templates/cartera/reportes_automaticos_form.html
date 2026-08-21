@@ -1,24 +1,139 @@
 {% extends 'core/base.html' %}
+{% load icons %}
 
 {% block title %}{% if config %}Editar{% else %}Nuevo{% endif %} reporte automático — {{ cartera.nombre }}{% endblock %}
 
 {% block content %}
-<div class="py-6 px-6" style="max-width: 620px;">
+<div class="mx-auto py-6 px-6" style="max-width:560px;">
   <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
     <h1 class="text-xl font-bold">{% if config %}Editar{% else %}Nuevo{% endif %} reporte automático — {{ cartera.nombre }}</h1>
     <a href="{% url 'cartera:detail' cartera.pk %}" class="btn btn-secondary">Volver</a>
   </div>
 
-  <div class="card p-4">
-    <form method="post">
-      {% csrf_token %}
-      <div class="grid-form">
-        {{ form.as_p }}
+  <form method="post" style="display:flex; flex-direction:column; gap:1rem;">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+
+    <div class="card p-4" style="display:flex; flex-direction:column; gap:.6rem;">
+      <p class="font-semibold" style="margin:0 0 -.1rem;">Tipo de reporte y alcance</p>
+      <div class="grid-form" style="grid-template-columns:1fr;">
+        <p>
+          <label for="{{ form.tipo_reporte.id_for_label }}">Tipo de reporte:</label>
+          {{ form.tipo_reporte.errors }}
+          {{ form.tipo_reporte }}
+        </p>
+        <p>
+          <label>Subcarteras:</label>
+          {{ form.subcarteras.errors }}
+          <div style="display:flex; flex-direction:column; gap:.35rem; margin-top:.2rem;">
+            {% for choice in form.subcarteras %}
+              <label style="display:flex; align-items:center; gap:.5rem; font-weight:400; font-size:13px; cursor:pointer;">
+                {{ choice.tag }} {{ choice.choice_label }}
+              </label>
+            {% empty %}
+              <span class="muted" style="font-size:12.5px;">Esta cartera no tiene subcarteras.</span>
+            {% endfor %}
+          </div>
+          <span class="helptext">{{ form.subcarteras.help_text }}</span>
+        </p>
       </div>
-      <button type="submit" class="btn btn-primary mt-3">
+    </div>
+
+    <div class="card p-4" style="display:flex; flex-direction:column; gap:.6rem;">
+      <p class="font-semibold" style="margin:0 0 -.1rem;">Periodicidad</p>
+      <div class="grid-form" style="grid-template-columns:1fr;">
+        <p>
+          <label for="{{ form.periodicidad.id_for_label }}">Periodicidad:</label>
+          {{ form.periodicidad.errors }}
+          {{ form.periodicidad }}
+        </p>
+        <p id="cada-x-dias-group">
+          <label for="{{ form.cada_x_dias.id_for_label }}">Cada X días:</label>
+          {{ form.cada_x_dias.errors }}
+          {{ form.cada_x_dias }}
+        </p>
+        <p>
+          <label for="{{ form.hora_envio.id_for_label }}">Hora de envío:</label>
+          {{ form.hora_envio.errors }}
+          {{ form.hora_envio }}
+          <span class="helptext">Hora local (America/Santiago) de envío.</span>
+        </p>
+        <p>
+          <label style="display:flex; align-items:center; gap:.5rem; font-weight:400;">
+            {{ form.saltar_fines_de_semana }} Saltar fines de semana
+          </label>
+          <span class="helptext">No enviar sábado ni domingo, aunque la periodicidad indique que corresponde.</span>
+        </p>
+      </div>
+    </div>
+
+    <div class="card p-4" style="display:flex; flex-direction:column; gap:.6rem;">
+      <p class="font-semibold" style="margin:0 0 -.1rem;">Destinatarios</p>
+      <div class="grid-form" style="grid-template-columns:1fr;">
+        <p>
+          <label for="{{ form.destinatarios_to.id_for_label }}">Destinatarios (to):</label>
+          {{ form.destinatarios_to.errors }}
+          {{ form.destinatarios_to }}
+          <span class="helptext">Emails separados por coma. Ej: data@cliente.com</span>
+        </p>
+        <p>
+          <label for="{{ form.destinatarios_cc.id_for_label }}">Destinatarios (cc):</label>
+          {{ form.destinatarios_cc.errors }}
+          {{ form.destinatarios_cc }}
+        </p>
+        <p>
+          <label for="{{ form.destinatarios_cco.id_for_label }}">Destinatarios (cco):</label>
+          {{ form.destinatarios_cco.errors }}
+          {{ form.destinatarios_cco }}
+          <span class="helptext">Con copia oculta -- ej. dueños o supervisores que quieren registro sin que el resto lo sepa.</span>
+        </p>
+      </div>
+    </div>
+
+    <details class="gestion-panel">
+      <summary style="font-weight:600; font-size:13px; color:var(--text-muted);">Envío avanzado</summary>
+      <div class="gestion-panel-body">
+        <div class="grid-form" style="grid-template-columns:1fr;">
+          <p>
+            <label for="{{ form.metodo_envio.id_for_label }}">Método de envío:</label>
+            {{ form.metodo_envio.errors }}
+            {{ form.metodo_envio }}
+          </p>
+          <p>
+            <label for="{{ form.remitente_from.id_for_label }}">Remitente (from):</label>
+            {{ form.remitente_from.errors }}
+            {{ form.remitente_from }}
+            <span class="helptext">Vacío = usa el remitente por defecto del sistema.</span>
+          </p>
+          <p>
+            <label for="{{ form.asunto_personalizado.id_for_label }}">Asunto personalizado:</label>
+            {{ form.asunto_personalizado.errors }}
+            {{ form.asunto_personalizado }}
+          </p>
+        </div>
+      </div>
+    </details>
+
+    <div style="display:flex; gap:.75rem;">
+      <button type="submit" class="btn btn-primary">
         {% if config %}Guardar cambios{% else %}Crear reporte automático{% endif %}
       </button>
-    </form>
-  </div>
+      <a href="{% url 'cartera:detail' cartera.pk %}" class="btn btn-secondary">Cancelar</a>
+    </div>
+  </form>
 </div>
+
+<script>
+  (function () {
+    var periodicidadSelect = document.getElementById('{{ form.periodicidad.id_for_label }}');
+    var cadaXDiasGroup = document.getElementById('cada-x-dias-group');
+    if (!periodicidadSelect || !cadaXDiasGroup) { return; }
+
+    function updateCadaXDiasVisibility() {
+      cadaXDiasGroup.style.display = periodicidadSelect.value === 'cada_x_dias' ? '' : 'none';
+    }
+    periodicidadSelect.addEventListener('change', updateCadaXDiasVisibility);
+    updateCadaXDiasVisibility();
+  })();
+</script>
 {% endblock %}
